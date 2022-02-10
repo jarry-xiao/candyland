@@ -114,6 +114,7 @@ fn generate_leaf_node<'info>(
     collection: &AccountLoader<'info, Collection>,
     owner: &Pubkey,
 ) -> Result<Node, ProgramError> {
+    // leaf = hash(metadata, owner, collection, index)
     let mut leaf = EMPTY;
     let hash = hashv(&[&leaf, metadata]);
     leaf.copy_from_slice(hash.as_ref());
