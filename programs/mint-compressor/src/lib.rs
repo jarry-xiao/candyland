@@ -4,7 +4,7 @@ use anchor_spl::{
     token::{self, Burn, CloseAccount, Mint, MintTo, Token, TokenAccount},
 };
 use mpl_token_metadata::state::Metadata;
-use solana_program::{hash::hashv, program::invoke_signed};
+use solana_program::{hash::hashv, program::invoke_signed, sysvar};
 use spl_token_2022::instruction::close_account;
 
 declare_id!("EfYFFrDJCyP7P8LSmHykAqdyJpPsJsxChFEPy5AJ5mR7");
@@ -24,9 +24,9 @@ type Node = [u8; 32];
 const EMPTY: Node = [0; 32];
 
 #[program]
-pub mod fractal {
+pub mod mint_compressor {
     use super::*;
-    pub fn initialize_collection(ctx: Context<Initialize>, data: Node) -> ProgramResult {
+    pub fn initialize_collection(ctx: Context<InitializeCollection>, data: Node) -> ProgramResult {
         let mut collection = ctx.accounts.collection.load_init()?;
         collection.root = data;
         // This will be the bump of the collection authority PDA
@@ -34,6 +34,39 @@ pub mod fractal {
             Pubkey::find_program_address(&[ctx.accounts.collection.key().as_ref()], ctx.program_id);
         collection.bump = bump as u64;
         Ok(())
+    }
+
+    pub fn mint_nft<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, MintNFT<'info>>,
+        params: MintNFTArgs,
+    ) -> ProgramResult {
+        let cpi_ctx = CpiContext::new(
+            ctx.accounts.candy_machine_program.to_account_info(),
+            mpl_candy_machine::cpi::accounts::MintNFT {
+                candy_machine: ctx.accounts.candy_machine.to_account_info(),
+                candy_machine_creator: ctx.accounts.candy_machine.to_account_info(),
+                payer: ctx.accounts.owner.to_account_info(),
+                wallet: ctx.accounts.token_account.to_account_info(),
+                metadata: ctx.accounts.metadata.to_account_info(),
+                mint: ctx.accounts.mint.to_account_info(),
+                mint_authority: ctx.accounts.authority.to_account_info(),
+                update_authority: ctx.accounts.authority.to_account_info(),
+                master_edition: ctx.accounts.master_edition.to_account_info(),
+                token_metadata_program: ctx.accounts.token_metadata_program.to_account_info(),
+                token_program: ctx.accounts.token_program.to_account_info(),
+                system_program: ctx.accounts.system_program.to_account_info(),
+                rent: ctx.accounts.rent.to_account_info(),
+                clock: ctx.accounts.clock.to_account_info(),
+                recent_blockhashes: ctx.accounts.recent_blockhashes.to_account_info(),
+                instruction_sysvar_account: ctx
+                    .accounts
+                    .instruction_sysvar_account
+                    .to_account_info(),
+            },
+        )
+        .with_remaining_accounts(ctx.remaining_accounts.to_vec());
+        // TODO, whitelist this program to allow it to invoke the candy machine
+        mpl_candy_machine::cpi::mint_nft(cpi_ctx, params.creator_bump)
     }
 
     pub fn compress_nft(ctx: Context<CompressNFT>, params: CompressNFTArgs) -> ProgramResult {
@@ -62,7 +95,25 @@ pub mod fractal {
                 authority: ctx.accounts.owner.to_account_info(),
             },
         ))?;
-        // TODO: Close mint account (Token 2022)
+        invoke_signed(
+            &close_account(
+                &ctx.accounts.token_program.key(),
+                &ctx.accounts.mint.key(),
+                &ctx.accounts.owner.key(),
+                &ctx.accounts.authority.key(),
+                &[],
+            )?,
+            &[
+                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.mint.to_account_info(),
+                ctx.accounts.owner.to_account_info(),
+                ctx.accounts.authority.to_account_info(),
+            ],
+            &[&[
+                ctx.accounts.collection.key().as_ref(),
+                &[collection.bump as u8],
+            ]],
+        )?;
         let (metadata_key, _) = Pubkey::find_program_address(
             &[
                 b"metadata",
@@ -76,15 +127,16 @@ pub mod fractal {
             ProgramError::InvalidArgument,
             "Token metadata key derivation failed",
         )?;
-        let leaf = generate_leaf_node(
+        // TODO: Destroy Metadata Account (Add instruction to Metaplex)
+        let leaf = generate_leaf_node(&[
             &ctx.accounts.metadata.try_borrow_mut_data()?.as_ref(),
-            &ctx.accounts.collection,
-            &ctx.accounts.owner.key(),
-        )?;
+            &ctx.accounts.collection.key().as_ref(),
+            &params.seed.to_le_bytes().as_ref(),
+            &ctx.accounts.owner.key().as_ref(),
+        ])?;
         let new_root = recompute(leaf, params.proof.as_ref(), params.path);
         let mut collection = ctx.accounts.collection.load_mut()?;
         collection.root = new_root;
-        collection.sequence_number += 1;
         Ok(())
     }
 
@@ -96,11 +148,12 @@ pub mod fractal {
         let collection = ctx.accounts.collection.load()?;
         let mut metadata = Box::new(vec![]);
         params.metadata.serialize(&mut metadata)?;
-        let leaf = generate_leaf_node(
+        let leaf = generate_leaf_node(&[
             metadata.as_ref(),
-            &ctx.accounts.collection,
-            &ctx.accounts.owner.key(),
-        )?;
+            &ctx.accounts.collection.key().as_ref(),
+            &params.seed.to_le_bytes().as_ref(),
+            &ctx.accounts.owner.key().as_ref(),
+        ])?;
         assert_with_msg(
             recompute(leaf, params.proof.as_ref(), params.path) == collection.root,
             ProgramError::InvalidArgument,
@@ -128,22 +181,13 @@ pub mod fractal {
     }
 }
 
-fn generate_leaf_node<'info>(
-    metadata: &[u8],
-    collection: &AccountLoader<'info, Collection>,
-    owner: &Pubkey,
-) -> Result<Node, ProgramError> {
+fn generate_leaf_node<'info>(seeds: &[&[u8]]) -> Result<Node, ProgramError> {
     // leaf = hash(metadata, owner, collection, index)
     let mut leaf = EMPTY;
-    let hash = hashv(&[&leaf, metadata]);
-    leaf.copy_from_slice(hash.as_ref());
-    let hash = hashv(&[&leaf, owner.as_ref()]);
-    leaf.copy_from_slice(hash.as_ref());
-    let hash = hashv(&[&leaf, collection.key().as_ref()]);
-    leaf.copy_from_slice(hash.as_ref());
-    let sequence_number = collection.load()?.sequence_number;
-    let hash = hashv(&[&leaf, sequence_number.to_le_bytes().as_ref()]);
-    leaf.copy_from_slice(hash.as_ref());
+    for seed in seeds.iter() {
+        let hash = hashv(&[&leaf, seed]);
+        leaf.copy_from_slice(hash.as_ref());
+    }
     Ok(leaf)
 }
 
@@ -164,30 +208,96 @@ fn recompute(mut start: [u8; 32], path: &[[u8; 32]], address: u32) -> [u8; 32] {
 pub struct Collection {
     root: Node,
     bump: u64,
-    sequence_number: u128,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct MintNFTArgs {
+    seed: u128,
+    creator_bump: u8,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct CompressNFTArgs {
+    seed: u128,
     path: u32,
     proof: Vec<Node>,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct DecompressNFTArgs {
-    index: u128,
+    seed: u128,
     metadata: Metadata,
     path: u32,
     proof: Vec<Node>,
 }
 
 #[derive(Accounts)]
-pub struct Initialize<'info> {
+pub struct InitializeCollection<'info> {
     #[account(init, payer = payer, space = 8 + 32 + 16 + 8)]
     pub collection: AccountLoader<'info, Collection>,
     #[account(mut)]
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(bump: u8, params: MintNFTArgs)]
+pub struct MintNFT<'info> {
+    #[account(mut)]
+    pub collection: AccountLoader<'info, Collection>,
+    #[account(
+        init,
+        seeds = [
+            collection.key().as_ref(),
+            params.seed.to_le_bytes().as_ref(),
+        ],
+        bump = bump,
+        payer = owner,
+        space = Mint::LEN,
+        mint::decimals = 1,
+        mint::authority = authority,
+    )]
+    pub mint: Account<'info, Mint>,
+    #[account(
+        init,
+        payer = owner,
+        associated_token::mint = mint,
+        associated_token::authority = owner,
+    )]
+    pub token_account: Account<'info, TokenAccount>,
+    #[account(mut)]
+    pub metadata: AccountInfo<'info>,
+    #[account(
+        seeds = [
+            collection.key().as_ref(),
+        ],
+        bump = collection.load()?.bump as u8,
+    )]
+    pub authority: AccountInfo<'info>,
+    pub owner: Signer<'info>,
+    pub rent: Sysvar<'info, Rent>,
+    pub token_program: Program<'info, Token>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    pub system_program: Program<'info, System>,
+    // These accounts are used for CPI
+    #[account(
+        executable,
+        address = mpl_candy_machine::id(),
+    )]
+    pub candy_machine_program: AccountInfo<'info>,
+    #[account(mut)]
+    candy_machine: UncheckedAccount<'info>,
+    candy_machine_creator: UncheckedAccount<'info>,
+    #[account(mut)]
+    wallet: UncheckedAccount<'info>,
+    #[account(mut)]
+    master_edition: UncheckedAccount<'info>,
+    #[account(address = mpl_token_metadata::id())]
+    token_metadata_program: UncheckedAccount<'info>,
+    clock: Sysvar<'info, Clock>,
+    recent_blockhashes: UncheckedAccount<'info>,
+    #[account(address = sysvar::instructions::id())]
+    instruction_sysvar_account: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -205,6 +315,13 @@ pub struct CompressNFT<'info> {
     #[account(mut)]
     pub metadata: AccountInfo<'info>,
     pub owner: Signer<'info>,
+    #[account(
+        seeds = [
+            collection.key().as_ref(),
+        ],
+        bump = collection.load()?.bump as u8,
+    )]
+    pub authority: AccountInfo<'info>,
     pub token_program: Program<'info, Token>,
 }
 
@@ -217,7 +334,7 @@ pub struct DecompressNFT<'info> {
         init,
         seeds = [
             collection.key().as_ref(),
-            params.index.to_le_bytes().as_ref(),
+            params.seed.to_le_bytes().as_ref(),
         ],
         bump = bump,
         payer = owner,
