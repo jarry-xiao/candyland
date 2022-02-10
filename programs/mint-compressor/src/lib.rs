@@ -31,9 +31,11 @@ pub mod fractal {
     use super::*;
     pub fn initialize_collection(ctx: Context<Initialize>, data: Node) -> ProgramResult {
         let mut collection = ctx.accounts.collection.load_init()?;
-
         collection.root = data;
-
+        // This will be the bump of the collection authority PDA
+        let (_, bump) = Pubkey::find_program_address(
+            &[ctx.accounts.collection.key().as_ref()], ctx.program_id);
+        collection.bump = bump as u64;
         Ok(())
     }
 
