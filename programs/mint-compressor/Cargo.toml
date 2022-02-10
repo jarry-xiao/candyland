@@ -1,0 +1,20 @@
+[package]
+name = "mint-compressor"
+version = "0.1.0"
+description = "Merkle tree compression of collections of accounts"
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "mint_compressor"
+
+[features]
+no-entrypoint = []
+cpi = ["no-entrypoint"]
+
+[dependencies]
+anchor-lang = "0.20.1"
+anchor-spl = {version = "0.20.1"}
+solana-program = "1.8"
+spl-token-2022 = { git = "https://github.com/solana-labs/solana-program-library/", features = [ "no-entrypoint" ], branch = "master" }
+mpl-token-metadata = { version = "1.1.0", features = [ "no-entrypoint" ] }
