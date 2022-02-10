@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{self, Burn, CloseAccount, Mint, Token, TokenAccount},
+    token::{self, Burn, CloseAccount, Mint, MintTo, Token, TokenAccount},
 };
 use mpl_token_metadata::state::Metadata;
 use solana_program::{hash::hashv, program::invoke_signed};
@@ -105,6 +105,21 @@ pub mod fractal {
             recompute(leaf, params.proof.as_ref(), params.path) == collection.root,
             ProgramError::InvalidArgument,
             "Invalid Merkle proof provided",
+        )?;
+        token::mint_to(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                MintTo {
+                    authority: ctx.accounts.authority.to_account_info(),
+                    mint: ctx.accounts.mint.to_account_info(),
+                    to: ctx.accounts.token_account.to_account_info(),
+                },
+                &[&[
+                    ctx.accounts.collection.key().as_ref(),
+                    &[collection.bump as u8],
+                ]],
+            ),
+            1,
         )?;
         // TODO: Restore Metadata Account (Add instruction to Metaplex)
         let mut collection = ctx.accounts.collection.load_mut()?;
@@ -220,6 +235,12 @@ pub struct DecompressNFT<'info> {
     pub token_account: Account<'info, TokenAccount>,
     #[account(mut)]
     pub metadata: AccountInfo<'info>,
+    #[account(
+        seeds = [
+            collection.key().as_ref(),
+        ],
+        bump = collection.load()?.bump as u8,
+    )]
     pub authority: AccountInfo<'info>,
     pub owner: Signer<'info>,
     pub rent: Sysvar<'info, Rent>,
