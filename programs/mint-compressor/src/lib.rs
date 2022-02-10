@@ -1,14 +1,11 @@
 use anchor_lang::prelude::*;
 use anchor_spl::{
     associated_token::AssociatedToken,
-    token::{self, Burn, Mint, Token, TokenAccount},
+    token::{self, Burn, CloseAccount, Mint, Token, TokenAccount},
 };
 use mpl_token_metadata::state::Metadata;
+use solana_program::{hash::hashv, program::invoke_signed};
 use spl_token_2022::instruction::close_account;
-use solana_program::{
-    hash::hashv,
-    program::{invoke_signed},
-};
 
 declare_id!("EfYFFrDJCyP7P8LSmHykAqdyJpPsJsxChFEPy5AJ5mR7");
 
@@ -33,8 +30,8 @@ pub mod fractal {
         let mut collection = ctx.accounts.collection.load_init()?;
         collection.root = data;
         // This will be the bump of the collection authority PDA
-        let (_, bump) = Pubkey::find_program_address(
-            &[ctx.accounts.collection.key().as_ref()], ctx.program_id);
+        let (_, bump) =
+            Pubkey::find_program_address(&[ctx.accounts.collection.key().as_ref()], ctx.program_id);
         collection.bump = bump as u64;
         Ok(())
     }
@@ -57,8 +54,15 @@ pub mod fractal {
             ),
             1,
         )?;
+        token::close_account(CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            CloseAccount {
+                account: ctx.accounts.token_account.to_account_info(),
+                destination: ctx.accounts.owner.to_account_info(),
+                authority: ctx.accounts.owner.to_account_info(),
+            },
+        ))?;
         // TODO: Close mint account (Token 2022)
-        // TODO: Close token account (Token 2022)
         let (metadata_key, _) = Pubkey::find_program_address(
             &[
                 b"metadata",
