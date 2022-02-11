@@ -7,6 +7,8 @@ use mpl_token_metadata::state::Metadata;
 use solana_program::{hash::hashv, program::invoke_signed, sysvar};
 use spl_token_2022::instruction::close_account;
 
+const MERKLE_PREFIX: &str = "MERKLE";
+
 declare_id!("EfYFFrDJCyP7P8LSmHykAqdyJpPsJsxChFEPy5AJ5mR7");
 
 #[inline(always)]
@@ -24,55 +26,41 @@ type Node = [u8; 32];
 const EMPTY: Node = [0; 32];
 
 #[program]
-pub mod mint_compressor {
+pub mod merkle_wallet {
     use super::*;
-    pub fn initialize_collection(ctx: Context<InitializeCollection>, data: Node) -> ProgramResult {
-        let mut collection = ctx.accounts.collection.load_init()?;
-        collection.root = data;
-        // This will be the bump of the collection authority PDA
-        let (_, bump) =
-            Pubkey::find_program_address(&[ctx.accounts.collection.key().as_ref()], ctx.program_id);
-        collection.bump = bump as u64;
+    pub fn initialize_collection(ctx: Context<InitializeMerkleWallet>, bump: u8, root: Node) -> ProgramResult {
+        let mut merkle_wallet = ctx.accounts.merkle_wallet.load_init()?;
+        merkle_wallet.root = root;
+        // This will be the bump of the user's global merkle wallet PDA
+        merkle_wallet.bump = bump as u64;
         Ok(())
     }
 
     pub fn mint_nft<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, MintNFT<'info>>,
-        params: MintNFTArgs,
+        _mint_bump: u8,
+        authority_bump: u8,
+        _params: MintNFTArgs,
     ) -> ProgramResult {
-        let cpi_ctx = CpiContext::new(
-            ctx.accounts.candy_machine_program.to_account_info(),
-            mpl_candy_machine::cpi::accounts::MintNFT {
-                candy_machine: ctx.accounts.candy_machine.to_account_info(),
-                candy_machine_creator: ctx.accounts.candy_machine.to_account_info(),
-                payer: ctx.accounts.owner.to_account_info(),
-                wallet: ctx.accounts.token_account.to_account_info(),
-                metadata: ctx.accounts.metadata.to_account_info(),
-                mint: ctx.accounts.mint.to_account_info(),
-                mint_authority: ctx.accounts.authority.to_account_info(),
-                update_authority: ctx.accounts.authority.to_account_info(),
-                master_edition: ctx.accounts.master_edition.to_account_info(),
-                token_metadata_program: ctx.accounts.token_metadata_program.to_account_info(),
-                token_program: ctx.accounts.token_program.to_account_info(),
-                system_program: ctx.accounts.system_program.to_account_info(),
-                rent: ctx.accounts.rent.to_account_info(),
-                clock: ctx.accounts.clock.to_account_info(),
-                recent_blockhashes: ctx.accounts.recent_blockhashes.to_account_info(),
-                instruction_sysvar_account: ctx
-                    .accounts
-                    .instruction_sysvar_account
-                    .to_account_info(),
-            },
-        )
-        .with_remaining_accounts(ctx.remaining_accounts.to_vec());
-        // TODO, whitelist this program to allow it to invoke the candy machine
-        mpl_candy_machine::cpi::mint_nft(cpi_ctx, params.creator_bump)
+        token::mint_to(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                MintTo {
+                    authority: ctx.accounts.authority.to_account_info(),
+                    mint: ctx.accounts.mint.to_account_info(),
+                    to: ctx.accounts.token_account.to_account_info(),
+                },
+                &[&[MERKLE_PREFIX.as_ref(), &[authority_bump as u8]]],
+            ),
+            1,
+        )?;
+        Ok(())
     }
 
-    pub fn compress_nft(ctx: Context<CompressNFT>, params: CompressNFTArgs) -> ProgramResult {
-        let collection = ctx.accounts.collection.load()?;
+    pub fn compress_nft(ctx: Context<CompressNFT>, _mint_bump: u8, authority_bump: u8, params: CompressNFTArgs) -> ProgramResult {
+        let merkle_wallet = ctx.accounts.merkle_wallet.load()?;
         assert_with_msg(
-            recompute(EMPTY, params.proof.as_ref(), params.path) == collection.root,
+            recompute(EMPTY, params.proof.as_ref(), params.path) == merkle_wallet.root,
             ProgramError::InvalidArgument,
             "Invalid Merkle proof provided",
         )?;
@@ -95,6 +83,9 @@ pub mod mint_compressor {
                 authority: ctx.accounts.owner.to_account_info(),
             },
         ))?;
+        // TODO: This should probably be a CPI into the Token Metadata program
+        // By this point the mint authority should have changed to a PDA of the
+        // Token Metadata Program
         invoke_signed(
             &close_account(
                 &ctx.accounts.token_program.key(),
@@ -109,10 +100,7 @@ pub mod mint_compressor {
                 ctx.accounts.owner.to_account_info(),
                 ctx.accounts.authority.to_account_info(),
             ],
-            &[&[
-                ctx.accounts.collection.key().as_ref(),
-                &[collection.bump as u8],
-            ]],
+            &[&[MERKLE_PREFIX.as_ref(), &[authority_bump as u8]]],
         )?;
         let (metadata_key, _) = Pubkey::find_program_address(
             &[
@@ -130,32 +118,29 @@ pub mod mint_compressor {
         // TODO: Destroy Metadata Account (Add instruction to Metaplex)
         let leaf = generate_leaf_node(&[
             &ctx.accounts.metadata.try_borrow_mut_data()?.as_ref(),
-            &ctx.accounts.collection.key().as_ref(),
-            &params.seed.to_le_bytes().as_ref(),
-            &ctx.accounts.owner.key().as_ref(),
+            &params.uuid.as_ref(),
         ])?;
         let new_root = recompute(leaf, params.proof.as_ref(), params.path);
-        let mut collection = ctx.accounts.collection.load_mut()?;
-        collection.root = new_root;
+        let mut merkle_wallet = ctx.accounts.merkle_wallet.load_mut()?;
+        merkle_wallet.root = new_root;
         Ok(())
     }
 
     pub fn decompress_nft(
         ctx: Context<DecompressNFT>,
-        _bump: u8,
+        _mint_bump: u8,
+        authority_bump: u8,
         params: DecompressNFTArgs,
     ) -> ProgramResult {
-        let collection = ctx.accounts.collection.load()?;
+        let merkle_wallet = ctx.accounts.merkle_wallet.load()?;
         let mut metadata = Box::new(vec![]);
         params.metadata.serialize(&mut metadata)?;
         let leaf = generate_leaf_node(&[
             metadata.as_ref(),
-            &ctx.accounts.collection.key().as_ref(),
-            &params.seed.to_le_bytes().as_ref(),
-            &ctx.accounts.owner.key().as_ref(),
+            &params.uuid.as_ref(),
         ])?;
         assert_with_msg(
-            recompute(leaf, params.proof.as_ref(), params.path) == collection.root,
+            recompute(leaf, params.proof.as_ref(), params.path) == merkle_wallet.root,
             ProgramError::InvalidArgument,
             "Invalid Merkle proof provided",
         )?;
@@ -168,21 +153,20 @@ pub mod mint_compressor {
                     to: ctx.accounts.token_account.to_account_info(),
                 },
                 &[&[
-                    ctx.accounts.collection.key().as_ref(),
-                    &[collection.bump as u8],
+                    MERKLE_PREFIX.as_ref(),
+                    &[authority_bump],
                 ]],
             ),
             1,
         )?;
-        // TODO: Restore Metadata Account (Add instruction to Metaplex)
-        let mut collection = ctx.accounts.collection.load_mut()?;
-        collection.root = recompute(EMPTY, &params.proof, params.path);
+        // TODO: Restore Metadata Account (Add Metaplex instructions)
+        let mut merkle_wallet = ctx.accounts.merkle_wallet.load_mut()?;
+        merkle_wallet.root = recompute(EMPTY, &params.proof, params.path);
         Ok(())
     }
 }
 
 fn generate_leaf_node<'info>(seeds: &[&[u8]]) -> Result<Node, ProgramError> {
-    // leaf = hash(metadata, owner, collection, index)
     let mut leaf = EMPTY;
     for seed in seeds.iter() {
         let hash = hashv(&[&leaf, seed]);
@@ -205,53 +189,59 @@ fn recompute(mut start: [u8; 32], path: &[[u8; 32]], address: u32) -> [u8; 32] {
 }
 
 #[account(zero_copy)]
-pub struct Collection {
+pub struct MerkleWallet {
     root: Node,
     bump: u64,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct MintNFTArgs {
-    seed: u128,
-    creator_bump: u8,
+    uuid: [u8; 32],
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct CompressNFTArgs {
-    seed: u128,
+    uuid: [u8; 32],
     path: u32,
     proof: Vec<Node>,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
 pub struct DecompressNFTArgs {
-    seed: u128,
+    uuid: [u8; 32],
     metadata: Metadata,
     path: u32,
     proof: Vec<Node>,
 }
 
 #[derive(Accounts)]
-pub struct InitializeCollection<'info> {
-    #[account(init, payer = payer, space = 8 + 32 + 16 + 8)]
-    pub collection: AccountLoader<'info, Collection>,
+#[instruction(bump: u8, params: MintNFTArgs)]
+pub struct InitializeMerkleWallet<'info> {
+    #[account(
+        init, 
+        seeds = [
+            MERKLE_PREFIX.as_ref(),
+            payer.key().as_ref(),
+        ],
+        bump = bump,
+        payer = payer,
+        space = 8 + 32 + 16 + 8,
+    )]
+    pub merkle_wallet: AccountLoader<'info, MerkleWallet>,
     #[account(mut)]
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-#[instruction(bump: u8, params: MintNFTArgs)]
+#[instruction(mint_bump: u8, authority_bump: u8, params: MintNFTArgs)]
 pub struct MintNFT<'info> {
-    #[account(mut)]
-    pub collection: AccountLoader<'info, Collection>,
     #[account(
         init,
         seeds = [
-            collection.key().as_ref(),
-            params.seed.to_le_bytes().as_ref(),
+            params.uuid.as_ref(),
         ],
-        bump = bump,
+        bump = mint_bump,
         payer = owner,
         space = Mint::LEN,
         mint::decimals = 1,
@@ -265,13 +255,9 @@ pub struct MintNFT<'info> {
         associated_token::authority = owner,
     )]
     pub token_account: Account<'info, TokenAccount>,
-    #[account(mut)]
-    pub metadata: AccountInfo<'info>,
     #[account(
-        seeds = [
-            collection.key().as_ref(),
-        ],
-        bump = collection.load()?.bump as u8,
+        seeds = [MERKLE_PREFIX.as_ref()],
+        bump = authority_bump,
     )]
     pub authority: AccountInfo<'info>,
     pub owner: Signer<'info>,
@@ -279,64 +265,65 @@ pub struct MintNFT<'info> {
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
-    // These accounts are used for CPI
-    #[account(
-        executable,
-        address = mpl_candy_machine::id(),
-    )]
-    pub candy_machine_program: AccountInfo<'info>,
-    #[account(mut)]
-    candy_machine: UncheckedAccount<'info>,
-    candy_machine_creator: UncheckedAccount<'info>,
-    #[account(mut)]
-    wallet: UncheckedAccount<'info>,
-    #[account(mut)]
-    master_edition: UncheckedAccount<'info>,
-    #[account(address = mpl_token_metadata::id())]
-    token_metadata_program: UncheckedAccount<'info>,
-    clock: Sysvar<'info, Clock>,
-    recent_blockhashes: UncheckedAccount<'info>,
-    #[account(address = sysvar::instructions::id())]
-    instruction_sysvar_account: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
+#[instruction(mint_bump: u8, authority_bump: u8, params: MintNFTArgs)]
 pub struct CompressNFT<'info> {
-    #[account(mut)]
-    pub collection: AccountLoader<'info, Collection>,
+    #[account(
+        mut,
+        seeds = [
+            MERKLE_PREFIX.as_ref(),
+            owner.key().as_ref(),
+        ],
+        bump = merkle_wallet.load()?.bump as u8,
+    )]
+    pub merkle_wallet: AccountLoader<'info, MerkleWallet>,
     #[account(
         mut,
         constraint = token_account.mint == mint.key(),
         constraint = token_account.amount == 1,
     )]
     pub token_account: Account<'info, TokenAccount>,
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [
+            params.uuid.as_ref(),
+        ],
+        bump = mint_bump,
+    )]
     pub mint: Account<'info, Mint>,
     #[account(mut)]
     pub metadata: AccountInfo<'info>,
     pub owner: Signer<'info>,
     #[account(
         seeds = [
-            collection.key().as_ref(),
+            MERKLE_PREFIX.as_ref() 
         ],
-        bump = collection.load()?.bump as u8,
+        bump = authority_bump
     )]
     pub authority: AccountInfo<'info>,
     pub token_program: Program<'info, Token>,
 }
 
 #[derive(Accounts)]
-#[instruction(bump: u8, params: DecompressNFTArgs)]
+#[instruction(mint_bump: u8, authority_bump: u8, params: DecompressNFTArgs)]
 pub struct DecompressNFT<'info> {
-    #[account(mut)]
-    pub collection: AccountLoader<'info, Collection>,
+    #[account(
+        mut,
+        seeds = [
+            MERKLE_PREFIX.as_ref(),
+            owner.key().as_ref(),
+        ],
+        bump = merkle_wallet.load()?.bump as u8,
+    )]
+    pub merkle_wallet: AccountLoader<'info, MerkleWallet>,
     #[account(
         init,
         seeds = [
-            collection.key().as_ref(),
-            params.seed.to_le_bytes().as_ref(),
+            params.uuid.as_ref(),
         ],
-        bump = bump,
+        bump = mint_bump,
         payer = owner,
         space = Mint::LEN,
         mint::decimals = 1,
@@ -354,9 +341,9 @@ pub struct DecompressNFT<'info> {
     pub metadata: AccountInfo<'info>,
     #[account(
         seeds = [
-            collection.key().as_ref(),
+            MERKLE_PREFIX.as_ref(),
         ],
-        bump = collection.load()?.bump as u8,
+        bump = authority_bump,
     )]
     pub authority: AccountInfo<'info>,
     pub owner: Signer<'info>,

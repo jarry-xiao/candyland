@@ -1,12 +1,12 @@
 [package]
-name = "mint-compressor"
+name = "merkle-wallet"
 version = "0.1.0"
 description = "Merkle tree compression of collections of accounts"
 edition = "2018"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "mint_compressor"
+name = "merkle_wallet"
 
 [features]
 no-entrypoint = []
