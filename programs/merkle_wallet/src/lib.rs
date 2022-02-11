@@ -28,7 +28,7 @@ const EMPTY: Node = [0; 32];
 #[program]
 pub mod merkle_wallet {
     use super::*;
-    pub fn initialize_collection(
+    pub fn initialize_merkle_wallet(
         ctx: Context<InitializeMerkleWallet>,
         bump: u8,
         root: Node,
