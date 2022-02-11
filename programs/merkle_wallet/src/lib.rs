@@ -28,7 +28,11 @@ const EMPTY: Node = [0; 32];
 #[program]
 pub mod merkle_wallet {
     use super::*;
-    pub fn initialize_collection(ctx: Context<InitializeMerkleWallet>, bump: u8, root: Node) -> ProgramResult {
+    pub fn initialize_collection(
+        ctx: Context<InitializeMerkleWallet>,
+        bump: u8,
+        root: Node,
+    ) -> ProgramResult {
         let mut merkle_wallet = ctx.accounts.merkle_wallet.load_init()?;
         merkle_wallet.root = root;
         // This will be the bump of the user's global merkle wallet PDA
@@ -57,7 +61,12 @@ pub mod merkle_wallet {
         Ok(())
     }
 
-    pub fn compress_nft(ctx: Context<CompressNFT>, _mint_bump: u8, authority_bump: u8, params: CompressNFTArgs) -> ProgramResult {
+    pub fn compress_nft(
+        ctx: Context<CompressNFT>,
+        _mint_bump: u8,
+        authority_bump: u8,
+        params: CompressNFTArgs,
+    ) -> ProgramResult {
         let merkle_wallet = ctx.accounts.merkle_wallet.load()?;
         assert_with_msg(
             recompute(EMPTY, params.proof.as_ref(), params.path) == merkle_wallet.root,
@@ -135,10 +144,7 @@ pub mod merkle_wallet {
         let merkle_wallet = ctx.accounts.merkle_wallet.load()?;
         let mut metadata = Box::new(vec![]);
         params.metadata.serialize(&mut metadata)?;
-        let leaf = generate_leaf_node(&[
-            metadata.as_ref(),
-            &params.uuid.as_ref(),
-        ])?;
+        let leaf = generate_leaf_node(&[metadata.as_ref(), &params.uuid.as_ref()])?;
         assert_with_msg(
             recompute(leaf, params.proof.as_ref(), params.path) == merkle_wallet.root,
             ProgramError::InvalidArgument,
@@ -152,10 +158,7 @@ pub mod merkle_wallet {
                     mint: ctx.accounts.mint.to_account_info(),
                     to: ctx.accounts.token_account.to_account_info(),
                 },
-                &[&[
-                    MERKLE_PREFIX.as_ref(),
-                    &[authority_bump],
-                ]],
+                &[&[MERKLE_PREFIX.as_ref(), &[authority_bump]]],
             ),
             1,
         )?;
