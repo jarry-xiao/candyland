@@ -506,30 +506,3 @@ pub struct DecompressNFT<'info> {
     )]
     pub token_metadata_program: AccountInfo<'info>,
 }
-
-// struct MetaplexMetadata(Metadata);
-// // AccountDeserialize delegates to AnchorDeserialize (which delegates to Borsh)
-// impl AccountDeserialize for MetaplexMetadata {
-//     fn try_deserialize_unchecked(buf: &mut &[u8]) -> Result<Self, ProgramError> {
-//         AnchorDeserialize::deserialize(buf).map_err(|e| ProgramError::InvalidAccountData)
-//     }
-// }
-
-// impl AccountSerialize for MetaplexMetadata {
-//     fn try_serialize<W: Write>(&self, _writer: &mut W) -> Result<(), ProgramError> {
-//         self.serialize(_writer)
-//             .map_err(|e| ProgramError::BorshIoError(e.to_string()))
-//     }
-// }
-
-// impl AnchorSerialize for MetaplexMetadata {
-//     fn serialize<W: Write>(&self, writer: &mut W) -> std::io::Result<()> {
-//         self.0.serialize(writer)
-//     }
-// }
-
-// impl AnchorDeserialize for MetaplexMetadata {
-//     fn deserialize(buf: &mut &[u8]) -> std::io::Result<Self> {
-//         try_from_slice_checked(buf, Key::MetadataV1, MAX_METADATA_LEN)
-//     }
-// }
