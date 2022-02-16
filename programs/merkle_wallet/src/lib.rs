@@ -4,15 +4,14 @@ use anchor_spl::{
     token::{self, Burn, CloseAccount, Mint, MintTo, Token, TokenAccount},
 };
 use mpl_token_metadata::{
-    instruction::{
-        create_master_edition_v3, create_metadata_accounts_v2, update_metadata_accounts_v2,
-    },
-    state::{Metadata, MAX_METADATA_LEN},
+    state::{MAX_METADATA_LEN, MAX_MASTER_EDITION_LEN},
     utils::try_from_slice_checked,
 };
-use solana_program::{hash::hashv, program::invoke_signed, sysvar};
+use solana_program::{hash::hashv, program::invoke_signed};
 use spl_token_2022::instruction::close_account;
-use std::io::Write;
+use std::{
+    ops::Deref,
+};
 
 const MERKLE_PREFIX: &str = "MERKLE";
 
@@ -32,21 +31,35 @@ pub fn assert_with_msg(v: bool, err: ProgramError, msg: &str) -> ProgramResult {
 type Node = [u8; 32];
 const EMPTY: Node = [0; 32];
 
+#[account]
+#[derive(Default)]
+pub struct MerkleAuthority {
+    bump: u8,
+}
+
+#[account]
+#[derive(Default)]
+pub struct MerkleWallet {
+    root: Node,
+    counter: u128,
+    bump: u8,
+}
+
 #[program]
 pub mod merkle_wallet {
     use super::*;
-    pub fn initialize_merkle_wallet(
-        ctx: Context<InitializeMerkleWallet>,
-        bump: u8,
-        airdrop_bump: u8,
-    ) -> ProgramResult {
-        let mut merkle_wallet = ctx.accounts.merkle_wallet.load_init()?;
-        merkle_wallet.root = EMPTY;
-        merkle_wallet.counter = 0;
-        merkle_wallet.bump = bump as u64;
-        let mut merkle_airdrop_wallet = ctx.accounts.merkle_airdrop_wallet.load_init()?;
-        merkle_airdrop_wallet.root = EMPTY;
-        merkle_airdrop_wallet.bump = airdrop_bump as u64;
+    pub fn initialize_merkle_wallet(ctx: Context<InitializeMerkleWallet>) -> ProgramResult {
+        ctx.accounts.merkle_wallet.root = EMPTY;
+        ctx.accounts.merkle_wallet.counter = 0;
+        match ctx.bumps.get("merkle_wallet") {
+            Some(b) => {
+                ctx.accounts.merkle_wallet.bump = *b;
+            }
+            _ => {
+                msg!("Bump seed missing from ctx");
+                return Err(ProgramError::InvalidArgument);
+            }
+        }
         Ok(())
     }
 
@@ -66,8 +79,7 @@ pub mod merkle_wallet {
             ),
             1,
         )?;
-        let mut merkle_wallet = ctx.accounts.merkle_wallet.load_mut()?;
-        merkle_wallet.counter += 1;
+        ctx.accounts.merkle_wallet.counter += 1;
         Ok(())
     }
 
@@ -76,9 +88,8 @@ pub mod merkle_wallet {
         authority_bump: u8,
         params: CompressNFTArgs,
     ) -> ProgramResult {
-        let merkle_wallet = ctx.accounts.merkle_wallet.load()?;
         assert_with_msg(
-            recompute(EMPTY, params.proof.as_ref(), params.path) == merkle_wallet.root,
+            recompute(EMPTY, params.proof.as_ref(), params.path) == ctx.accounts.merkle_wallet.root,
             ProgramError::InvalidArgument,
             "Invalid Merkle proof provided",
         )?;
@@ -120,43 +131,22 @@ pub mod merkle_wallet {
             ],
             &[&[MERKLE_PREFIX.as_ref(), &[authority_bump as u8]]],
         )?;
-        let (metadata_key, _) = Pubkey::find_program_address(
-            &[
-                mpl_token_metadata::state::PREFIX.as_ref(),
-                mpl_token_metadata::id().as_ref(),
-                ctx.accounts.mint.key().as_ref(),
-            ],
-            &mpl_token_metadata::id(),
-        );
-        assert_with_msg(
-            metadata_key == ctx.accounts.metadata.key(),
-            ProgramError::InvalidArgument,
-            "Token metadata key derivation failed",
-        )?;
-        let (master_edition_key, _) = Pubkey::find_program_address(
-            &[
-                mpl_token_metadata::state::PREFIX.as_ref(),
-                mpl_token_metadata::id().as_ref(),
-                ctx.accounts.mint.key().as_ref(),
-                mpl_token_metadata::state::EDITION.as_ref(),
-            ],
-            &mpl_token_metadata::id(),
-        );
-        assert_with_msg(
-            master_edition_key == ctx.accounts.master_edition.key(),
-            ProgramError::InvalidArgument,
-            "Master Edition key derivation failed",
-        )?;
+
         // TODO: Destroy Metadata Account (Add instruction to Metaplex)
+        let max_supply = match ctx.accounts.master_edition.max_supply {
+            Some(s) => s,
+            None => 0,
+        };
+
         let leaf = generate_leaf_node(&[
-            &ctx.accounts.metadata.try_borrow_mut_data()?.as_ref(),
-            &ctx.accounts.master_edition.try_borrow_mut_data()?.as_ref(),
-            &ctx.accounts.mint_creator.key().as_ref(),
+            &ctx.accounts.metadata.to_account_info().try_borrow_mut_data()?.as_ref(),
+            &max_supply.to_le_bytes().as_ref(),
+            &ctx.accounts.master_edition.supply.to_le_bytes().as_ref(),
+            &params.mint_creator.as_ref(),
             &params.index.to_le_bytes().as_ref(),
         ])?;
         let new_root = recompute(leaf, params.proof.as_ref(), params.path);
-        let mut merkle_wallet = ctx.accounts.merkle_wallet.load_mut()?;
-        merkle_wallet.root = new_root;
+        ctx.accounts.merkle_wallet.root = new_root;
         Ok(())
     }
 
@@ -166,19 +156,17 @@ pub mod merkle_wallet {
         authority_bump: u8,
         params: DecompressNFTArgs,
     ) -> ProgramResult {
-        let merkle_wallet = ctx.accounts.merkle_wallet.load()?;
         let mut metadata = Box::new(vec![]);
         params.metadata.serialize(&mut metadata)?;
-        let mut master_edition = Box::new(vec![]);
-        // params.master_edition.serialize(&mut master_edition)?;
         let leaf = generate_leaf_node(&[
             metadata.as_ref(),
-            master_edition.as_ref(),
-            ctx.accounts.mint_creator.key().as_ref(),
+            params.max_supply.to_le_bytes().as_ref(),
+            params.supply.to_le_bytes().as_ref(),
+            params.mint_creator.as_ref(),
             params.index.to_le_bytes().as_ref(),
         ])?;
         assert_with_msg(
-            recompute(leaf, params.proof.as_ref(), params.path) == merkle_wallet.root,
+            recompute(leaf, params.proof.as_ref(), params.path) == ctx.accounts.merkle_wallet.root,
             ProgramError::InvalidArgument,
             "Invalid Merkle proof provided",
         )?;
@@ -194,92 +182,12 @@ pub mod merkle_wallet {
             ),
             1,
         )?;
-        // TODO: Restore Metadata Account (Add Metaplex instructions)
-        let creators = match params.metadata.data.creators {
+        let _creators = match params.metadata.data.creators {
             Some(c) => c,
             None => vec![],
         };
-
-        let metadata_infos = vec![
-            ctx.accounts.metadata.to_account_info(),
-            ctx.accounts.mint.to_account_info(),
-            ctx.accounts.authority.to_account_info(),
-            ctx.accounts.owner.to_account_info(),
-            ctx.accounts.token_metadata_program.to_account_info(),
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.system_program.to_account_info(),
-            ctx.accounts.rent.to_account_info(),
-        ];
-
-        let master_edition_infos = vec![
-            ctx.accounts.master_edition.to_account_info(),
-            ctx.accounts.mint.to_account_info(),
-            ctx.accounts.authority.to_account_info(),
-            ctx.accounts.owner.to_account_info(),
-            ctx.accounts.metadata.to_account_info(),
-            ctx.accounts.token_metadata_program.to_account_info(),
-            ctx.accounts.token_program.to_account_info(),
-            ctx.accounts.system_program.to_account_info(),
-            ctx.accounts.rent.to_account_info(),
-        ];
-
-        invoke_signed(
-            &create_metadata_accounts_v2(
-                *ctx.accounts.token_metadata_program.key,
-                ctx.accounts.metadata.key(),
-                ctx.accounts.mint.key(),
-                ctx.accounts.authority.key(),
-                ctx.accounts.owner.key(),
-                ctx.accounts.authority.key(),
-                params.metadata.data.name,
-                params.metadata.data.symbol.clone(),
-                params.metadata.data.uri,
-                Some(creators),
-                params.metadata.data.seller_fee_basis_points,
-                true,
-                params.metadata.is_mutable,
-                params.metadata.collection,
-                params.metadata.uses,
-            ),
-            metadata_infos.as_slice(),
-            &[&[MERKLE_PREFIX.as_ref(), &[authority_bump]]],
-        )?;
-
-        // msg!("Before master");
-        // invoke_signed(
-        //     &create_master_edition(
-        //         ctx.accounts.token_metadata_program.key(),
-        //         ctx.accounts.master_edition.key(),
-        //         ctx.accounts.mint.key(),
-        //         ctx.accounts.authority.key(),
-        //         ctx.accounts.authority.key(),
-        //         ctx.accounts.metadata.key(),
-        //         ctx.accounts.owner.key(),
-        //         Some(params.metadata.data.max_supply),
-        //     ),
-        //     master_edition_infos.as_slice(),
-        //     &[&[MERKLE_PREFIX.as_ref(), &[authority_bump]]],
-        // )?;
-
-        // msg!("Before update");
-        // invoke_signed(
-        //     &update_metadata_accounts(
-        //         ctx.accounts.token_metadata_program.key(),
-        //         ctx.accounts.metadata.key(),
-        //         ctx.accounts.authority.key(),
-        //         new_update_authority,
-        //         None,
-        //         Some(true),
-        //     ),
-        //     &[
-        //         ctx.accounts.token_metadata_program.to_account_info(),
-        //         ctx.accounts.metadata.to_account_info(),
-        //         ctx.accounts.authority.to_account_info(),
-        //     ],
-        //     &[&[MERKLE_PREFIX.as_ref(), &[authority_bump]]],
-        // )?;
-        let mut merkle_wallet = ctx.accounts.merkle_wallet.load_mut()?;
-        merkle_wallet.root = recompute(EMPTY, &params.proof, params.path);
+        // TODO: Restore Metadata Account (Add Metaplex instructions)
+        ctx.accounts.merkle_wallet.root = recompute(EMPTY, &params.proof, params.path);
         Ok(())
     }
 }
@@ -306,34 +214,6 @@ fn recompute(mut start: [u8; 32], path: &[[u8; 32]], address: u32) -> [u8; 32] {
     start
 }
 
-#[account(zero_copy)]
-pub struct MerkleWallet {
-    root: Node,
-    bump: u64,
-    counter: u128,
-}
-
-#[account(zero_copy)]
-pub struct AirdropMerkleWallet {
-    root: Node,
-    bump: u64,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize)]
-pub struct CompressNFTArgs {
-    index: u128,
-    path: u32,
-    proof: Vec<Node>,
-}
-
-#[derive(AnchorSerialize, AnchorDeserialize)]
-pub struct DecompressNFTArgs {
-    index: u128,
-    metadata: Metadata,
-    path: u32,
-    proof: Vec<Node>,
-}
-
 #[derive(Accounts)]
 pub struct InitializeMerkleWallet<'info> {
     #[account(
@@ -344,21 +224,8 @@ pub struct InitializeMerkleWallet<'info> {
         ],
         bump,
         payer = payer,
-        space = 8 + 32 + 16 + 8,
     )]
-    pub merkle_wallet: AccountLoader<'info, MerkleWallet>,
-    #[account(
-        init,
-        seeds = [
-            MERKLE_PREFIX.as_ref(),
-            b"airdrop".as_ref(),
-            payer.key().as_ref(),
-        ],
-        bump,
-        payer = payer,
-        space = 8 + 32 + 16 + 8,
-    )]
-    pub merkle_airdrop_wallet: AccountLoader<'info, AirdropMerkleWallet>,
+    pub merkle_wallet: Box<Account<'info, MerkleWallet>>,
     #[account(mut)]
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -375,12 +242,12 @@ pub struct MintNFT<'info> {
         ],
         bump,
     )]
-    pub merkle_wallet: AccountLoader<'info, MerkleWallet>,
+    pub merkle_wallet: Box<Account<'info, MerkleWallet>>,
     #[account(
         init,
         seeds = [
             owner.key().as_ref(),
-            merkle_wallet.load()?.counter.to_le_bytes().as_ref(),
+            merkle_wallet.counter.to_le_bytes().as_ref(),
         ],
         bump,
         payer = owner,
@@ -388,25 +255,36 @@ pub struct MintNFT<'info> {
         mint::decimals = 1,
         mint::authority = authority,
     )]
-    pub mint: Account<'info, Mint>,
+    pub mint: Box<Account<'info, Mint>>,
     #[account(
         init,
         payer = owner,
         associated_token::mint = mint,
         associated_token::authority = owner,
     )]
-    pub token_account: Account<'info, TokenAccount>,
+    pub token_account: Box<Account<'info, TokenAccount>>,
     #[account(
+        init_if_needed,
         seeds = [MERKLE_PREFIX.as_ref()],
-        bump = authority_bump,
+        payer = owner,
+        bump,
     )]
-    pub authority: AccountInfo<'info>,
+    pub authority: Box<Account<'info, MerkleAuthority>>,
     pub owner: Signer<'info>,
     pub rent: Sysvar<'info, Rent>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
+
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct CompressNFTArgs {
+    index: u128,
+    mint_creator: Pubkey,
+    path: u32,
+    proof: Vec<Node>,
+}
+
 
 #[derive(Accounts)]
 #[instruction(authority_bump: u8, params: CompressNFTArgs)]
@@ -417,38 +295,47 @@ pub struct CompressNFT<'info> {
             MERKLE_PREFIX.as_ref(),
             owner.key().as_ref(),
         ],
-        bump = merkle_wallet.load()?.bump as u8,
+        bump = merkle_wallet.bump,
     )]
-    pub merkle_wallet: AccountLoader<'info, MerkleWallet>,
+    pub merkle_wallet: Box<Account<'info, MerkleWallet>>,
     #[account(
         mut,
         constraint = token_account.mint == mint.key(),
         constraint = token_account.amount == 1,
     )]
-    pub token_account: Account<'info, TokenAccount>,
+    pub token_account: Box<Account<'info, TokenAccount>>,
     #[account(
         mut,
         seeds = [
-            mint_creator.key().as_ref(),
+            params.mint_creator.as_ref(),
             params.index.to_le_bytes().as_ref(),
         ],
         bump,
     )]
-    pub mint: Account<'info, Mint>,
-    pub mint_creator: AccountInfo<'info>,
+    pub mint: Box<Account<'info, Mint>>,
     #[account(mut)]
-    pub metadata: AccountInfo<'info>,
+    pub metadata: Box<Account<'info, TokenMetadata>>,
     #[account(mut)]
-    pub master_edition: AccountInfo<'info>,
+    pub master_edition: Box<Account<'info, MasterEdition>>,
     pub owner: Signer<'info>,
     #[account(
-        seeds = [
-            MERKLE_PREFIX.as_ref()
-        ],
-        bump = authority_bump
+        seeds = [MERKLE_PREFIX.as_ref()],
+        bump = authority.bump,
     )]
-    pub authority: AccountInfo<'info>,
+    pub authority: Account<'info, MerkleAuthority>,
     pub token_program: Program<'info, Token>,
+    pub token_metadata_program: Program<'info, MplTokenMetadata>,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize)]
+pub struct DecompressNFTArgs {
+    index: u128,
+    mint_creator: Pubkey,
+    max_supply: u64,
+    supply: u64,
+    metadata: mpl_token_metadata::state::Metadata,
+    path: u32,
+    proof: Vec<Node>,
 }
 
 #[derive(Accounts)]
@@ -460,13 +347,13 @@ pub struct DecompressNFT<'info> {
             MERKLE_PREFIX.as_ref(),
             owner.key().as_ref(),
         ],
-        bump = merkle_wallet.load()?.bump as u8,
+        bump = merkle_wallet.bump as u8,
     )]
-    pub merkle_wallet: AccountLoader<'info, MerkleWallet>,
+    pub merkle_wallet: Box<Account<'info, MerkleWallet>>,
     #[account(
         init,
         seeds = [
-            mint_creator.key().as_ref(),
+            params.mint_creator.as_ref(),
             params.index.to_le_bytes().as_ref(),
         ],
         bump,
@@ -475,34 +362,91 @@ pub struct DecompressNFT<'info> {
         mint::decimals = 1,
         mint::authority = authority,
     )]
-    pub mint: Account<'info, Mint>,
-    pub mint_creator: AccountInfo<'info>,
+    pub mint: Box<Account<'info, Mint>>,
     #[account(
         init,
         payer = owner,
         associated_token::mint = mint,
         associated_token::authority = owner,
     )]
-    pub token_account: Account<'info, TokenAccount>,
+    pub token_account: Box<Account<'info, TokenAccount>>,
     #[account(mut)]
-    pub metadata: AccountInfo<'info>,
+    pub metadata: Box<Account<'info, TokenMetadata>>,
     #[account(mut)]
-    pub master_edition: AccountInfo<'info>,
+    pub master_edition: Box<Account<'info, MasterEdition>>,
     #[account(
-        seeds = [
-            MERKLE_PREFIX.as_ref(),
-        ],
-        bump = authority_bump,
+        seeds = [MERKLE_PREFIX.as_ref()],
+        bump = authority.bump,
     )]
-    pub authority: AccountInfo<'info>,
+    pub authority: Account<'info, MerkleAuthority>,
     pub owner: Signer<'info>,
     pub rent: Sysvar<'info, Rent>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
-    #[account(
-        executable,
-        address = mpl_token_metadata::id(),
-    )]
-    pub token_metadata_program: AccountInfo<'info>,
+    pub token_metadata_program: Program<'info, MplTokenMetadata>,
+}
+
+#[derive(Clone, AnchorDeserialize, AnchorSerialize)]
+pub struct MasterEdition(mpl_token_metadata::state::MasterEditionV2);
+
+impl anchor_lang::AccountDeserialize for MasterEdition {
+    fn try_deserialize_unchecked(buf: &mut &[u8]) -> Result<Self, ProgramError> {
+        try_from_slice_checked(
+            &buf,
+            mpl_token_metadata::state::Key::MasterEditionV2,
+            MAX_MASTER_EDITION_LEN,
+        )
+    }
+}
+
+impl anchor_lang::AccountSerialize for MasterEdition {}
+
+impl anchor_lang::Owner for MasterEdition {
+    fn owner() -> Pubkey {
+        mpl_token_metadata::id()
+    }
+}
+
+impl Deref for MasterEdition {
+    type Target = mpl_token_metadata::state::MasterEditionV2;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+
+#[derive(Clone, AnchorDeserialize, AnchorSerialize)]
+pub struct TokenMetadata(mpl_token_metadata::state::Metadata);
+
+impl anchor_lang::AccountDeserialize for TokenMetadata {
+    fn try_deserialize_unchecked(buf: &mut &[u8]) -> Result<Self, ProgramError> {
+        try_from_slice_checked(buf, mpl_token_metadata::state::Key::MetadataV1, MAX_METADATA_LEN)
+    }
+}
+
+impl anchor_lang::AccountSerialize for TokenMetadata {}
+
+impl anchor_lang::Owner for TokenMetadata {
+    fn owner() -> Pubkey {
+        mpl_token_metadata::id()
+    }
+}
+
+impl Deref for TokenMetadata {
+    type Target = mpl_token_metadata::state::Metadata;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[derive(Clone)]
+pub struct MplTokenMetadata;
+
+impl anchor_lang::Id for MplTokenMetadata {
+    fn id() -> Pubkey {
+        mpl_token_metadata::id()
+    }
 }

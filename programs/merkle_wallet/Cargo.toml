@@ -13,7 +13,7 @@ no-entrypoint = []
 cpi = ["no-entrypoint"]
 
 [dependencies]
-anchor-lang = "0.21.0"
+anchor-lang = {version = "0.21.0", features = [ "init-if-needed" ]}
 anchor-spl = {version = "0.21.0"}
 borsh = "0.9.2"
 solana-program = "1.8"
