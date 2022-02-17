@@ -1,15 +1,14 @@
+use crate::state::{metaplex_anchor::*, spl_token_2022_anchor::*};
 use anchor_lang::prelude::*;
-use anchor_spl::{
-    associated_token::AssociatedToken,
-    token::{self, Burn, CloseAccount, Mint, MintTo, Token, TokenAccount},
+use anchor_spl::associated_token::AssociatedToken;
+use mpl_token_metadata::{state::MAX_METADATA_LEN, utils::try_from_slice_checked};
+use solana_program::{
+    hash::hashv,
+    program::{invoke, invoke_signed},
+    system_instruction,
 };
-use mpl_token_metadata::{
-    state::{MAX_MASTER_EDITION_LEN, MAX_METADATA_LEN},
-    utils::try_from_slice_checked,
-};
-use solana_program::{hash::hashv, program::invoke_signed};
-use spl_token_2022::instruction::close_account;
-use std::ops::Deref;
+
+pub mod state;
 
 const MERKLE_PREFIX: &str = "MERKLE";
 
@@ -63,50 +62,91 @@ pub mod merkle_wallet {
     pub fn mint_nft<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, MintNFT<'info>>,
     ) -> ProgramResult {
-        token::mint_to(
-            CpiContext::new(
+        msg!("{}", ctx.accounts.token_program.key());
+        msg!("{}", spl_token_2022::id());
+        invoke(
+            &spl_token_2022::instruction::initialize_mint2(
+                &spl_token_2022::id(),
+                &ctx.accounts.mint.key(),
+                &ctx.accounts.payer.key(),
+                Some(&ctx.accounts.payer.key()),
+                0,
+            )?,
+            &[
                 ctx.accounts.token_program.to_account_info(),
-                MintTo {
-                    authority: ctx.accounts.owner.to_account_info(),
-                    mint: ctx.accounts.mint.to_account_info(),
-                    to: ctx.accounts.token_account.to_account_info(),
-                },
+                ctx.accounts.mint.to_account_info(),
+            ],
+        )?;
+        invoke(
+            &spl_associated_token_account::instruction::create_associated_token_account_idempotent(
+                &ctx.accounts.payer.key(),
+                &ctx.accounts.payer.key(),
+                &ctx.accounts.mint.key(),
+                &ctx.accounts.token_program.key(),
             ),
-            1,
+            &[
+                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.payer.to_account_info(),
+                ctx.accounts.mint.to_account_info(),
+                ctx.accounts.token_account.to_account_info(),
+            ],
+        )?;
+        invoke(
+            &spl_token_2022::instruction::mint_to(
+                &spl_token_2022::id(),
+                &ctx.accounts.mint.key(),
+                &ctx.accounts.token_account.key(),
+                &ctx.accounts.payer.key(),
+                &[],
+                1,
+            )?,
+            &[
+                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.payer.to_account_info(),
+                ctx.accounts.mint.to_account_info(),
+                ctx.accounts.token_account.to_account_info(),
+            ],
         )?;
         ctx.accounts.merkle_wallet.counter += 1;
         Ok(())
     }
 
-    pub fn compress_nft(
-        ctx: Context<CompressNFT>,
-        authority_bump: u8,
-        params: CompressNFTArgs,
-    ) -> ProgramResult {
+    pub fn compress_nft(ctx: Context<CompressNFT>, params: CompressNFTArgs) -> ProgramResult {
         assert_with_msg(
             recompute(EMPTY, params.proof.as_ref(), params.path) == ctx.accounts.merkle_wallet.root,
             ProgramError::InvalidArgument,
             "Invalid Merkle proof provided",
         )?;
-        token::burn(
-            CpiContext::new(
+        invoke(
+            &spl_token_2022::instruction::burn(
+                &spl_token_2022::id(),
+                &ctx.accounts.token_account.key(),
+                &ctx.accounts.mint.key(),
+                &ctx.accounts.owner.key(),
+                &[],
+                1,
+            )?,
+            &[
                 ctx.accounts.token_program.to_account_info(),
-                Burn {
-                    mint: ctx.accounts.mint.to_account_info(),
-                    to: ctx.accounts.token_account.to_account_info(),
-                    authority: ctx.accounts.owner.to_account_info(),
-                },
-            ),
-            1,
+                ctx.accounts.owner.to_account_info(),
+                ctx.accounts.mint.to_account_info(),
+                ctx.accounts.token_account.to_account_info(),
+            ],
         )?;
-        token::close_account(CpiContext::new(
-            ctx.accounts.token_program.to_account_info(),
-            CloseAccount {
-                account: ctx.accounts.token_account.to_account_info(),
-                destination: ctx.accounts.owner.to_account_info(),
-                authority: ctx.accounts.owner.to_account_info(),
-            },
-        ))?;
+        invoke(
+            &spl_token_2022::instruction::close_account(
+                &spl_token_2022::id(),
+                &ctx.accounts.token_account.key(),
+                &ctx.accounts.owner.key(),
+                &ctx.accounts.owner.key(),
+                &[],
+            )?,
+            &[
+                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.owner.to_account_info(),
+                ctx.accounts.token_account.to_account_info(),
+            ],
+        )?;
         let max_supply = match ctx.accounts.master_edition.max_supply {
             Some(s) => s,
             None => 0,
@@ -129,22 +169,6 @@ pub mod merkle_wallet {
         // By this point the mint authority should have changed to a PDA of the
         // Token Metadata Program
         // TODO: Destroy Metadata Account (Add instruction to Metaplex)
-        invoke_signed(
-            &close_account(
-                &ctx.accounts.token_program.key(),
-                &ctx.accounts.mint.key(),
-                &ctx.accounts.owner.key(),
-                &ctx.accounts.authority.key(),
-                &[],
-            )?,
-            &[
-                ctx.accounts.token_program.to_account_info(),
-                ctx.accounts.mint.to_account_info(),
-                ctx.accounts.owner.to_account_info(),
-                ctx.accounts.authority.to_account_info(),
-            ],
-            &[&[MERKLE_PREFIX.as_ref(), &[authority_bump as u8]]],
-        )?;
 
         Ok(())
     }
@@ -167,17 +191,22 @@ pub mod merkle_wallet {
             ProgramError::InvalidArgument,
             "Invalid Merkle proof provided",
         )?;
-        token::mint_to(
-            CpiContext::new_with_signer(
+        invoke_signed(
+            &spl_token_2022::instruction::mint_to(
+                &spl_token_2022::id(),
+                &ctx.accounts.mint.key(),
+                &ctx.accounts.token_account.key(),
+                &ctx.accounts.authority.key(),
+                &[],
+                1,
+            )?,
+            &[
                 ctx.accounts.token_program.to_account_info(),
-                MintTo {
-                    authority: ctx.accounts.authority.to_account_info(),
-                    mint: ctx.accounts.mint.to_account_info(),
-                    to: ctx.accounts.token_account.to_account_info(),
-                },
-                &[&[MERKLE_PREFIX.as_ref(), &[authority_bump]]],
-            ),
-            1,
+                ctx.accounts.authority.to_account_info(),
+                ctx.accounts.mint.to_account_info(),
+                ctx.accounts.token_account.to_account_info(),
+            ],
+            &[&[MERKLE_PREFIX.as_ref(), &[authority_bump]]],
         )?;
         let metadata = Box::<TokenMetadata>::new(try_from_slice_checked(
             &params.metadata_bytes,
@@ -239,7 +268,7 @@ pub struct MintNFT<'info> {
         mut,
         seeds = [
             MERKLE_PREFIX.as_ref(),
-            owner.key().as_ref(),
+            payer.key().as_ref(),
         ],
         bump,
     )]
@@ -247,29 +276,23 @@ pub struct MintNFT<'info> {
     #[account(
         init,
         seeds = [
-            owner.key().as_ref(),
+            payer.key().as_ref(),
             merkle_wallet.counter.to_le_bytes().as_ref(),
         ],
         bump,
-        payer = owner,
+        owner = spl_token_2022::id(),
+        payer = payer,
         space = Mint::LEN,
-        mint::decimals = 1,
-        mint::authority = owner,
     )]
-    pub mint: Box<Account<'info, Mint>>,
-    #[account(
-        init,
-        payer = owner,
-        associated_token::mint = mint,
-        associated_token::authority = owner,
-    )]
-    pub token_account: Box<Account<'info, TokenAccount>>,
+    pub mint: UncheckedAccount<'info>,
     #[account(mut)]
-    pub owner: Signer<'info>,
+    pub token_account: UncheckedAccount<'info>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
     pub rent: Sysvar<'info, Rent>,
-    pub token_program: Program<'info, Token>,
+    pub token_program: Program<'info, Token2022> ,
     pub associated_token_program: Program<'info, AssociatedToken>,
-    pub system_program: Program<'info, System>,
+    pub system_program: Program<'info, System>, 
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
@@ -317,7 +340,7 @@ pub struct CompressNFT<'info> {
         bump = authority.bump,
     )]
     pub authority: Account<'info, MerkleAuthority>,
-    pub token_program: Program<'info, Token>,
+    pub token_program: Program<'info, Token2022>,
     pub token_metadata_program: Program<'info, MplTokenMetadata>,
 }
 
@@ -375,75 +398,8 @@ pub struct DecompressNFT<'info> {
     pub authority: Account<'info, MerkleAuthority>,
     pub owner: Signer<'info>,
     pub rent: Sysvar<'info, Rent>,
-    pub token_program: Program<'info, Token>,
+    pub token_program: Program<'info, Token2022>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
     pub token_metadata_program: Program<'info, MplTokenMetadata>,
-}
-
-#[derive(Clone, AnchorDeserialize, AnchorSerialize)]
-pub struct MasterEdition(mpl_token_metadata::state::MasterEditionV2);
-
-impl anchor_lang::AccountDeserialize for MasterEdition {
-    fn try_deserialize_unchecked(buf: &mut &[u8]) -> Result<Self, ProgramError> {
-        try_from_slice_checked(
-            &buf,
-            mpl_token_metadata::state::Key::MasterEditionV2,
-            MAX_MASTER_EDITION_LEN,
-        )
-    }
-}
-
-impl anchor_lang::AccountSerialize for MasterEdition {}
-
-impl anchor_lang::Owner for MasterEdition {
-    fn owner() -> Pubkey {
-        mpl_token_metadata::id()
-    }
-}
-
-impl Deref for MasterEdition {
-    type Target = mpl_token_metadata::state::MasterEditionV2;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-#[derive(Clone, AnchorDeserialize, AnchorSerialize)]
-pub struct TokenMetadata(mpl_token_metadata::state::Metadata);
-
-impl anchor_lang::AccountDeserialize for TokenMetadata {
-    fn try_deserialize_unchecked(buf: &mut &[u8]) -> Result<Self, ProgramError> {
-        try_from_slice_checked(
-            buf,
-            mpl_token_metadata::state::Key::MetadataV1,
-            MAX_METADATA_LEN,
-        )
-    }
-}
-
-impl anchor_lang::AccountSerialize for TokenMetadata {}
-
-impl anchor_lang::Owner for TokenMetadata {
-    fn owner() -> Pubkey {
-        mpl_token_metadata::id()
-    }
-}
-
-impl Deref for TokenMetadata {
-    type Target = mpl_token_metadata::state::Metadata;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-#[derive(Clone)]
-pub struct MplTokenMetadata;
-
-impl anchor_lang::Id for MplTokenMetadata {
-    fn id() -> Pubkey {
-        mpl_token_metadata::id()
-    }
 }

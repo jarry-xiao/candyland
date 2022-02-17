@@ -3,15 +3,12 @@ import { MerkleWallet } from "../target/types/merkle_wallet";
 import { Program, BN, IdlAccounts } from "@project-serum/anchor";
 import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 import {
-  TOKEN_PROGRAM_ID,
   Token,
   ASSOCIATED_TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import { assert } from "chai";
 
-const toAmount = (target, decimals) => {
-  return Math.floor(target * Math.pow(10, decimals));
-};
+const TOKEN_PROGRAM_2022_ID = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
 
 const logTx = async (provider, tx) => {
   await provider.connection.confirmTransaction(tx, "confirmed");
@@ -81,11 +78,12 @@ describe("merkle-wallet", () => {
 
     const tokenAccountKey = await Token.getAssociatedTokenAddress(
       ASSOCIATED_TOKEN_PROGRAM_ID,
-      TOKEN_PROGRAM_ID,
+      TOKEN_PROGRAM_2022_ID,
       mintKey,
       payer.publicKey
     );
 
+    console.log("token program", TOKEN_PROGRAM_2022_ID.toBase58());
     console.log("merkleWallet", merkleWalletKey.toBase58());
     console.log("mint", mintKey.toBase58());
     console.log("token account", tokenAccountKey.toBase58());
@@ -95,9 +93,9 @@ describe("merkle-wallet", () => {
         merkleWallet: merkleWalletKey,
         mint: mintKey,
         tokenAccount: tokenAccountKey,
-        owner: payer.publicKey,
+        payer: payer.publicKey,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram: TOKEN_PROGRAM_2022_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         systemProgram: anchor.web3.SystemProgram.programId,
       },
