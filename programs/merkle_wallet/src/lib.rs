@@ -62,8 +62,6 @@ pub mod merkle_wallet {
     pub fn mint_nft<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, MintNFT<'info>>,
     ) -> ProgramResult {
-        msg!("{}", ctx.accounts.token_program.key());
-        msg!("{}", spl_token_2022::id());
         invoke(
             &spl_token_2022::instruction::initialize_mint2(
                 &spl_token_2022::id(),
