@@ -10,7 +10,7 @@ import {
   CreateMasterEditionV3,
   MasterEditionV2Data,
 } from "@metaplex-foundation/mpl-token-metadata";
-import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
+import { PublicKey, Keypair, SystemProgram, Transaction } from "@solana/web3.js";
 import { Token, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { assert } from "chai";
 
@@ -76,7 +76,7 @@ describe("merkle-wallet", () => {
       [Buffer.from("MERKLE")],
       program.programId
     );
-    let tx = await program.rpc.initializeMerkleWallet({
+    const tx = await program.rpc.initializeMerkleWallet({
       accounts: {
         merkleWallet: merkleWalletKey,
         payer: payer.publicKey,
@@ -107,7 +107,7 @@ describe("merkle-wallet", () => {
     );
 
 
-    tx = await program.rpc.mintNft({
+    const mintTx = await program.transaction.mintNft({
       accounts: {
         merkleWallet: merkleWalletKey,
         mint: mintKey,
@@ -121,7 +121,7 @@ describe("merkle-wallet", () => {
       },
       signers: [payer],
     });
-    await logTx(provider, tx);
+    // await logTx(provider, tx);
 
     const URI = "uri";
     const NAME = "test";
@@ -154,10 +154,6 @@ describe("merkle-wallet", () => {
       }
     );
     metadataTx.instructions[0].keys[3].isWritable = true;
-    const metaplexTx = await program.provider.send(metadataTx, [payer], {
-      commitment: "confirmed",
-    });
-    await logTx(program.provider, metaplexTx);
     let masterEditionTx = new CreateMasterEditionV3(
       { feePayer: payer.publicKey },
       {
@@ -174,10 +170,12 @@ describe("merkle-wallet", () => {
     masterEditionTx.instructions[0].keys[4].isWritable = true;
     masterEditionTx.instructions[0].keys[6].pubkey = TOKEN_PROGRAM_2022_ID;
 
-    const metaplexMETx = await program.provider.send(masterEditionTx, [payer], {
+    let nftTx = new Transaction().add(mintTx).add(metadataTx).add(masterEditionTx);
+
+    const txid = await program.provider.send(nftTx, [payer], {
       commitment: "confirmed",
     });
-    await logTx(program.provider, metaplexMETx);
+    await logTx(program.provider, txid);
 
     let metadataData = await program.provider.connection.getAccountInfo(
       metadataKey,
@@ -190,7 +188,7 @@ describe("merkle-wallet", () => {
 
     let masterEdition = MasterEditionV2Data.deserialize(masterEditionData.data);
 
-    tx = await program.rpc.compressNft(
+    let compressTx = await program.rpc.compressNft(
       new BN(0),
       payer.publicKey,
       new BN(0),
@@ -211,7 +209,7 @@ describe("merkle-wallet", () => {
         signers: [payer],
       }
     );
-    await logTx(provider, tx);
+    await logTx(provider, compressTx);
 
     let leaf = generateLeafNode([
       metadataData.data,
