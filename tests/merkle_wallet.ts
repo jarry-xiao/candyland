@@ -3,17 +3,12 @@ import { MerkleWallet } from "../target/types/merkle_wallet";
 import { Program, BN, IdlAccounts } from "@project-serum/anchor";
 import { Borsh } from "@metaplex-foundation/mpl-core";
 import {
-  MetadataDataData,
   DataV2,
   CreateMetadataV2,
   MetadataProgram,
   CreateMasterEditionV3,
 } from "@metaplex-foundation/mpl-token-metadata";
 import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
-import {
-  PayerTransactionHandler,
-  defaultSendOptions,
-} from "@metaplex-foundation/amman";
 import { Token, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { assert } from "chai";
 
@@ -65,6 +60,10 @@ describe("merkle-wallet", () => {
   it("Create Merkle wallet", async () => {
     const [merkleWalletKey, bump] = await PublicKey.findProgramAddress(
       [Buffer.from("MERKLE"), payer.publicKey.toBuffer()],
+      program.programId
+    );
+    const [merkleAuthKey, authBump] = await PublicKey.findProgramAddress(
+      [Buffer.from("MERKLE")],
       program.programId
     );
     let tx = await program.rpc.initializeMerkleWallet({
@@ -130,10 +129,6 @@ describe("merkle-wallet", () => {
       collection: null,
       uses: null,
     });
-    const transactionHandler = new PayerTransactionHandler(
-      program.provider.connection,
-      payer
-    );
 
     let [metadataKey, _metadataBump] =
       await MetadataProgram.findMetadataAccount(mintKey);
@@ -172,18 +167,27 @@ describe("merkle-wallet", () => {
     masterEditionTx.instructions[0].keys[4].isWritable = true;
     masterEditionTx.instructions[0].keys[6].pubkey = TOKEN_PROGRAM_2022_ID;
 
-    for (const k of masterEditionTx.instructions[0].keys) {
-      console.log(k.pubkey.toBase58(), k.isSigner, k.isWritable);
-    }
-    console.log(masterEditionKey.toBase58())
-    console.log(metadataKey.toBase58())
-    console.log(payer.publicKey.toBase58())
     const metaplexMETx = await program.provider.send(masterEditionTx, [payer], {
       commitment: "confirmed",
     });
     await logTx(program.provider, metaplexMETx);
-  });
 
+    tx = await program.rpc.compressNft(new BN(0), payer.publicKey, new BN(0), {
+      accounts: {
+        merkleWallet: merkleWalletKey,
+        tokenAccount: tokenAccountKey,
+        mint: mintKey,
+        metadata: metadataKey,
+        masterEdition: masterEditionKey,
+        owner: payer.publicKey,
+        tokenProgram: TOKEN_PROGRAM_2022_ID,
+        tokenMetadataProgram: MetadataProgram.PUBKEY,
+        systemProgram: anchor.web3.SystemProgram.programId,
+      },
+      signers: [payer],
+    });
+    await logTx(provider, tx);
+  });
 
   it("Compress NFT", async () => {
     // This part is going to suck...

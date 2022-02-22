@@ -109,12 +109,17 @@ pub mod merkle_wallet {
         Ok(())
     }
 
-    pub fn compress_nft(ctx: Context<CompressNFT>, params: CompressNFTArgs) -> ProgramResult {
-        assert_with_msg(
-            recompute(EMPTY, params.proof.as_ref(), params.path) == ctx.accounts.merkle_wallet.root,
-            ProgramError::InvalidArgument,
-            "Invalid Merkle proof provided",
-        )?;
+    pub fn compress_nft(
+        ctx: Context<CompressNFT>,
+        index: u128,
+        mint_creator: Pubkey,
+        path: u32,
+    ) -> ProgramResult {
+        // assert_with_msg(
+        //     recompute(EMPTY, params.proof.as_ref(), params.path) == ctx.accounts.merkle_wallet.root,
+        //     ProgramError::InvalidArgument,
+        //     "Invalid Merkle proof provided",
+        // )?;
         invoke(
             &spl_token_2022::instruction::burn(
                 &spl_token_2022::id(),
@@ -145,10 +150,10 @@ pub mod merkle_wallet {
                 ctx.accounts.token_account.to_account_info(),
             ],
         )?;
-        let max_supply = match ctx.accounts.master_edition.max_supply {
-            Some(s) => s,
-            None => 0,
-        };
+        // let max_supply = match ctx.accounts.master_edition.max_supply {
+        //     Some(s) => s,
+        //     None => 0,
+        // };
 
         let leaf = generate_leaf_node(&[
             &ctx.accounts
@@ -156,13 +161,13 @@ pub mod merkle_wallet {
                 .to_account_info()
                 .try_borrow_mut_data()?
                 .as_ref(),
-            &max_supply.to_le_bytes().as_ref(),
-            &ctx.accounts.master_edition.supply.to_le_bytes().as_ref(),
-            &params.mint_creator.as_ref(),
-            &params.index.to_le_bytes().as_ref(),
+            &1_u64.to_le_bytes().as_ref(),
+            &1_u64.to_le_bytes().as_ref(),
+            &mint_creator.as_ref(),
+            &index.to_le_bytes().as_ref(),
         ])?;
-        let new_root = recompute(leaf, params.proof.as_ref(), params.path);
-        ctx.accounts.merkle_wallet.root = new_root;
+        // let new_root = recompute(leaf, params.proof.as_ref(), params.path);
+        // ctx.accounts.merkle_wallet.root = new_root;
         // TODO: This should probably be a CPI into the Token Metadata program
         // By this point the mint authority should have changed to a PDA of the
         // Token Metadata Program
@@ -288,9 +293,9 @@ pub struct MintNFT<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     pub rent: Sysvar<'info, Rent>,
-    pub token_program: Program<'info, Token2022> ,
+    pub token_program: Program<'info, Token2022>,
     pub associated_token_program: Program<'info, AssociatedToken>,
-    pub system_program: Program<'info, System>, 
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
@@ -298,11 +303,10 @@ pub struct CompressNFTArgs {
     index: u128,
     mint_creator: Pubkey,
     path: u32,
-    proof: Vec<[u8; 32]>,
+    // proof: Vec<[u8; 32]>,
 }
 
 #[derive(Accounts)]
-#[instruction(authority_bump: u8, params: CompressNFTArgs)]
 pub struct CompressNFT<'info> {
     #[account(
         mut,
@@ -310,36 +314,26 @@ pub struct CompressNFT<'info> {
             MERKLE_PREFIX.as_ref(),
             owner.key().as_ref(),
         ],
-        bump = merkle_wallet.bump,
-    )]
-    pub merkle_wallet: Box<Account<'info, MerkleWallet>>,
-    #[account(
-        mut,
-        constraint = token_account.mint == mint.key(),
-        constraint = token_account.amount == 1,
-    )]
-    pub token_account: Box<Account<'info, TokenAccount>>,
-    #[account(
-        mut,
-        seeds = [
-            params.mint_creator.as_ref(),
-            params.index.to_le_bytes().as_ref(),
-        ],
         bump,
     )]
-    pub mint: Box<Account<'info, Mint>>,
-    #[account(mut)]
-    pub metadata: Box<Account<'info, TokenMetadata>>,
-    #[account(mut)]
-    pub master_edition: Box<Account<'info, MasterEdition>>,
-    pub owner: Signer<'info>,
+    pub merkle_wallet: AccountInfo<'info>,
     #[account(
-        seeds = [MERKLE_PREFIX.as_ref()],
-        bump = authority.bump,
+        mut
+        // constraint = token_account.mint == mint.key(),
+        // constraint = token_account.amount == 1,
     )]
-    pub authority: Account<'info, MerkleAuthority>,
+    pub token_account: AccountInfo<'info>,
+    #[account(mut)]
+    pub mint: AccountInfo<'info>,
+    #[account(mut)]
+    pub metadata: AccountInfo<'info>,
+    #[account(mut)]
+    pub master_edition: AccountInfo<'info>,
+    #[account(mut)]
+    pub owner: Signer<'info>,
     pub token_program: Program<'info, Token2022>,
-    pub token_metadata_program: Program<'info, MplTokenMetadata>,
+    pub token_metadata_program: AccountInfo<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
