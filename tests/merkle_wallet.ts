@@ -1,12 +1,14 @@
 import * as anchor from "@project-serum/anchor";
 import { MerkleWallet } from "../target/types/merkle_wallet";
 import { Program, BN, IdlAccounts } from "@project-serum/anchor";
+import { keccak_256 } from "js-sha3";
 import { Borsh } from "@metaplex-foundation/mpl-core";
 import {
   DataV2,
   CreateMetadataV2,
   MetadataProgram,
   CreateMasterEditionV3,
+  MasterEditionV2Data,
 } from "@metaplex-foundation/mpl-token-metadata";
 import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 import { Token, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
@@ -22,6 +24,14 @@ const logTx = async (provider, tx) => {
     (await provider.connection.getConfirmedTransaction(tx, "confirmed")).meta
       .logMessages
   );
+};
+
+const generateLeafNode = (seeds) => {
+  let leaf = Buffer.alloc(32);
+  for (const seed of seeds) {
+    leaf = Buffer.from(keccak_256.digest([...leaf, ...seed]));
+  }
+  return leaf;
 };
 
 describe("merkle-wallet", () => {
@@ -96,10 +106,6 @@ describe("merkle-wallet", () => {
       payer.publicKey
     );
 
-    console.log("token program", TOKEN_PROGRAM_2022_ID.toBase58());
-    console.log("merkleWallet", merkleWalletKey.toBase58());
-    console.log("mint", mintKey.toBase58());
-    console.log("token account", tokenAccountKey.toBase58());
 
     tx = await program.rpc.mintNft({
       accounts: {
@@ -107,6 +113,7 @@ describe("merkle-wallet", () => {
         mint: mintKey,
         tokenAccount: tokenAccountKey,
         payer: payer.publicKey,
+        authority: merkleAuthKey,
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
         tokenProgram: TOKEN_PROGRAM_2022_ID,
         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -172,25 +179,48 @@ describe("merkle-wallet", () => {
     });
     await logTx(program.provider, metaplexMETx);
 
-    tx = await program.rpc.compressNft(new BN(0), payer.publicKey, new BN(0), {
-      accounts: {
-        merkleWallet: merkleWalletKey,
-        tokenAccount: tokenAccountKey,
-        mint: mintKey,
-        metadata: metadataKey,
-        masterEdition: masterEditionKey,
-        owner: payer.publicKey,
-        tokenProgram: TOKEN_PROGRAM_2022_ID,
-        tokenMetadataProgram: MetadataProgram.PUBKEY,
-        systemProgram: anchor.web3.SystemProgram.programId,
-      },
-      signers: [payer],
-    });
-    await logTx(provider, tx);
-  });
+    let metadataData = await program.provider.connection.getAccountInfo(
+      metadataKey,
+      "confirmed"
+    );
+    let masterEditionData = await program.provider.connection.getAccountInfo(
+      masterEditionKey,
+      "confirmed"
+    );
 
-  it("Compress NFT", async () => {
-    // This part is going to suck...
+    let masterEdition = MasterEditionV2Data.deserialize(masterEditionData.data);
+
+    tx = await program.rpc.compressNft(
+      new BN(0),
+      payer.publicKey,
+      new BN(0),
+      [],
+      {
+        accounts: {
+          merkleWallet: merkleWalletKey,
+          tokenAccount: tokenAccountKey,
+          mint: mintKey,
+          authority: merkleAuthKey,
+          metadata: metadataKey,
+          masterEdition: masterEditionKey,
+          owner: payer.publicKey,
+          tokenProgram: TOKEN_PROGRAM_2022_ID,
+          tokenMetadataProgram: MetadataProgram.PUBKEY,
+          systemProgram: anchor.web3.SystemProgram.programId,
+        },
+        signers: [payer],
+      }
+    );
+    await logTx(provider, tx);
+
+    let leaf = generateLeafNode([
+      metadataData.data,
+      masterEdition.maxSupply.toBuffer("le", 8),
+      masterEdition.supply.toBuffer("le", 8),
+      payer.publicKey.toBuffer(),
+      new BN(0).toBuffer("le", 16),
+    ]);
+    console.log(leaf.join(" "));
   });
 
   it("Decompress NFT", async () => {

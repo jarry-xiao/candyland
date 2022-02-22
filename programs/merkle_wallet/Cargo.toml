@@ -19,5 +19,5 @@ borsh = "0.9.2"
 solana-program = "1.8"
 spl-token-2022 = { path = "/Users/jarryxiao/solana-program-library/token/program-2022", features = [ "no-entrypoint" ] }
 spl-associated-token-account = { path = "/Users/jarryxiao/solana-program-library/associated-token-account/program", features = [ "no-entrypoint" ] }
-mpl-token-metadata = { version = "1.1.0", features = [ "no-entrypoint" ] }
+mpl-token-metadata = { path = "/Users/jarryxiao/Projects/metaplex-program-library/token-metadata/program", features = [ "no-entrypoint" ] }
 mpl-candy-machine = { version = "3.0.0", features = [ "no-entrypoint", "cpi" ] }

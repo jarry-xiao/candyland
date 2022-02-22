@@ -3,9 +3,12 @@ use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
 use mpl_token_metadata::{state::MAX_METADATA_LEN, utils::try_from_slice_checked};
 use solana_program::{
-    hash::hashv,
+    keccak::hashv,
     program::{invoke, invoke_signed},
-    system_instruction,
+};
+use spl_token_2022::{
+    extension::{ExtensionType, ExtensionType::{MintCloseAuthority}},
+    state::Mint as Mint2022,
 };
 
 pub mod state;
@@ -26,13 +29,6 @@ pub fn assert_with_msg(v: bool, err: ProgramError, msg: &str) -> ProgramResult {
 }
 
 const EMPTY: [u8; 32] = [0; 32];
-
-#[account]
-#[derive(Default)]
-pub struct MerkleAuthority {
-    bump: u8,
-}
-
 #[account]
 #[derive(Default)]
 pub struct MerkleWallet {
@@ -62,6 +58,18 @@ pub mod merkle_wallet {
     pub fn mint_nft<'a, 'b, 'c, 'info>(
         ctx: Context<'a, 'b, 'c, 'info, MintNFT<'info>>,
     ) -> ProgramResult {
+        invoke(
+            &spl_token_2022::instruction::initialize_mint_close_authority(
+                &spl_token_2022::id(),
+                &ctx.accounts.mint.key(),
+                Some(&ctx.accounts.authority.key()),
+            )?,
+            &[
+                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.mint.to_account_info(),
+                ctx.accounts.authority.to_account_info(),
+            ],
+        )?;
         invoke(
             &spl_token_2022::instruction::initialize_mint2(
                 &spl_token_2022::id(),
@@ -114,12 +122,20 @@ pub mod merkle_wallet {
         index: u128,
         mint_creator: Pubkey,
         path: u32,
+        proof: Vec<[u8; 32]>,
     ) -> ProgramResult {
-        // assert_with_msg(
-        //     recompute(EMPTY, params.proof.as_ref(), params.path) == ctx.accounts.merkle_wallet.root,
-        //     ProgramError::InvalidArgument,
-        //     "Invalid Merkle proof provided",
-        // )?;
+        let bump = match ctx.bumps.get("authority") {
+            Some(b) => *b, 
+            _ => {
+                msg!("Bump seed missing from ctx");
+                return Err(ProgramError::InvalidArgument);
+            }
+        };
+        assert_with_msg(
+            recompute(EMPTY, proof.as_ref(), path) == ctx.accounts.merkle_wallet.root,
+            ProgramError::InvalidArgument,
+            "Invalid Merkle proof provided",
+        )?;
         invoke(
             &spl_token_2022::instruction::burn(
                 &spl_token_2022::id(),
@@ -150,10 +166,10 @@ pub mod merkle_wallet {
                 ctx.accounts.token_account.to_account_info(),
             ],
         )?;
-        // let max_supply = match ctx.accounts.master_edition.max_supply {
-        //     Some(s) => s,
-        //     None => 0,
-        // };
+        let max_supply = match ctx.accounts.master_edition.max_supply {
+            Some(s) => s,
+            None => 0,
+        };
 
         let leaf = generate_leaf_node(&[
             &ctx.accounts
@@ -161,19 +177,51 @@ pub mod merkle_wallet {
                 .to_account_info()
                 .try_borrow_mut_data()?
                 .as_ref(),
-            &1_u64.to_le_bytes().as_ref(),
-            &1_u64.to_le_bytes().as_ref(),
+            &max_supply.to_le_bytes().as_ref(),
+            &ctx.accounts.master_edition.supply.to_le_bytes().as_ref(),
             &mint_creator.as_ref(),
             &index.to_le_bytes().as_ref(),
         ])?;
-        // let new_root = recompute(leaf, params.proof.as_ref(), params.path);
-        // ctx.accounts.merkle_wallet.root = new_root;
-        // TODO: This should probably be a CPI into the Token Metadata program
-        // By this point the mint authority should have changed to a PDA of the
-        // Token Metadata Program
-        // TODO: Destroy Metadata Account (Add instruction to Metaplex)
-
-        Ok(())
+        msg!("Computed leaf: {:?}", leaf);
+        let new_root = recompute(leaf, proof.as_ref(), path);
+        ctx.accounts.merkle_wallet.root = new_root;
+        invoke_signed(
+            &spl_token_2022::instruction::close_account(
+                &spl_token_2022::id(),
+                &ctx.accounts.mint.key(),
+                &ctx.accounts.owner.key(),
+                &ctx.accounts.authority.key(),
+                &[],
+            )?,
+            &[
+                ctx.accounts.mint.to_account_info(),
+                ctx.accounts.owner.to_account_info(),
+                ctx.accounts.authority.to_account_info(),
+                ctx.accounts.token_program.to_account_info(),
+            ],
+            &[&[
+                MERKLE_PREFIX.as_ref(),
+                &[bump],
+            ]],
+        )?;
+        invoke(
+            &mpl_token_metadata::instruction::close_metadata_and_master_edition(
+                mpl_token_metadata::id(),
+                ctx.accounts.metadata.key(),
+                ctx.accounts.master_edition.key(),
+                ctx.accounts.mint.key(),
+                ctx.accounts.owner.key(),
+                ctx.accounts.owner.key(),
+            ),
+            &[
+                ctx.accounts.token_metadata_program.to_account_info(),
+                ctx.accounts.metadata.to_account_info(),
+                ctx.accounts.master_edition.to_account_info(),
+                ctx.accounts.mint.to_account_info(),
+                ctx.accounts.owner.to_account_info(),
+                ctx.accounts.token_program.to_account_info(),
+            ],
+        )
     }
 
     pub fn decompress_nft(
@@ -229,7 +277,7 @@ pub mod merkle_wallet {
 fn generate_leaf_node<'info>(seeds: &[&[u8]]) -> Result<[u8; 32], ProgramError> {
     let mut leaf = EMPTY;
     for seed in seeds.iter() {
-        let hash = hashv(&[&leaf, seed]);
+        let hash = hashv(&[leaf.as_ref(), seed]);
         leaf.copy_from_slice(hash.as_ref());
     }
     Ok(leaf)
@@ -285,11 +333,16 @@ pub struct MintNFT<'info> {
         bump,
         owner = spl_token_2022::id(),
         payer = payer,
-        space = Mint::LEN,
+        space = ExtensionType::get_account_len::<Mint2022>(&[MintCloseAuthority]),
     )]
     pub mint: UncheckedAccount<'info>,
     #[account(mut)]
     pub token_account: UncheckedAccount<'info>,
+    #[account(
+        seeds = [MERKLE_PREFIX.as_ref()],
+        bump,
+    )]
+    pub authority: AccountInfo<'info>,
     #[account(mut)]
     pub payer: Signer<'info>,
     pub rent: Sysvar<'info, Rent>,
@@ -316,23 +369,24 @@ pub struct CompressNFT<'info> {
         ],
         bump,
     )]
-    pub merkle_wallet: AccountInfo<'info>,
-    #[account(
-        mut
-        // constraint = token_account.mint == mint.key(),
-        // constraint = token_account.amount == 1,
-    )]
+    pub merkle_wallet: Box<Account<'info, MerkleWallet>>,
+    #[account(mut)]
     pub token_account: AccountInfo<'info>,
     #[account(mut)]
     pub mint: AccountInfo<'info>,
+    #[account(
+        seeds = [MERKLE_PREFIX.as_ref()],
+        bump,
+    )]
+    pub authority: AccountInfo<'info>,
     #[account(mut)]
-    pub metadata: AccountInfo<'info>,
+    pub metadata: Box<Account<'info, TokenMetadata>>,
     #[account(mut)]
-    pub master_edition: AccountInfo<'info>,
+    pub master_edition: Box<Account<'info, MasterEdition>>,
     #[account(mut)]
     pub owner: Signer<'info>,
     pub token_program: Program<'info, Token2022>,
-    pub token_metadata_program: AccountInfo<'info>,
+    pub token_metadata_program: Program<'info, MplTokenMetadata>,
     pub system_program: Program<'info, System>,
 }
 
@@ -385,9 +439,9 @@ pub struct DecompressNFT<'info> {
     pub master_edition: Box<Account<'info, MasterEdition>>,
     #[account(
         seeds = [MERKLE_PREFIX.as_ref()],
-        bump = authority.bump,
+        bump,
     )]
-    pub authority: Account<'info, MerkleAuthority>,
+    pub authority: AccountInfo<'info>,
     pub owner: Signer<'info>,
     pub rent: Sysvar<'info, Rent>,
     pub token_program: Program<'info, Token2022>,
