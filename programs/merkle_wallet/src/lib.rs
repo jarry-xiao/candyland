@@ -182,7 +182,6 @@ pub mod merkle_wallet {
             &mint_creator.as_ref(),
             &index.to_le_bytes().as_ref(),
         ])?;
-        msg!("Computed leaf: {:?}", leaf);
         let new_root = recompute(leaf, proof.as_ref(), path);
         ctx.accounts.merkle_wallet.root = new_root;
         invoke_signed(

@@ -1,8 +1,7 @@
 import * as anchor from "@project-serum/anchor";
 import { MerkleWallet } from "../target/types/merkle_wallet";
-import { Program, BN, IdlAccounts } from "@project-serum/anchor";
+import { Program, BN } from "@project-serum/anchor";
 import { keccak_256 } from "js-sha3";
-import { Borsh } from "@metaplex-foundation/mpl-core";
 import {
   DataV2,
   CreateMetadataV2,
@@ -36,34 +35,20 @@ const generateLeafNode = (seeds) => {
 
 describe("merkle-wallet", () => {
   // Configure the client to use the local cluster.
-  const defaultProvider = anchor.Provider.env();
-  const provider = new anchor.Provider(
-    defaultProvider.connection,
-    defaultProvider.wallet,
-    { commitment: "confirmed" }
-  );
-  const idl = JSON.parse(
-    require("fs").readFileSync("./target/idl/merkle_wallet.json", "utf8")
-  );
+  anchor.setProvider(anchor.Provider.env());
 
-  // Address of the deployed program.
-  const programId = new anchor.web3.PublicKey(
-    "7iNZXYZDn1127tRp1GSe3W3zGqGNdw16SiCwANNfTqXH"
-  );
-
-  // Generate the program client from IDL.
-  const program = new anchor.Program(idl, programId, provider);
+  const program = anchor.workspace.MerkleWallet as Program<MerkleWallet>;
   const payer = Keypair.generate();
   const feepayer = Keypair.generate();
 
   it("Initialize start state", async () => {
     // Airdropping tokens to a payer.
-    await provider.connection.confirmTransaction(
-      await provider.connection.requestAirdrop(payer.publicKey, 10000000000),
+    await program.provider.connection.confirmTransaction(
+      await program.provider.connection.requestAirdrop(payer.publicKey, 10000000000),
       "confirmed"
     );
-    await provider.connection.confirmTransaction(
-      await provider.connection.requestAirdrop(feepayer.publicKey, 10000000000),
+    await program.provider.connection.confirmTransaction(
+      await program.provider.connection.requestAirdrop(feepayer.publicKey, 10000000000),
       "confirmed"
     );
   });
@@ -84,7 +69,7 @@ describe("merkle-wallet", () => {
       },
       signers: [payer],
     });
-    await logTx(provider, tx);
+    await logTx(program.provider, tx);
 
     let merkleWallet = await program.account.merkleWallet.fetch(
       merkleWalletKey
@@ -170,25 +155,8 @@ describe("merkle-wallet", () => {
     masterEditionTx.instructions[0].keys[4].isWritable = true;
     masterEditionTx.instructions[0].keys[6].pubkey = TOKEN_PROGRAM_2022_ID;
 
-    let nftTx = new Transaction().add(mintTx).add(metadataTx).add(masterEditionTx);
 
-    const txid = await program.provider.send(nftTx, [payer], {
-      commitment: "confirmed",
-    });
-    await logTx(program.provider, txid);
-
-    let metadataData = await program.provider.connection.getAccountInfo(
-      metadataKey,
-      "confirmed"
-    );
-    let masterEditionData = await program.provider.connection.getAccountInfo(
-      masterEditionKey,
-      "confirmed"
-    );
-
-    let masterEdition = MasterEditionV2Data.deserialize(masterEditionData.data);
-
-    let compressTx = await program.rpc.compressNft(
+    let compressTx = await program.transaction.compressNft(
       new BN(0),
       payer.publicKey,
       new BN(0),
@@ -209,16 +177,33 @@ describe("merkle-wallet", () => {
         signers: [payer],
       }
     );
-    await logTx(provider, compressTx);
 
-    let leaf = generateLeafNode([
-      metadataData.data,
-      masterEdition.maxSupply.toBuffer("le", 8),
-      masterEdition.supply.toBuffer("le", 8),
-      payer.publicKey.toBuffer(),
-      new BN(0).toBuffer("le", 16),
-    ]);
-    console.log(leaf.join(" "));
+    let nftTx = new Transaction().add(mintTx).add(metadataTx).add(masterEditionTx).add(compressTx);
+
+    let txid = await program.provider.send(nftTx, [payer], {
+      commitment: "confirmed",
+    });
+    await logTx(program.provider, txid);
+
+    // let metadataData = await program.provider.connection.getAccountInfo(
+    //   metadataKey,
+    //   "confirmed"
+    // );
+    // let masterEditionData = await program.provider.connection.getAccountInfo(
+    //   masterEditionKey,
+    //   "confirmed"
+    // );
+
+    // let masterEdition = MasterEditionV2Data.deserialize(masterEditionData.data);
+
+    // let leaf = generateLeafNode([
+    //   metadataData.data,
+    //   masterEdition.maxSupply.toBuffer("le", 8),
+    //   masterEdition.supply.toBuffer("le", 8),
+    //   payer.publicKey.toBuffer(),
+    //   new BN(0).toBuffer("le", 16),
+    // ]);
+    // console.log(leaf.join(" "));
   });
 
   it("Decompress NFT", async () => {
