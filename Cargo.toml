@@ -2,8 +2,3 @@
 members = [
     "programs/merkle_wallet"
 ]
-
-exclude = [
-    "programs/metaplex-program-library",
-    "programs/solana-program-library"
-]
