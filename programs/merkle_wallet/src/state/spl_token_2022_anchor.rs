@@ -1,9 +1,7 @@
-
-use anchor_lang::solana_program::program_error::ProgramError;
+use anchor_lang::prelude::*;
 use anchor_lang::solana_program::program_pack::Pack;
 use anchor_lang::solana_program::pubkey::Pubkey;
 use std::ops::Deref;
-
 
 #[derive(Clone)]
 pub struct TokenAccount(spl_token_2022::state::Account);
@@ -13,8 +11,10 @@ impl TokenAccount {
 }
 
 impl anchor_lang::AccountDeserialize for TokenAccount {
-    fn try_deserialize_unchecked(buf: &mut &[u8]) -> Result<Self, ProgramError> {
-        spl_token_2022::state::Account::unpack(buf).map(TokenAccount)
+    fn try_deserialize_unchecked(buf: &mut &[u8]) -> Result<Self> {
+        spl_token_2022::state::Account::unpack(buf)
+            .map(TokenAccount)
+            .map_err(Into::into)
     }
 }
 
@@ -42,8 +42,10 @@ impl Mint {
 }
 
 impl anchor_lang::AccountDeserialize for Mint {
-    fn try_deserialize_unchecked(buf: &mut &[u8]) -> Result<Self, ProgramError> {
-        spl_token_2022::state::Mint::unpack(buf).map(Mint)
+    fn try_deserialize_unchecked(buf: &mut &[u8]) -> Result<Self> {
+        spl_token_2022::state::Mint::unpack(buf)
+            .map(Mint)
+            .map_err(Into::into)
     }
 }
 
