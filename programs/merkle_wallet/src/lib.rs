@@ -119,6 +119,28 @@ pub mod merkle_wallet {
         Ok(())
     }
 
+    pub fn mint_nft_rent_free<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, MintNFTRentFree<'info>>,
+        metadata: mpl_token_metadata::state::DataV2,
+        path: u32,
+        proof: Vec<[u8; 32]>,
+    ) -> ProgramResult {
+        assert_with_msg(
+            recompute(EMPTY, proof.as_ref(), path) == ctx.accounts.merkle_wallet.root,
+            ProgramError::InvalidArgument,
+            "Invalid Merkle proof provided",
+        )?;
+        let leaf = generate_leaf_node(&[
+            metadata.try_to_vec()?.as_ref(),
+            &ctx.accounts.authority.key().as_ref(),
+            &ctx.accounts.merkle_wallet.counter.to_le_bytes().as_ref(),
+        ])?;
+        let new_root = recompute(leaf, proof.as_ref(), path);
+        ctx.accounts.merkle_wallet.root = new_root;
+        ctx.accounts.merkle_wallet.counter += 1;
+        Ok(())
+    }
+
     pub fn compress_nft(
         ctx: Context<CompressNFT>,
         index: u128,
@@ -168,19 +190,19 @@ pub mod merkle_wallet {
                 ctx.accounts.token_account.to_account_info(),
             ],
         )?;
-        let max_supply = match ctx.accounts.master_edition.max_supply {
-            Some(s) => s,
-            None => 0,
+        match ctx.accounts.master_edition.max_supply {
+            Some(_) => {
+                msg!("Master edition must have a max supply of 0");
+                return Err(ProgramError::InvalidAccountData);
+            }
+            None => {}
         };
-
         let leaf = generate_leaf_node(&[
             &ctx.accounts
                 .metadata
                 .to_account_info()
                 .try_borrow_mut_data()?
                 .as_ref(),
-            &max_supply.to_le_bytes().as_ref(),
-            &ctx.accounts.master_edition.supply.to_le_bytes().as_ref(),
             &mint_creator.as_ref(),
             &index.to_le_bytes().as_ref(),
         ])?;
@@ -310,6 +332,25 @@ pub struct MintNFT<'info> {
     pub token_program: Program<'info, Token2022>,
     pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct MintNFTRentFree<'info> {
+    #[account(
+        mut,
+        seeds = [
+            MERKLE_PREFIX.as_ref(),
+            authority.key().as_ref(),
+        ],
+        bump,
+    )]
+    pub merkle_wallet: Box<Account<'info, MerkleWallet>>,
+    /// CHECK: unsafe
+    #[account(
+        seeds = [MERKLE_PREFIX.as_ref()],
+        bump,
+    )]
+    pub authority: AccountInfo<'info>,
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize)]
