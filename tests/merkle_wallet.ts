@@ -1,5 +1,5 @@
 import * as anchor from "@project-serum/anchor";
-import { MerkleWallet } from "../target/types/merkle_wallet";
+import { MerkleWallet } from "../target/types/merkle_wallet" ;
 import { Program, BN } from "@project-serum/anchor";
 import { keccak_256 } from "js-sha3";
 import {
@@ -147,7 +147,7 @@ describe("merkle-wallet", () => {
         updateAuthority: payer.publicKey,
         mint: mintKey,
         mintAuthority: payer.publicKey,
-        maxSupply: new BN(1),
+        maxSupply: new BN(0),
       }
     );
     masterEditionTx.instructions[0].keys[2].isWritable = true;

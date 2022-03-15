@@ -77,10 +77,10 @@
     "@solana/web3.js" "^1.33.0"
     bs58 "^4.0.1"
 
-"@metaplex-foundation/mpl-token-metadata@^1.2.4":
-  version "1.2.4"
-  resolved "https://registry.yarnpkg.com/@metaplex-foundation/mpl-token-metadata/-/mpl-token-metadata-1.2.4.tgz#b764c7bafb17d8a8733d5094abe0350de8120bd8"
-  integrity sha512-FI+VOI5ctlny4UiotvF/xGcSHuXYO0ihgR/GnZfwF5hJ+dx/fhsKmOZsABshMBKUpANhU/3O2TIM5scAGExTEw==
+"@metaplex-foundation/mpl-token-metadata@^1.2.5":
+  version "1.2.5"
+  resolved "https://registry.yarnpkg.com/@metaplex-foundation/mpl-token-metadata/-/mpl-token-metadata-1.2.5.tgz#1a927b1c7d30cd634a1e4782022712a02f6865c2"
+  integrity sha512-pxRG53JsTSwXpiJJMHNulJhH8kO3hHztQ3QxslUoKw2hBYKXsg9TGsiHgNIhN2MPZGBJ2pDeK6kNGv0sd54HhA==
   dependencies:
     "@metaplex-foundation/mpl-core" "^0.0.2"
     "@solana/spl-token" "^0.1.8"

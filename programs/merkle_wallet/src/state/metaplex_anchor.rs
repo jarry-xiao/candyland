@@ -5,6 +5,8 @@ use mpl_token_metadata::{
     utils::try_from_slice_checked,
 };
 use std::ops::Deref;
+use mpl_token_metadata::state::DataV2;
+use solana_program::borsh::try_from_slice_unchecked;
 
 #[derive(Clone, AnchorDeserialize, AnchorSerialize)]
 pub struct MasterEdition(mpl_token_metadata::state::MasterEditionV2);
