@@ -4,3 +4,6 @@
 [submodule "deps/solana-program-library"]
 	path = deps/solana-program-library
 	url = https://github.com/solana-labs/solana-program-library.git
+[submodule "deps/accountsdb-postgres"]
+	path = deps/accountsdb-postgres
+	url = https://github.com/solana-labs/solana-accountsdb-plugin-postgres.git
