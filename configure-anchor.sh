@@ -26,6 +26,21 @@ function replace_workspace_id() {
     fi
 }
 
+function set_workspace_wallet() {
+    WALLET_PATH="/Users/$1/.config/solana/id.json"
+    echo "Setting workspace wallet path: $WALLET_PATH"
+
+    if [[ "$OSTYPE" == "darwin"* ]]
+    then
+        sed -i '' 's#wallet = .*#wallet = "$WALLET_PATH"#g' $2
+    else
+        sed -i 's#wallet = .*#wallet = "'"$WALLET_PATH"'"#g' $2
+    fi
+}
+
+echo ""
+echo ""
+
 WORKSPACE_KEYPAIR="target/deploy/merkle_wallet-keypair.json"
 
 if [[ -f "$WORKSPACE_KEYPAIR" ]]; then
@@ -36,8 +51,13 @@ else
     exit 1;
 fi
 
+
 get_true_workspace_id $WORKSPACE_KEYPAIR
 echo "True workspace program id is: $TRUE_PROGRAM_ID"
 
 replace_declared_id $TRUE_PROGRAM_ID programs/merkle_wallet/src/lib.rs
 replace_workspace_id $TRUE_PROGRAM_ID Anchor.toml
+set_workspace_wallet $USER Anchor.toml
+
+echo ""
+echo ""
