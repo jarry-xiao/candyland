@@ -1,5 +1,5 @@
 [programs.localnet]
-merkle_wallet = "ALNjRQ3aaLsTY9p8FyRUt8dpEWBF1DvTiD8QcLffBKHn"
+merkle_wallet = "HCrUkHVeMqhsDuMvLSQa6HFKdB2ypF27r2pL2tpfLPBq"
 
 [[test.genesis]]
 address = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
