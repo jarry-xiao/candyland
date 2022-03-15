@@ -32,7 +32,7 @@ if [[ -f "$WORKSPACE_KEYPAIR" ]]; then
     echo "Replacing keypair everwhere with address from $WORKSPACE_KEYPAIR"
 else
     echo "Could not find workspace keypair from $WORKSPACE_KEYPAIR"
-    echo "Please run yarn build (anchor build) before running"
+    echo "Please run 'anchor build' before running"
     exit 1;
 fi
 
