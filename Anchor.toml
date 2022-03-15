@@ -1,5 +1,5 @@
 [programs.localnet]
-merkle_wallet = "7iNZXYZDn1127tRp1GSe3W3zGqGNdw16SiCwANNfTqXH"
+merkle_wallet = "ALNjRQ3aaLsTY9p8FyRUt8dpEWBF1DvTiD8QcLffBKHn"
 
 [[test.genesis]]
 address = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
@@ -22,7 +22,7 @@ url = "https://anchor.projectserum.com"
 
 [provider]
 cluster = "localnet"
-wallet = "/Users/jarryxiao/.config/solana/id.json"
+wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+test = "yarn run ts-mocha -t 1000000 tests/**/*.ts"

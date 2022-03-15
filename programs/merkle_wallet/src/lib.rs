@@ -17,7 +17,7 @@ pub mod state;
 
 const MERKLE_PREFIX: &str = "MERKLE";
 
-declare_id!("7iNZXYZDn1127tRp1GSe3W3zGqGNdw16SiCwANNfTqXH");
+declare_id!("ALNjRQ3aaLsTY9p8FyRUt8dpEWBF1DvTiD8QcLffBKHn");
 
 #[inline(always)]
 pub fn assert_with_msg(v: bool, err: ProgramError, msg: &str) -> ProgramResult {
@@ -119,27 +119,27 @@ pub mod merkle_wallet {
         Ok(())
     }
 
-    pub fn mint_nft_rent_free<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, MintNFTRentFree<'info>>,
-        metadata: mpl_token_metadata::state::DataV2,
-        path: u32,
-        proof: Vec<[u8; 32]>,
-    ) -> ProgramResult {
-        assert_with_msg(
-            recompute(EMPTY, proof.as_ref(), path) == ctx.accounts.merkle_wallet.root,
-            ProgramError::InvalidArgument,
-            "Invalid Merkle proof provided",
-        )?;
-        let leaf = generate_leaf_node(&[
-            metadata.try_to_vec()?.as_ref(),
-            &ctx.accounts.authority.key().as_ref(),
-            &ctx.accounts.merkle_wallet.counter.to_le_bytes().as_ref(),
-        ])?;
-        let new_root = recompute(leaf, proof.as_ref(), path);
-        ctx.accounts.merkle_wallet.root = new_root;
-        ctx.accounts.merkle_wallet.counter += 1;
-        Ok(())
-    }
+    // pub fn mint_nft_rent_free<'a, 'b, 'c, 'info>(
+    //     ctx: Context<'a, 'b, 'c, 'info, MintNFTRentFree<'info>>,
+    //     metadata: mpl_token_metadata::state::DataV2,
+    //     path: u32,
+    //     proof: Vec<[u8; 32]>,
+    // ) -> ProgramResult {
+    //     assert_with_msg(
+    //         recompute(EMPTY, proof.as_ref(), path) == ctx.accounts.merkle_wallet.root,
+    //         ProgramError::InvalidArgument,
+    //         "Invalid Merkle proof provided",
+    //     )?;
+    //     let leaf = generate_leaf_node(&[
+    //         metadata.try_to_vec()?.as_ref(),
+    //         &ctx.accounts.authority.key().as_ref(),
+    //         &ctx.accounts.merkle_wallet.counter.to_le_bytes().as_ref(),
+    //     ])?;
+    //     let new_root = recompute(leaf, proof.as_ref(), path);
+    //     ctx.accounts.merkle_wallet.root = new_root;
+    //     ctx.accounts.merkle_wallet.counter += 1;
+    //     Ok(())
+    // }
 
     pub fn compress_nft(
         ctx: Context<CompressNFT>,
@@ -191,11 +191,11 @@ pub mod merkle_wallet {
             ],
         )?;
         match ctx.accounts.master_edition.max_supply {
-            Some(_) => {
+            Some(d) if d > 0 => {
                 msg!("Master edition must have a max supply of 0");
                 return Err(ProgramError::InvalidAccountData);
             }
-            None => {}
+            _ => {}
         };
         let leaf = generate_leaf_node(&[
             &ctx.accounts
