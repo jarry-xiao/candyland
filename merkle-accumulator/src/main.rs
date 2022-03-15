@@ -1,27 +1,9 @@
-use solana_program::keccak::hashv;
 use rand::thread_rng;
 use rand::Rng;
-// use rand::distributions::{Distribution, Standard};
+use solana_program::keccak::hashv;
 
-const MAX_SIZE: usize = 64;
-const MAX_DEPTH: usize = 20;
-const PADDING: usize = 12;
-const MASK: u64 = MAX_SIZE as u64 - 1;
-
-type Node = [u8; 32];
-
-fn recompute(mut start: Node, path: &[Node], address: u32) -> Node {
-    for (ix, s) in path.iter().enumerate() {
-        if address >> ix & 1 == 1 {
-            let res = hashv(&[&start, s.as_ref()]);
-            start.copy_from_slice(res.as_ref());
-        } else {
-            let res = hashv(&[s.as_ref(), &start]);
-            start.copy_from_slice(res.as_ref());
-        }
-    }
-    start
-}
+mod merkle;
+use crate::merkle::{recompute, Node, MASK, MAX_DEPTH, MAX_SIZE, PADDING};
 
 #[derive(Copy, Clone)]
 pub struct ChangeLog {
@@ -152,7 +134,7 @@ fn main() {
     let mut merkle = MerkleAccumulator::new();
     for _ in 0..128 {
         let leaf = rng.gen::<[u8; 32]>();
-//        merkle.add(leaf);
+        //        merkle.add(leaf);
         v.push(leaf);
         println!("leaf {:?}, root {:?}", leaf, merkle.get());
     }
