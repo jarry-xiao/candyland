@@ -1,11 +1,10 @@
-use merkle::MerkleTree;
 use rand::prelude::SliceRandom;
 use rand::{thread_rng, random};
 use rand::{self, Rng};
 use solana_program::keccak::hashv;
 
 mod merkle;
-use crate::merkle::{empty_node, recompute, Node, MASK, MAX_DEPTH, MAX_SIZE, PADDING};
+use crate::merkle::{MerkleTree, empty_node, recompute, Node, MASK, MAX_DEPTH, MAX_SIZE, PADDING};
 
 #[derive(Copy, Clone)]
 /// Stores proof for a given Merkle root update
@@ -44,6 +43,7 @@ impl MerkleAccumulator {
         }
     }
 
+    /// Returns on-chain root
     pub fn get(&self) -> Node {
         self.roots[self.active_index as usize]
     }
@@ -186,7 +186,7 @@ fn main() {
     // On-chain: record updates to the root
     for i in 0..(1 << MAX_DEPTH - 1) {
         let leaf = rng.gen::<Node>();
-        let (proof_vec, path) = uc_merkley.get_proof(i);
+        let (proof_vec, path) = uc_merkley.get_proof_of_leaf(i);
 
         let proof = proof_to_slice(proof_vec);
 
@@ -196,10 +196,6 @@ fn main() {
 
     println!("end root {:?}", uc_merkley.root);
     println!("end root {:?}", merkle.get());
-
-    let mut proofs = vec![];
-    let mut indices = vec![];
-
 
     // Test: mixed remove_leaf() & add_leaf()
     // ---
@@ -218,8 +214,11 @@ fn main() {
     let mut inds: Vec<usize> = (0..(1 << MAX_DEPTH)).collect();
     inds.shuffle(&mut rng);
 
+    let mut proofs = vec![];
+    let mut indices = vec![];
+
     for i in inds.into_iter().take(MAX_SIZE-1) {
-        let (proof_vec, path) = uc_merkley.get_proof(i);
+        let (proof_vec, path) = uc_merkley.get_proof_of_leaf(i);
 
         // Make on-chain readable proof 
         let proof = proof_to_slice(proof_vec);
@@ -254,4 +253,119 @@ fn proof_to_slice(proof_vec: Vec<Node>) -> [Node; MAX_DEPTH]{
         slice[i] = *x;
     }
     slice
+}
+
+#[cfg(test)]
+mod test {
+    use rand::prelude::SliceRandom;
+    use rand::{thread_rng, rngs::ThreadRng};
+    use rand::{self, Rng};
+    use super::merkle::*;
+    use super::{MerkleAccumulator, proof_to_slice};
+
+    /// Sets up an off-chain Merkle Tree  with
+    #[inline]
+    fn setup() -> (MerkleAccumulator, MerkleTree) {
+        // Setup
+        let mut leaves = vec![];
+        // on-chain merkle change-record
+        let merkle = MerkleAccumulator::new();
+
+        // Init off-chain Merkle tree with leaves
+        for _ in 0..(1 << MAX_DEPTH) {
+            let leaf = [0; 32];
+            leaves.push(leaf);
+        }
+        // off-chain merkle tree
+        let uc_merkley = MerkleTree::new(leaves);
+
+        println!("start root {:?}", uc_merkley.root);
+        println!("start root {:?}", merkle.get());
+        (merkle, uc_merkley)
+    }
+
+    /// Adds random leaves to on-chain & records off-chain
+    fn add_random_leafs(merkle: &mut MerkleAccumulator, off_chain_merkle: &mut MerkleTree, num: usize, rng: &mut ThreadRng) {
+        for i in 0..num {
+            let leaf = rng.gen::<Node>();
+            let (proof_vec, path) = off_chain_merkle.get_proof_of_leaf(i);
+
+            merkle.add(off_chain_merkle.root, leaf, proof_to_slice(proof_vec), path);
+            off_chain_merkle.add_leaf(leaf, i);
+        }
+    }
+
+    #[inline]
+    fn create_proof_of_existence(merkle: MerkleAccumulator, off_chain_merkle: MerkleTree, rng: &mut ThreadRng) -> (Vec<(usize, Node, [Node; MAX_DEPTH], u32)>, Vec<usize>) {
+        let mut inds: Vec<usize> = (0..(1 << MAX_DEPTH)).collect();
+        inds.shuffle(rng);
+        let mut proofs = vec![];
+        let mut indices = vec![];
+
+        for i in inds.into_iter().take(MAX_SIZE-1) {
+            let (proof_vec, path) = off_chain_merkle.get_proof_of_leaf(i);
+
+            // Make on-chain readable proof 
+            let proof = proof_to_slice(proof_vec);
+
+            proofs.push((i, off_chain_merkle.get_node(i), proof, path));
+            indices.push(i);
+        }
+        (proofs, indices)
+    }
+
+    // fn proof_to_slice(proof_vec: Vec<Node>) -> [Node; MAX_DEPTH]{
+    //     let mut slice = [[0; 32]; MAX_DEPTH];
+    //     for (i, x) in proof_vec.iter().enumerate() {
+    //         slice[i] = *x;
+    //     }
+    //     slice
+    // }
+
+    // Test: add_leaf
+    // ------
+    // Note: we are not initializing on-chain merkle accumulator, we just start using it to track changes
+    // Off-chain: replace 1st half of leaves with random values
+    // On-chain: record updates to the root
+    #[test]
+    fn test_add() {
+        let (mut merkle, mut off_chain_merkle) = setup();
+        let mut rng = thread_rng();
+
+        add_random_leafs(&mut merkle, &mut off_chain_merkle, 1 << MAX_DEPTH - 1, &mut rng);
+
+        assert_eq!(merkle.get(), off_chain_merkle.root);
+    }
+
+
+    /// Test: add_leaf, remove_leaf
+    /// ------
+    /// Randomly insert & remove leaves into a half-full tree 
+    /// 
+    /// Description:
+    /// Shuffle all the remaining leaves, 
+    ///      and either add to that leaf if it is empty
+    ///      or remove leaf if it has values
+    ///
+    /// Note: we can only create proofs for up to MAX_SIZE indices at a time
+    ///      before reconstructing our list of proofs
+    /// 
+    /// Note: make sure indices are deduped, this cannot handle duplicate additions
+    /// 
+    /// This test mimicks concurrent writes to the same merkle tree
+    /// in the same block.
+    #[test]
+    fn test_mixed() {
+        let (mut merkle, mut off_chain_merkle) = setup();
+        let mut rng = thread_rng();
+
+        add_random_leafs(&mut merkle, &mut off_chain_merkle, 1 << MAX_DEPTH - 1, &mut rng);
+
+        // Limited by MAX_SIZE
+        let (mut proofs, mut indices) = create_proof_of_existence(merkle, off_chain_merkle,&mut rng);
+
+
+        println!("Hello world!");
+    }
+
 }
