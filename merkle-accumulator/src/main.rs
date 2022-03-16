@@ -248,19 +248,42 @@ mod test {
     // Off-chain: replace 1st half of leaves with random values
     // On-chain: record updates to the root
     #[test]
-    fn test_add() {
-
+    fn test_add_all() {
         let (mut merkle, mut off_chain_merkle) = setup();
         let mut rng = thread_rng();
 
         println!("Accumulator init root     : {:?}", merkle.get());
         println!("Off-chain merkle init root: {:?}", off_chain_merkle.root);
 
-        add_random_leafs(&mut merkle, &mut off_chain_merkle,  &mut rng, 1 << MAX_DEPTH - 1);
+        add_random_leafs(&mut merkle, &mut off_chain_merkle,  &mut rng, 1 << MAX_DEPTH);
 
         assert_eq!(merkle.get(), off_chain_merkle.root);
     }
 
+    /// Test: remove_leaf
+    /// ------
+    /// Add all leaves,
+    /// then remove leaves
+    #[test]
+    fn test_remove_all() {
+        let (mut merkle, mut off_chain_merkle) = setup();
+        let mut rng = thread_rng();
+
+        let num_leaves = 1 << MAX_DEPTH;
+        add_random_leafs(&mut merkle, &mut off_chain_merkle,  &mut rng, num_leaves);
+
+        let mut inds: Vec<usize> = (0..num_leaves).collect();
+        inds.shuffle(&mut rng);
+
+        for idx in inds.into_iter() {
+            let root = merkle.get();
+            let (mut proof, path)  = off_chain_merkle.get_proof_of_leaf(idx);
+            merkle.remove(root, off_chain_merkle.get_node(idx), proof_to_slice(proof), path);
+            off_chain_merkle.remove_leaf(idx);
+        }
+
+        assert_eq!(merkle.get(), off_chain_merkle.root);
+    }
 
     /// Test: add_leaf, remove_leaf
     /// ------
@@ -304,7 +327,6 @@ mod test {
             assert_eq!(merkle.get(), off_chain_merkle.root);
         }
     }
-
 
     /// Currently failing, need some fancy on-chain instructions & storage to be able to dynamically handle this
     #[test]
