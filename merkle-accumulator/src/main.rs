@@ -1,6 +1,7 @@
 use merkle::MerkleTree;
-use rand::thread_rng;
-use rand::Rng;
+use rand::prelude::SliceRandom;
+use rand::{thread_rng, random};
+use rand::{self, Rng};
 use solana_program::keccak::hashv;
 
 mod merkle;
@@ -44,12 +45,13 @@ impl MerkleAccumulator {
         path: u32,
     ) -> Option<Node> {
         for i in 0..self.size {
-            let j = (self.active_index - i) & MASK;
+            let j = self.active_index.wrapping_sub(i) & MASK;
             if self.roots[j as usize] != current_root {
                 continue;
             }
             let old_root = recompute([0; 32], &proof, path);
             if old_root == current_root {
+                println!("Roots match {:?}", old_root);
                 return Some(self.update_and_apply_proof(leaf, &mut proof, path, j));
             } else {
                 println!("Root mismatch {:?} {:?}", old_root, current_root);
@@ -76,7 +78,7 @@ impl MerkleAccumulator {
         path: u32,
     ) -> Option<Node> {
         for i in 0..self.size {
-            let j = (self.active_index - i) & MASK;
+            let j = self.active_index.wrapping_sub(i) & MASK;
 
             if self.roots[j as usize] != current_root {
                 if self.changes[j as usize].changes[MAX_DEPTH - 1] == leaf {
@@ -86,11 +88,13 @@ impl MerkleAccumulator {
             }
             let old_root = recompute(leaf, &proof, path);
             if old_root == current_root {
-                return Some(self.update_and_apply_proof(leaf, &mut proof, path, j));
+                return Some(self.update_and_apply_proof([0; 32], &mut proof, path, j));
             } else {
+                assert!(false);
                 return None;
             }
         }
+        println!("Failed to find root");
         return None;
     }
 
@@ -104,8 +108,9 @@ impl MerkleAccumulator {
         while j != self.active_index {
             j += 1;
             j &= MASK;
-            let critbit_index =
-                (path ^ self.changes[j as usize].path).leading_zeros() as usize - PADDING;
+            let critbit_index = MAX_DEPTH
+                - (((path ^ self.changes[j as usize].path) << PADDING).leading_zeros() as usize)
+                - 1;
             proof[critbit_index] = self.changes[j as usize].changes[critbit_index];
         }
         if self.size > 0 {
@@ -122,7 +127,7 @@ impl MerkleAccumulator {
 
     fn apply_changes(&mut self, mut start: Node, proof: &[Node], path: u32, i: usize) -> Node {
         let change_log = &mut self.changes[i];
-        change_log.changes[MAX_DEPTH - 1] = start;
+        change_log.changes[0] = start;
         for (ix, s) in proof.iter().enumerate() {
             if path >> ix & 1 == 1 {
                 let res = hashv(&[&start, s.as_ref()]);
@@ -131,8 +136,8 @@ impl MerkleAccumulator {
                 let res = hashv(&[s.as_ref(), &start]);
                 start.copy_from_slice(res.as_ref());
             }
-            if ix <= MAX_DEPTH - 2 {
-                change_log.changes[MAX_DEPTH - 2 - ix] = start;
+            if ix < MAX_DEPTH - 1 {
+                change_log.changes[ix + 1] = start;
             }
         }
         change_log.path = path;
@@ -151,7 +156,7 @@ fn main() {
     let mut uc_merkley = MerkleTree::new(leaves);
     println!("start root {:?}", uc_merkley.root);
     println!("start root {:?}", merkle.get());
-    for i in 0..(1 << MAX_DEPTH) {
+    for i in 0..(1 << MAX_DEPTH - 1) {
         let leaf = rng.gen::<Node>();
         let (proof_vec, path) = uc_merkley.get_proof(i);
         let mut proof = [[0; 32]; MAX_DEPTH];
@@ -160,6 +165,43 @@ fn main() {
         }
         merkle.add(uc_merkley.root, leaf, proof, path);
         uc_merkley.add_leaf(leaf, i);
+    }
+
+    println!("end root {:?}", uc_merkley.root);
+    println!("end root {:?}", merkle.get());
+
+    let mut proofs = vec![];
+    let mut indices = vec![];
+
+    let root = merkle.get();
+    let mut inds: Vec<usize> = (0..(1 << MAX_DEPTH)).collect();
+    inds.shuffle(&mut rng);
+
+    for i in inds.into_iter().take(63) {
+        if indices.iter().any(|j| *j == i) {
+            continue;
+        }
+        let (proof_vec, path) = uc_merkley.get_proof(i);
+        let mut proof = [[0; 32]; MAX_DEPTH];
+        for (i, x) in proof_vec.iter().enumerate() {
+            proof[i] = *x;
+        }
+        proofs.push((i, uc_merkley.get_node(i), proof, path));
+        indices.push(i);
+    }
+
+    for (i, leaf, proof, path) in proofs.iter() {
+        if *leaf != [0; 32] {
+            println!("Remove {}", i);
+            merkle.remove(root, uc_merkley.get_node(*i), *proof, *path);
+            uc_merkley.remove_leaf(*i);
+        } else {
+            println!("Add {}", i);
+            let random_leaf = rng.gen::<Node>();
+            merkle.add(root, random_leaf, *proof, *path);
+            uc_merkley.add_leaf(random_leaf, *i);
+        }
+        assert_eq!(merkle.get(), uc_merkley.root);
     }
 
     println!("end root {:?}", uc_merkley.root);

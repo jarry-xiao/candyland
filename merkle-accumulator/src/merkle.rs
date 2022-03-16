@@ -7,7 +7,7 @@ use std::rc::Rc;
 pub type Node = [u8; 32];
 pub const MAX_SIZE: usize = 64;
 pub const MAX_DEPTH: usize = 10;
-pub const PADDING: usize = 32 - MAX_DEPTH;
+pub const PADDING: usize = 32 - MAX_DEPTH; 
 pub const MASK: u64 = MAX_SIZE as u64 - 1;
 
 const MAX_LEAVES: u64 = 0x1 << MAX_DEPTH;
@@ -191,6 +191,10 @@ impl MerkleTree {
             node = parent;
             node.borrow_mut().node.copy_from_slice(hash.as_ref());
         }
+    }
+
+    pub fn get_node(&self, idx: usize) -> Node {
+        self.leaf_nodes[idx].borrow().node
     }
 
     pub fn add_leaf(&mut self, leaf: Node, idx: usize) {
