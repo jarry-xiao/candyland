@@ -1,5 +1,5 @@
 use solana_program::keccak::hashv;
-use std::cell::{Ref, RefCell, RefMut};
+use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::iter::FromIterator;
 use std::rc::Rc;
@@ -7,14 +7,12 @@ use std::rc::Rc;
 pub type Node = [u8; 32];
 pub const MAX_SIZE: usize = 64;
 pub const MAX_DEPTH: usize = 10;
-pub const PADDING: usize = 32 - MAX_DEPTH; 
+pub const PADDING: usize = 32 - MAX_DEPTH;
 pub const MASK: u64 = MAX_SIZE as u64 - 1;
 
-const MAX_LEAVES: u64 = 0x1 << MAX_DEPTH;
-
-pub fn recompute(mut start: Node, path: &[Node], address: u32) -> Node {
-    for (ix, s) in path.iter().enumerate() {
-        if address >> ix & 1 == 1 {
+pub fn recompute(mut start: Node, proof: &[Node], path: u32) -> Node {
+    for (ix, s) in proof.iter().enumerate() {
+        if path >> ix & 1 == 1 {
             let res = hashv(&[&start, s.as_ref()]);
             start.copy_from_slice(res.as_ref());
         } else {
@@ -30,7 +28,6 @@ pub struct MerkleTree {
     pub leaf_nodes: Vec<Rc<RefCell<TreeNode>>>,
     pub free_list: VecDeque<Rc<RefCell<TreeNode>>>,
     pub root: Node,
-    pub seq_num: u128,
 }
 
 impl MerkleTree {
@@ -41,12 +38,11 @@ impl MerkleTree {
             tree_node.node = node.clone();
             leaf_nodes.push(Rc::new(RefCell::new(tree_node)));
         }
-        let (root, seq_num) = MerkleTree::build_root(&leaf_nodes);
+        let root = MerkleTree::build_root(&leaf_nodes);
         Self {
             leaf_nodes,
             free_list: VecDeque::new(),
             root,
-            seq_num,
         }
     }
 }
@@ -91,7 +87,7 @@ impl TreeNode {
             right: None,
             parent: None,
             level: level,
-            id 
+            id,
         }
     }
 
@@ -112,7 +108,7 @@ pub fn empty_node(level: u32) -> Node {
 
 impl MerkleTree {
     /// Builds root from stack of leaves
-    pub fn build_root(leaves: &Vec<Rc<RefCell<TreeNode>>>) -> (Node, u128) {
+    pub fn build_root(leaves: &Vec<Rc<RefCell<TreeNode>>>) -> Node {
         let mut tree = VecDeque::from_iter(leaves.iter().map(|x| Rc::clone(x)));
         let mut seq_num = leaves.len() as u128;
         while tree.len() > 1 {
@@ -134,7 +130,7 @@ impl MerkleTree {
                 left.clone(),
                 right.clone(),
                 level + 1,
-                seq_num
+                seq_num,
             )));
             TreeNode::assign_parent(&mut left, parent.clone());
             TreeNode::assign_parent(&mut right, parent.clone());
@@ -143,7 +139,7 @@ impl MerkleTree {
         }
 
         let root = tree[0].borrow().node.clone();
-        (root, seq_num)
+        root
     }
 
     pub fn get_proof(&self, idx: usize) -> (Vec<Node>, u32) {
@@ -186,18 +182,18 @@ impl MerkleTree {
                 break;
             }
             let parent = Rc::clone(&ref_node.borrow().parent.as_ref().unwrap());
-            let hash =
-                if parent.borrow().left.as_ref().unwrap().borrow().id == ref_node.borrow().id {
-                    hashv(&[
-                        &ref_node.borrow().node,
-                        &parent.borrow().right.as_ref().unwrap().borrow().node,
-                    ])
-                } else {
-                    hashv(&[
-                        &parent.borrow().left.as_ref().unwrap().borrow().node,
-                        &ref_node.borrow().node,
-                    ])
-                };
+            let hash = if parent.borrow().left.as_ref().unwrap().borrow().id == ref_node.borrow().id
+            {
+                hashv(&[
+                    &ref_node.borrow().node,
+                    &parent.borrow().right.as_ref().unwrap().borrow().node,
+                ])
+            } else {
+                hashv(&[
+                    &parent.borrow().left.as_ref().unwrap().borrow().node,
+                    &ref_node.borrow().node,
+                ])
+            };
             node = parent;
             node.borrow_mut().node.copy_from_slice(hash.as_ref());
         }
@@ -205,6 +201,10 @@ impl MerkleTree {
 
     pub fn get_node(&self, idx: usize) -> Node {
         self.leaf_nodes[idx].borrow().node
+    }
+
+    pub fn get(&self) -> Node {
+        self.root
     }
 
     pub fn add_leaf(&mut self, leaf: Node, idx: usize) {

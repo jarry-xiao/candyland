@@ -1,6 +1,6 @@
 use merkle::MerkleTree;
 use rand::prelude::SliceRandom;
-use rand::{thread_rng, random};
+use rand::thread_rng;
 use rand::{self, Rng};
 use solana_program::keccak::hashv;
 
@@ -15,7 +15,7 @@ pub struct ChangeLog {
 
 pub struct MerkleAccumulator {
     roots: [Node; MAX_SIZE],
-    changes: [ChangeLog; MAX_SIZE],
+    change_logs: [ChangeLog; MAX_SIZE],
     active_index: u64,
     size: u64,
 }
@@ -24,7 +24,7 @@ impl MerkleAccumulator {
     pub fn new() -> Self {
         Self {
             roots: [empty_node(MAX_DEPTH as u32); MAX_SIZE],
-            changes: [ChangeLog {
+            change_logs: [ChangeLog {
                 changes: [[0; 32]; MAX_DEPTH],
                 path: 0,
             }; MAX_SIZE],
@@ -80,7 +80,7 @@ impl MerkleAccumulator {
             let j = self.active_index.wrapping_sub(i) & MASK;
 
             if self.roots[j as usize] != current_root {
-                if self.changes[j as usize].changes[MAX_DEPTH - 1] == leaf {
+                if self.change_logs[j as usize].changes[MAX_DEPTH - 1] == leaf {
                     return None;
                 }
                 continue;
@@ -108,9 +108,10 @@ impl MerkleAccumulator {
             j += 1;
             j &= MASK;
             let critbit_index = MAX_DEPTH
-                - (((path ^ self.changes[j as usize].path) << PADDING).leading_zeros() as usize)
+                - (((path ^ self.change_logs[j as usize].path) << PADDING).leading_zeros()
+                    as usize)
                 - 1;
-            proof[critbit_index] = self.changes[j as usize].changes[critbit_index];
+            proof[critbit_index] = self.change_logs[j as usize].changes[critbit_index];
         }
         if self.size > 0 {
             self.active_index += 1;
@@ -125,7 +126,7 @@ impl MerkleAccumulator {
     }
 
     fn apply_changes(&mut self, mut start: Node, proof: &[Node], path: u32, i: usize) -> Node {
-        let change_log = &mut self.changes[i];
+        let change_log = &mut self.change_logs[i];
         change_log.changes[0] = start;
         for (ix, s) in proof.iter().enumerate() {
             if path >> ix & 1 == 1 {
@@ -159,8 +160,7 @@ fn main() {
     // off-chain merkle
     let mut uc_merkley = MerkleTree::new(leaves);
 
-
-    println!("start root {:?}", uc_merkley.root);
+    println!("start root {:?}", uc_merkley.get());
     println!("start root {:?}", merkle.get());
 
     // Test: add_leaf()
@@ -174,38 +174,37 @@ fn main() {
 
         let proof = proof_to_slice(proof_vec);
 
-        merkle.add(uc_merkley.root, leaf, proof, path);
+        merkle.add(uc_merkley.get(), leaf, proof, path);
         uc_merkley.add_leaf(leaf, i);
     }
 
-    println!("end root {:?}", uc_merkley.root);
+    println!("end root {:?}", uc_merkley.get());
     println!("end root {:?}", merkle.get());
 
     let mut proofs = vec![];
     let mut indices = vec![];
 
-
     // Test: mixed remove_leaf() & add_leaf()
     // ---
-    // Shuffle all the remaining leaves, 
+    // Shuffle all the remaining leaves,
     //      and either add to that leaf if it is empty
     //      or remove leaf if it has values
     //
     // Note: we can only create proofs for up to MAX_SIZE indices at a time
     //      before reconstructing our list of proofs
-    // 
+    //
     // Note: make sure indices are deduped, this cannot handle duplicate additions
-    // 
+    //
     // This test mimicks concurrent writes to the same merkle tree
     // in the same block.
-    // 
+    //
     let mut inds: Vec<usize> = (0..(1 << MAX_DEPTH)).collect();
     inds.shuffle(&mut rng);
 
-    for i in inds.into_iter().take(MAX_SIZE-1) {
+    for i in inds.into_iter().take(MAX_SIZE - 1) {
         let (proof_vec, path) = uc_merkley.get_proof(i);
 
-        // Make on-chain readable proof 
+        // Make on-chain readable proof
         let proof = proof_to_slice(proof_vec);
 
         proofs.push((i, uc_merkley.get_node(i), proof, path));
@@ -213,7 +212,7 @@ fn main() {
     }
 
     // Apply "concurrent" changes to on-chain merkle accumulator
-    let root =  merkle.get();
+    let root = merkle.get();
     for (i, leaf, proof, path) in proofs.iter() {
         if *leaf != [0; 32] {
             println!("Remove {}", i);
@@ -225,14 +224,14 @@ fn main() {
             merkle.add(root, random_leaf, *proof, *path);
             uc_merkley.add_leaf(random_leaf, *i);
         }
-        assert_eq!(merkle.get(), uc_merkley.root);
+        assert_eq!(merkle.get(), uc_merkley.get());
     }
 
-    println!("end root {:?}", uc_merkley.root);
+    println!("end root {:?}", uc_merkley.get());
     println!("end root {:?}", merkle.get());
 }
 
-fn proof_to_slice(proof_vec: Vec<Node>) -> [Node; MAX_DEPTH]{
+fn proof_to_slice(proof_vec: Vec<Node>) -> [Node; MAX_DEPTH] {
     let mut slice = [[0; 32]; MAX_DEPTH];
     for (i, x) in proof_vec.iter().enumerate() {
         slice[i] = *x;
