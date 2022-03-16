@@ -1,3 +1,4 @@
+use merkle::MerkleTree;
 use rand::thread_rng;
 use rand::Rng;
 use solana_program::keccak::hashv;
@@ -129,13 +130,23 @@ impl MerkleAccumulator {
 
 fn main() {
     let mut rng = thread_rng();
-
-    let mut v = vec![];
+    let mut leaves = vec![];
     let mut merkle = MerkleAccumulator::new();
-    for _ in 0..128 {
-        let leaf = rng.gen::<[u8; 32]>();
-        //        merkle.add(leaf);
-        v.push(leaf);
-        println!("leaf {:?}, root {:?}", leaf, merkle.get());
+    for _ in 0..(1 << MAX_DEPTH) {
+        let leaf = [0; 32];
+        leaves.push(leaf);
     }
+    let mut uc_merkley = MerkleTree::new(leaves);
+    for (i, leaf) in uc_merkley.leaf_nodes.iter().enumerate() {
+        let leaf = rng.gen::<Node>();
+        let (proof_vec, path) = uc_merkley.get_proof(i);
+        let mut proof = [[0; 32]; MAX_DEPTH];
+        for (i, x) in proof_vec.iter().enumerate() {
+            proof[i] = *x;
+        }
+        merkle.add(uc_merkley.root, leaf, proof, path);
+    }
+
+    println!("root {:?}", uc_merkley.root);
+    println!("root {:?}", merkle.get());
 }

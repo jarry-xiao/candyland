@@ -1,11 +1,12 @@
 use solana_program::keccak::hashv;
+use std::cell::{Ref, RefCell, RefMut};
 use std::collections::VecDeque;
+use std::iter::FromIterator;
 use std::rc::Rc;
-use std::cell::{RefCell, RefMut, Ref};
 
 pub type Node = [u8; 32];
 pub const MAX_SIZE: usize = 64;
-pub const MAX_DEPTH: usize = 20;
+pub const MAX_DEPTH: usize = 10;
 pub const PADDING: usize = 12;
 pub const MASK: u64 = MAX_SIZE as u64 - 1;
 
@@ -26,13 +27,30 @@ pub fn recompute(mut start: Node, path: &[Node], address: u32) -> Node {
 
 // Off-chain implentation to keep track of nodes
 pub struct MerkleTree {
-    leaf_nodes: Vec<Rc<RefCell<TreeNode>>>,
-    free_list: VecDeque<Rc<RefCell<TreeNode>>>,
-    root: Node,
+    pub leaf_nodes: Vec<Rc<RefCell<TreeNode>>>,
+    pub free_list: VecDeque<Rc<RefCell<TreeNode>>>,
+    pub root: Node,
+}
+
+impl MerkleTree {
+    pub fn new(leaves: Vec<Node>) -> Self {
+        let mut leaf_nodes = vec![];
+        for node in leaves.iter() {
+            let mut tree_node = TreeNode::new_empty(0);
+            tree_node.node = node.clone();
+            leaf_nodes.push(Rc::new(RefCell::new(tree_node)));
+        }
+        let root = MerkleTree::build_root(&leaf_nodes);
+        Self {
+            leaf_nodes,
+            free_list: VecDeque::new(),
+            root,
+        }
+    }
 }
 
 #[derive(Clone)]
-struct TreeNode {
+pub struct TreeNode {
     node: Node,
     left: Option<Rc<RefCell<TreeNode>>>,
     right: Option<Rc<RefCell<TreeNode>>>,
@@ -40,7 +58,7 @@ struct TreeNode {
     level: u32,
 }
 
-struct ProofNode {
+pub struct ProofNode {
     node: Node,
     is_right: bool,
 }
@@ -61,7 +79,6 @@ impl TreeNode {
         }
     }
 
-
     pub fn new_empty(level: u32) -> Self {
         Self {
             node: empty_node(level),
@@ -77,7 +94,6 @@ impl TreeNode {
     }
 }
 
-
 fn empty_node(level: u32) -> Node {
     let mut data = [0; 32];
     if level != 0 {
@@ -90,30 +106,14 @@ fn empty_node(level: u32) -> Node {
 
 impl MerkleTree {
     /// Builds root from stack of leaves
-    // pub fn build_root(self: &Self) -> Node {
-    //     let mut current = [0;32];
-    //     let mut initialized= false;
-    //     let mut left = true;
+    pub fn build_root(leaves: &Vec<Rc<RefCell<TreeNode>>>) -> Node {
 
-    //     let mut tree = Vec::<HashingNode>::new();
-
-    //     for tree_node in self.leaf_nodes.iter() {
-    //         if !initialized {
-    //             current = tree_node
-    //         } else {
-    //             current.left = current.r
-    //         } //     }
-    //     return [0; 32];
-    // }
-
-    pub fn build_root(&mut self) {
-        let mut tree = VecDeque::<Rc<RefCell<TreeNode>>>::new();
-        for node in self.leaf_nodes.iter() {
-            tree.push_back(node.clone());
-        }
+        let mut tree = VecDeque::from_iter(
+            leaves.iter().map(|x| Rc::clone(x))
+        );
 
         while tree.len() > 1 {
-            let left = tree.pop_front().unwrap();
+            let mut left = tree.pop_front().unwrap();
             let level = left.borrow().level;
             let mut right = if level != tree[0].borrow().level {
                 Rc::new(RefCell::new(TreeNode::new_empty(left.borrow().level)))
@@ -122,36 +122,57 @@ impl MerkleTree {
             };
             let mut hashed_parent = [0; 32];
 
-            hashed_parent.copy_from_slice(hashv(&[&left.borrow().node, &right.borrow().node]).as_ref());
-            let parent = Rc::new(RefCell::new(TreeNode::new(hashed_parent, left.clone(), right.clone(), level + 1)));
+            hashed_parent
+                .copy_from_slice(hashv(&[&left.borrow().node, &right.borrow().node]).as_ref());
+            let parent = Rc::new(RefCell::new(TreeNode::new(
+                hashed_parent,
+                left.clone(),
+                right.clone(),
+                level + 1,
+            )));
             TreeNode::assign_parent(&mut left, parent.clone());
             TreeNode::assign_parent(&mut right, parent.clone());
             tree.push_back(parent);
         }
 
-        self.root = tree[0].borrow().node;
+        let root = tree[0].borrow().node.clone();
+        root
     }
 
-    pub fn get_proof(self: Self, idx: usize) -> Vec<ProofNode> {
-        let proof_vec = Vec::<ProofNode>::new();
-        let mut node = self.leaf_nodes[idx];
-        let mut parent = node.borrow().parent;
-        while node.borrow().parent.is_some() {
-            let current_node: &Ref<TreeNode> = node.borrow();
-            let parent_node = node.borrow().parent.unwrap().clone();
-            // if node.borrow().left.borrow().unwrap().node == child_key {
-            //     proof_vec.push(ProofNode {
-            //         node: node.right.unwrap().node,
-            //         is_right: true,
-            //     });
-            // } else {
-            //     proof_vec.push(ProofNode {
-            //         node: node.left.unwrap().node,
-            //         is_right: false,
-            //     });
-            // }
+    pub fn get_proof(&self, idx: usize) -> (Vec<Node>, u32) {
+        let mut proof_vec = Vec::<ProofNode>::new();
+        let mut node = Rc::clone(&self.leaf_nodes[idx]);
+        loop {
+            match node.borrow().parent {
+                Some(parent) => {
+                    let current_node: Ref<TreeNode> = node.borrow();
+                    if parent.borrow().left.as_ref().unwrap().borrow().node == current_node.node {
+                        proof_vec.push(ProofNode {
+                            node: parent.borrow().right.as_ref().unwrap().borrow().node,
+                            is_right: true,
+                        });
+                    } else {
+                        proof_vec.push(ProofNode {
+                            node: parent.borrow().left.as_ref().unwrap().borrow().node,
+                            is_right: false,
+                        });
+                    }
+                }
+                None => {
+                    break;
+                }
+            }
+
+
+            node = Rc::clone(&node.borrow().parent.unwrap());
         }
-        proof_vec
+        let proof = proof_vec.iter().map(|x| x.node).collect();
+        let mut path = 0;
+        for p in proof_vec.iter() {
+            path <<= 1;
+            path |= (p.is_right) as u32;
+        }
+        (proof, path)
     }
 
     pub fn verify_proof(self, proof: Vec<ProofNode>, mut leaf: Node) -> bool {
@@ -169,16 +190,11 @@ impl MerkleTree {
 
     pub fn add_leaf(&mut self, leaf: Node, idx: usize) {
         self.leaf_nodes[idx].borrow_mut().node = leaf;
-        self.build_root();
+        self.root = MerkleTree::build_root(&self.leaf_nodes);
     }
 
-    pub fn remove_leaf(&mut self, leaf: Node, idx: usize) {
+    pub fn remove_leaf(&mut self, idx: usize) {
         self.leaf_nodes[idx].borrow_mut().node = [0; 32];
-        self.build_root();
+        self.root = MerkleTree::build_root(&self.leaf_nodes);
     }
-
-    // pub fn verify_proof(self: &Self, proof: Vec<Node>, path: u32, leaf: Node) -> bool {
-    //     let key = recompute(leaf, proof.as_slice(), path);
-    //     key == self.root
-    // }
 }
