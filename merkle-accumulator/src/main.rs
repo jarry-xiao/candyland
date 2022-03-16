@@ -244,14 +244,6 @@ mod test {
         (proofs, indices)
     }
 
-    // fn proof_to_slice(proof_vec: Vec<Node>) -> [Node; MAX_DEPTH]{
-    //     let mut slice = [[0; 32]; MAX_DEPTH];
-    //     for (i, x) in proof_vec.iter().enumerate() {
-    //         slice[i] = *x;
-    //     }
-    //     slice
-    // }
-
     // Test: add_leaf
     // ------
     // Note: we are not initializing on-chain merkle accumulator, we just start using it to track changes
