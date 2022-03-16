@@ -8,7 +8,7 @@ pub type Node = [u8; 32];
 pub const MAX_SIZE: usize = 64;
 pub const MAX_DEPTH: usize = 10;
 pub const PADDING: usize = 32 - MAX_DEPTH;
-pub const MASK: u64 = MAX_SIZE as u64 - 1;
+pub const MASK: usize = MAX_SIZE - 1;
 
 pub fn recompute(mut start: Node, proof: &[Node], path: u32) -> Node {
     for (ix, s) in proof.iter().enumerate() {

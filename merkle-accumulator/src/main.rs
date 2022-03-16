@@ -16,25 +16,34 @@ pub struct ChangeLog {
 pub struct MerkleAccumulator {
     roots: [Node; MAX_SIZE],
     change_logs: [ChangeLog; MAX_SIZE],
-    active_index: u64,
-    size: u64,
+    rightmost_path: ChangeLog,
+    active_index: usize,
+    size: usize,
 }
 
 impl MerkleAccumulator {
     pub fn new() -> Self {
+        let mut rightmost_path = ChangeLog {
+            changes: [[0; 32]; MAX_DEPTH],
+            path: (1 << MAX_DEPTH) - 1,
+        };
+        for (i, node) in rightmost_path.changes.iter_mut().enumerate() {
+            node.copy_from_slice(&empty_node(i as u32))
+        }
         Self {
             roots: [empty_node(MAX_DEPTH as u32); MAX_SIZE],
             change_logs: [ChangeLog {
                 changes: [[0; 32]; MAX_DEPTH],
                 path: 0,
             }; MAX_SIZE],
+            rightmost_path,
             active_index: 0,
             size: 0,
         }
     }
 
     pub fn get(&self) -> Node {
-        self.roots[self.active_index as usize]
+        self.roots[self.active_index]
     }
 
     pub fn add(
@@ -46,7 +55,7 @@ impl MerkleAccumulator {
     ) -> Option<Node> {
         for i in 0..self.size {
             let j = self.active_index.wrapping_sub(i) & MASK;
-            if self.roots[j as usize] != current_root {
+            if self.roots[j] != current_root {
                 continue;
             }
             let old_root = recompute([0; 32], &proof, path);
@@ -79,8 +88,8 @@ impl MerkleAccumulator {
         for i in 0..self.size {
             let j = self.active_index.wrapping_sub(i) & MASK;
 
-            if self.roots[j as usize] != current_root {
-                if self.change_logs[j as usize].changes[MAX_DEPTH - 1] == leaf {
+            if self.roots[j] != current_root {
+                if self.change_logs[j].changes[MAX_DEPTH - 1] == leaf {
                     return None;
                 }
                 continue;
@@ -102,26 +111,25 @@ impl MerkleAccumulator {
         leaf: Node,
         proof: &mut [Node; MAX_DEPTH],
         path: u32,
-        mut j: u64,
+        mut j: usize,
     ) -> Node {
         while j != self.active_index {
             j += 1;
             j &= MASK;
             let critbit_index = MAX_DEPTH
-                - (((path ^ self.change_logs[j as usize].path) << PADDING).leading_zeros()
-                    as usize)
+                - ((path ^ self.change_logs[j].path) << PADDING).leading_zeros() as usize
                 - 1;
-            proof[critbit_index] = self.change_logs[j as usize].changes[critbit_index];
+            proof[critbit_index] = self.change_logs[j].changes[critbit_index];
         }
         if self.size > 0 {
             self.active_index += 1;
             self.active_index &= MASK;
         }
-        if self.size < MAX_SIZE as u64 {
+        if self.size < MAX_SIZE {
             self.size += 1;
         }
-        let new_root = self.apply_changes(leaf, proof, path, self.active_index as usize);
-        self.roots[self.active_index as usize] = new_root;
+        let new_root = self.apply_changes(leaf, proof, path, self.active_index);
+        self.roots[self.active_index] = new_root;
         new_root
     }
 
