@@ -8,15 +8,26 @@ mod merkle;
 use crate::merkle::{empty_node, recompute, Node, MASK, MAX_DEPTH, MAX_SIZE, PADDING};
 
 #[derive(Copy, Clone)]
+/// Stores proof for a given Merkle root update
 pub struct ChangeLog {
+    /// Nodes of off-chain merkle tree
     changes: [Node; MAX_DEPTH],
+    /// Bitmap of node parity (used when hashing)
     path: u32,
 }
 
+/// Tracks updates to off-chain Merkle tree
+/// 
+/// Allows for concurrent writes to same merkle tree so long as proof
+/// was generated for a that has had at most MAX_SIZE updates since the tx was submitted
 pub struct MerkleAccumulator {
+    /// Chronological roots of the off-chain Merkle tree stored in circular buffer
     roots: [Node; MAX_SIZE],
+    /// Proof for respective root
     changes: [ChangeLog; MAX_SIZE],
+    /// Index of most recent root & changes 
     active_index: u64,
+    /// Number of active changes we are tracking
     size: u64,
 }
 
@@ -97,6 +108,11 @@ impl MerkleAccumulator {
         return None;
     }
 
+    /// Fast-forwards submitted proof to be valid for the root at `self.current_index`
+    /// 
+    /// Updates proof & updates root & stores
+    /// 
+    /// Takes in `j`, which is the root index that this proof was last valid for
     fn update_and_apply_proof(
         &mut self,
         leaf: Node,
@@ -124,6 +140,7 @@ impl MerkleAccumulator {
         new_root
     }
 
+    /// Creates a new root from a proof that is valid for the root at `self.active_index`
     fn apply_changes(&mut self, mut start: Node, proof: &[Node], path: u32, i: usize) -> Node {
         let change_log = &mut self.changes[i];
         change_log.changes[0] = start;
@@ -156,9 +173,8 @@ fn main() {
         let leaf = [0; 32];
         leaves.push(leaf);
     }
-    // off-chain merkle
+    // off-chain merkle tree
     let mut uc_merkley = MerkleTree::new(leaves);
-
 
     println!("start root {:?}", uc_merkley.root);
     println!("start root {:?}", merkle.get());
