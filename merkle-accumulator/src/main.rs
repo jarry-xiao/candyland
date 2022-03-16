@@ -170,7 +170,7 @@ mod test {
     use rand::{self, Rng};
     use super::{MerkleAccumulator, merkle::*};
 
-    /// Sets up an off-chain Merkle Tree  with
+    /// Initializes off-chain Merkle Tree & creates on-chain tree
     #[inline]
     fn setup() -> (MerkleAccumulator, MerkleTree) {
         // Setup
