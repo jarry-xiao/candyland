@@ -167,21 +167,7 @@ impl MerkleTree {
         (proof, path)
     }
 
-    pub fn verify_proof(self, proof: Vec<ProofNode>, mut leaf: Node) -> bool {
-        for node in proof.iter() {
-            if node.is_right {
-                let res = hashv(&[&leaf, &node.node]);
-                leaf.copy_from_slice(res.as_ref());
-            } else {
-                let res = hashv(&[&node.node, &leaf]);
-                leaf.copy_from_slice(res.as_ref());
-            }
-        }
-        leaf == self.root
-    }
-
-    pub fn add_leaf(&mut self, leaf: Node, idx: usize) {
-        self.leaf_nodes[idx].borrow_mut().node = leaf;
+    fn update_path(&mut self, idx: usize) {
         let mut node = Rc::clone(&self.leaf_nodes[idx]);
         loop {
             let ref_node = Rc::clone(&node);
@@ -207,8 +193,13 @@ impl MerkleTree {
         }
     }
 
+    pub fn add_leaf(&mut self, leaf: Node, idx: usize) {
+        self.leaf_nodes[idx].borrow_mut().node = leaf;
+        self.update_path(idx)
+    }
+
     pub fn remove_leaf(&mut self, idx: usize) {
         self.leaf_nodes[idx].borrow_mut().node = [0; 32];
-        self.root = MerkleTree::build_root(&self.leaf_nodes);
+        self.update_path(idx)
     }
 }
