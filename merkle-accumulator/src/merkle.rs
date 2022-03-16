@@ -93,7 +93,7 @@ impl MerkleTree {
 
     /// Traverses TreeNodes upwards to root from a Leaf TreeNode
     /// hashing along the way
-    pub fn get_proof(&self, idx: usize) -> (Vec<Node>, u32) {
+    pub fn get_proof_of_leaf(&self, idx: usize) -> (Vec<Node>, u32) {
         let mut proof_vec = Vec::<ProofNode>::new();
         let mut node = Rc::clone(&self.leaf_nodes[idx]);
         loop {
