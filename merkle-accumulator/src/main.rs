@@ -18,7 +18,8 @@ pub struct MerkleAccumulator {
     change_logs: [ChangeLog; MAX_SIZE],
     rightmost_path: ChangeLog,
     active_index: usize,
-    size: usize,
+    buffer_size: usize,
+    rightmost_index: usize,
 }
 
 impl MerkleAccumulator {
@@ -38,7 +39,8 @@ impl MerkleAccumulator {
             }; MAX_SIZE],
             rightmost_path,
             active_index: 0,
-            size: 0,
+            buffer_size: 0,
+            rightmost_index: 0,
         }
     }
 
@@ -53,7 +55,7 @@ impl MerkleAccumulator {
         mut proof: [Node; MAX_DEPTH],
         path: u32,
     ) -> Option<Node> {
-        for i in 0..self.size {
+        for i in 0..self.buffer_size {
             let j = self.active_index.wrapping_sub(i) & MASK;
             if self.roots[j] != current_root {
                 continue;
@@ -62,11 +64,10 @@ impl MerkleAccumulator {
             if old_root == current_root {
                 return Some(self.update_and_apply_proof(leaf, &mut proof, path, j));
             } else {
-                println!("Root mismatch {:?} {:?}", old_root, current_root);
                 return None;
             }
         }
-        if self.size == 0 {
+        if self.buffer_size == 0 {
             let old_root = recompute([0; 32], &proof, path);
             if old_root == empty_node(MAX_DEPTH as u32) {
                 return Some(self.update_and_apply_proof(leaf, &mut proof, path, 0));
@@ -82,10 +83,21 @@ impl MerkleAccumulator {
         &mut self,
         current_root: Node,
         leaf: Node,
+        proof: [Node; MAX_DEPTH],
+        path: u32,
+    ) -> Option<Node> {
+        self.replace(current_root, leaf, [0; 32], proof, path)
+    }
+
+    pub fn replace(
+        &mut self,
+        current_root: Node,
+        leaf: Node,
+        new_leaf: Node,
         mut proof: [Node; MAX_DEPTH],
         path: u32,
     ) -> Option<Node> {
-        for i in 0..self.size {
+        for i in 0..self.buffer_size {
             let j = self.active_index.wrapping_sub(i) & MASK;
 
             if self.roots[j] != current_root {
@@ -96,7 +108,7 @@ impl MerkleAccumulator {
             }
             let old_root = recompute(leaf, &proof, path);
             if old_root == current_root {
-                return Some(self.update_and_apply_proof([0; 32], &mut proof, path, j));
+                return Some(self.update_and_apply_proof(new_leaf, &mut proof, path, j));
             } else {
                 assert!(false);
                 return None;
@@ -105,6 +117,8 @@ impl MerkleAccumulator {
         println!("Failed to find root");
         return None;
     }
+
+    fn append(&mut self, leaf: Node) {}
 
     fn update_and_apply_proof(
         &mut self,
@@ -116,17 +130,16 @@ impl MerkleAccumulator {
         while j != self.active_index {
             j += 1;
             j &= MASK;
-            let critbit_index = MAX_DEPTH
-                - ((path ^ self.change_logs[j].path) << PADDING).leading_zeros() as usize
-                - 1;
+            let path_len = ((path ^ self.change_logs[j].path) << PADDING).leading_zeros() as usize;
+            let critbit_index = (MAX_DEPTH - 1) - path_len;
             proof[critbit_index] = self.change_logs[j].changes[critbit_index];
         }
-        if self.size > 0 {
+        if self.buffer_size > 0 {
             self.active_index += 1;
             self.active_index &= MASK;
         }
-        if self.size < MAX_SIZE {
-            self.size += 1;
+        if self.buffer_size < MAX_SIZE {
+            self.buffer_size += 1;
         }
         let new_root = self.apply_changes(leaf, proof, path, self.active_index);
         self.roots[self.active_index] = new_root;
