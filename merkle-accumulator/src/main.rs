@@ -4,7 +4,7 @@ use rand::Rng;
 use solana_program::keccak::hashv;
 
 mod merkle;
-use crate::merkle::{recompute, Node, MASK, MAX_DEPTH, MAX_SIZE, PADDING};
+use crate::merkle::{empty_node, recompute, Node, MASK, MAX_DEPTH, MAX_SIZE, PADDING};
 
 #[derive(Copy, Clone)]
 pub struct ChangeLog {
@@ -22,7 +22,7 @@ pub struct MerkleAccumulator {
 impl MerkleAccumulator {
     pub fn new() -> Self {
         Self {
-            roots: [[0; 32]; MAX_SIZE],
+            roots: [empty_node(MAX_DEPTH as u32); MAX_SIZE],
             changes: [ChangeLog {
                 changes: [[0; 32]; MAX_DEPTH],
                 path: 0,
@@ -57,8 +57,15 @@ impl MerkleAccumulator {
             }
         }
         if self.size == 0 {
-            return Some(self.update_and_apply_proof(leaf, &mut proof, path, 0));
+            let old_root = recompute([0; 32], &proof, path);
+            if old_root == empty_node(MAX_DEPTH as u32) {
+                return Some(self.update_and_apply_proof(leaf, &mut proof, path, 0));
+            } else {
+                println!("Bad proof");
+                return None;
+            }
         }
+        println!("Failed to get proof");
         return None;
     }
 
@@ -102,8 +109,10 @@ impl MerkleAccumulator {
                 (path ^ self.changes[j as usize].path).leading_zeros() as usize - PADDING;
             proof[critbit_index] = self.changes[j as usize].changes[critbit_index];
         }
-        self.active_index += 1;
-        self.active_index &= MASK;
+        if self.size > 0 {
+            self.active_index += 1;
+            self.active_index &= MASK;
+        }
         if self.size < MAX_SIZE as u64 {
             self.size += 1;
         }
@@ -141,19 +150,19 @@ fn main() {
         leaves.push(leaf);
     }
     let mut uc_merkley = MerkleTree::new(leaves);
-    for (i, leaf) in uc_merkley.leaf_nodes.iter().enumerate() {
+    println!("start root {:?}", uc_merkley.root);
+    println!("start root {:?}", merkle.get());
+    for i in 0..(1 << MAX_DEPTH) {
         let leaf = rng.gen::<Node>();
         let (proof_vec, path) = uc_merkley.get_proof(i);
         let mut proof = [[0; 32]; MAX_DEPTH];
         for (i, x) in proof_vec.iter().enumerate() {
             proof[i] = *x;
         }
-        match merkle.add(uc_merkley.root, leaf, proof, path) {
-            Some(_) => {},
-            None => {}, 
-        }
+        merkle.add(uc_merkley.root, leaf, proof, path);
+        uc_merkley.add_leaf(leaf, i);
     }
 
-    println!("root {:?}", uc_merkley.root);
-    println!("root {:?}", merkle.get());
+    println!("end root {:?}", uc_merkley.root);
+    println!("end root {:?}", merkle.get());
 }

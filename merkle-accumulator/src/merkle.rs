@@ -94,7 +94,7 @@ impl TreeNode {
     }
 }
 
-fn empty_node(level: u32) -> Node {
+pub fn empty_node(level: u32) -> Node {
     let mut data = [0; 32];
     if level != 0 {
         let lower_empty = empty_node(level - 1);
@@ -161,9 +161,9 @@ impl MerkleTree {
             }
             node = parent; 
         }
-        let proof = proof_vec.iter().map(|x| x.node).collect();
+        let proof: Vec<Node> = proof_vec.iter().map(|x| x.node).collect();
         let mut path = 0;
-        for p in proof_vec.iter() {
+        for p in proof_vec.iter().rev() {
             path <<= 1;
             path |= (p.is_right) as u32;
         }
