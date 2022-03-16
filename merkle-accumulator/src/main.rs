@@ -51,7 +51,6 @@ impl MerkleAccumulator {
             }
             let old_root = recompute([0; 32], &proof, path);
             if old_root == current_root {
-                println!("Roots match {:?}", old_root);
                 return Some(self.update_and_apply_proof(leaf, &mut proof, path, j));
             } else {
                 println!("Root mismatch {:?} {:?}", old_root, current_root);

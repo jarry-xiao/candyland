@@ -30,21 +30,23 @@ pub struct MerkleTree {
     pub leaf_nodes: Vec<Rc<RefCell<TreeNode>>>,
     pub free_list: VecDeque<Rc<RefCell<TreeNode>>>,
     pub root: Node,
+    pub seq_num: u128,
 }
 
 impl MerkleTree {
     pub fn new(leaves: Vec<Node>) -> Self {
         let mut leaf_nodes = vec![];
-        for node in leaves.iter() {
-            let mut tree_node = TreeNode::new_empty(0);
+        for (i, node) in leaves.iter().enumerate() {
+            let mut tree_node = TreeNode::new_empty(0, i as u128);
             tree_node.node = node.clone();
             leaf_nodes.push(Rc::new(RefCell::new(tree_node)));
         }
-        let root = MerkleTree::build_root(&leaf_nodes);
+        let (root, seq_num) = MerkleTree::build_root(&leaf_nodes);
         Self {
             leaf_nodes,
             free_list: VecDeque::new(),
             root,
+            seq_num,
         }
     }
 }
@@ -56,6 +58,7 @@ pub struct TreeNode {
     right: Option<Rc<RefCell<TreeNode>>>,
     parent: Option<Rc<RefCell<TreeNode>>>,
     level: u32,
+    id: u128,
 }
 
 pub struct ProofNode {
@@ -69,6 +72,7 @@ impl TreeNode {
         left: Rc<RefCell<TreeNode>>,
         right: Rc<RefCell<TreeNode>>,
         level: u32,
+        id: u128,
     ) -> Self {
         Self {
             node,
@@ -76,16 +80,18 @@ impl TreeNode {
             right: Some(right),
             parent: None,
             level,
+            id,
         }
     }
 
-    pub fn new_empty(level: u32) -> Self {
+    pub fn new_empty(level: u32, id: u128) -> Self {
         Self {
             node: empty_node(level),
             left: None,
             right: None,
             parent: None,
             level: level,
+            id 
         }
     }
 
@@ -106,14 +112,16 @@ pub fn empty_node(level: u32) -> Node {
 
 impl MerkleTree {
     /// Builds root from stack of leaves
-    pub fn build_root(leaves: &Vec<Rc<RefCell<TreeNode>>>) -> Node {
+    pub fn build_root(leaves: &Vec<Rc<RefCell<TreeNode>>>) -> (Node, u128) {
         let mut tree = VecDeque::from_iter(leaves.iter().map(|x| Rc::clone(x)));
-
+        let mut seq_num = leaves.len() as u128;
         while tree.len() > 1 {
             let mut left = tree.pop_front().unwrap();
             let level = left.borrow().level;
             let mut right = if level != tree[0].borrow().level {
-                Rc::new(RefCell::new(TreeNode::new_empty(level)))
+                let node = Rc::new(RefCell::new(TreeNode::new_empty(level, seq_num)));
+                seq_num += 1;
+                node
             } else {
                 tree.pop_front().unwrap()
             };
@@ -126,14 +134,16 @@ impl MerkleTree {
                 left.clone(),
                 right.clone(),
                 level + 1,
+                seq_num
             )));
             TreeNode::assign_parent(&mut left, parent.clone());
             TreeNode::assign_parent(&mut right, parent.clone());
             tree.push_back(parent);
+            seq_num += 1;
         }
 
         let root = tree[0].borrow().node.clone();
-        root
+        (root, seq_num)
     }
 
     pub fn get_proof(&self, idx: usize) -> (Vec<Node>, u32) {
@@ -145,7 +155,7 @@ impl MerkleTree {
                 break;
             }
             let parent = Rc::clone(&ref_node.borrow().parent.as_ref().unwrap());
-            if parent.borrow().left.as_ref().unwrap().borrow().node == ref_node.borrow().node {
+            if parent.borrow().left.as_ref().unwrap().borrow().id == ref_node.borrow().id {
                 proof_vec.push(ProofNode {
                     node: parent.borrow().right.as_ref().unwrap().borrow().node,
                     is_right: true,
@@ -177,7 +187,7 @@ impl MerkleTree {
             }
             let parent = Rc::clone(&ref_node.borrow().parent.as_ref().unwrap());
             let hash =
-                if parent.borrow().left.as_ref().unwrap().borrow().node == ref_node.borrow().node {
+                if parent.borrow().left.as_ref().unwrap().borrow().id == ref_node.borrow().id {
                     hashv(&[
                         &ref_node.borrow().node,
                         &parent.borrow().right.as_ref().unwrap().borrow().node,
