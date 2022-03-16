@@ -143,28 +143,23 @@ impl MerkleTree {
         let mut proof_vec = Vec::<ProofNode>::new();
         let mut node = Rc::clone(&self.leaf_nodes[idx]);
         loop {
-            match node.borrow().parent {
-                Some(parent) => {
-                    let current_node: Ref<TreeNode> = node.borrow();
-                    if parent.borrow().left.as_ref().unwrap().borrow().node == current_node.node {
-                        proof_vec.push(ProofNode {
-                            node: parent.borrow().right.as_ref().unwrap().borrow().node,
-                            is_right: true,
-                        });
-                    } else {
-                        proof_vec.push(ProofNode {
-                            node: parent.borrow().left.as_ref().unwrap().borrow().node,
-                            is_right: false,
-                        });
-                    }
-                }
-                None => {
-                    break;
-                }
+            let ref_node = Rc::clone(&node);
+            if ref_node.borrow().parent.is_none() {
+                break;
             }
-
-
-            node = Rc::clone(&node.borrow().parent.unwrap());
+            let parent = Rc::clone(&ref_node.borrow().parent.as_ref().unwrap());
+            if parent.borrow().left.as_ref().unwrap().borrow().node == ref_node.borrow().node {
+                proof_vec.push(ProofNode {
+                    node: parent.borrow().right.as_ref().unwrap().borrow().node,
+                    is_right: true,
+                });
+            } else {
+                proof_vec.push(ProofNode {
+                    node: parent.borrow().left.as_ref().unwrap().borrow().node,
+                    is_right: false,
+                });
+            }
+            node = parent; 
         }
         let proof = proof_vec.iter().map(|x| x.node).collect();
         let mut path = 0;

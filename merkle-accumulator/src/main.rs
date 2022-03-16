@@ -52,8 +52,12 @@ impl MerkleAccumulator {
             if old_root == current_root {
                 return Some(self.update_and_apply_proof(leaf, &mut proof, path, j));
             } else {
+                println!("Root mismatch {:?} {:?}", old_root, current_root);
                 return None;
             }
+        }
+        if self.size == 0 {
+            return Some(self.update_and_apply_proof(leaf, &mut proof, path, 0));
         }
         return None;
     }
@@ -144,7 +148,10 @@ fn main() {
         for (i, x) in proof_vec.iter().enumerate() {
             proof[i] = *x;
         }
-        merkle.add(uc_merkley.root, leaf, proof, path);
+        match merkle.add(uc_merkley.root, leaf, proof, path) {
+            Some(_) => {},
+            None => {}, 
+        }
     }
 
     println!("root {:?}", uc_merkley.root);
