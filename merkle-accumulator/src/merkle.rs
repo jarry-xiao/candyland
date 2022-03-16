@@ -7,7 +7,7 @@ use std::rc::Rc;
 pub type Node = [u8; 32];
 pub const MAX_SIZE: usize = 64;
 pub const MAX_DEPTH: usize = 10;
-pub const PADDING: usize = 12;
+pub const PADDING: usize = 32 - MAX_DEPTH;
 pub const MASK: u64 = MAX_SIZE as u64 - 1;
 
 const MAX_LEAVES: u64 = 0x1 << MAX_DEPTH;
@@ -107,16 +107,13 @@ pub fn empty_node(level: u32) -> Node {
 impl MerkleTree {
     /// Builds root from stack of leaves
     pub fn build_root(leaves: &Vec<Rc<RefCell<TreeNode>>>) -> Node {
-
-        let mut tree = VecDeque::from_iter(
-            leaves.iter().map(|x| Rc::clone(x))
-        );
+        let mut tree = VecDeque::from_iter(leaves.iter().map(|x| Rc::clone(x)));
 
         while tree.len() > 1 {
             let mut left = tree.pop_front().unwrap();
             let level = left.borrow().level;
             let mut right = if level != tree[0].borrow().level {
-                Rc::new(RefCell::new(TreeNode::new_empty(left.borrow().level)))
+                Rc::new(RefCell::new(TreeNode::new_empty(level)))
             } else {
                 tree.pop_front().unwrap()
             };
@@ -159,7 +156,7 @@ impl MerkleTree {
                     is_right: false,
                 });
             }
-            node = parent; 
+            node = parent;
         }
         let proof: Vec<Node> = proof_vec.iter().map(|x| x.node).collect();
         let mut path = 0;
@@ -185,7 +182,29 @@ impl MerkleTree {
 
     pub fn add_leaf(&mut self, leaf: Node, idx: usize) {
         self.leaf_nodes[idx].borrow_mut().node = leaf;
-        self.root = MerkleTree::build_root(&self.leaf_nodes);
+        let mut node = Rc::clone(&self.leaf_nodes[idx]);
+        loop {
+            let ref_node = Rc::clone(&node);
+            if ref_node.borrow().parent.is_none() {
+                self.root = ref_node.borrow().node;
+                break;
+            }
+            let parent = Rc::clone(&ref_node.borrow().parent.as_ref().unwrap());
+            let hash =
+                if parent.borrow().left.as_ref().unwrap().borrow().node == ref_node.borrow().node {
+                    hashv(&[
+                        &ref_node.borrow().node,
+                        &parent.borrow().right.as_ref().unwrap().borrow().node,
+                    ])
+                } else {
+                    hashv(&[
+                        &parent.borrow().left.as_ref().unwrap().borrow().node,
+                        &ref_node.borrow().node,
+                    ])
+                };
+            node = parent;
+            node.borrow_mut().node.copy_from_slice(hash.as_ref());
+        }
     }
 
     pub fn remove_leaf(&mut self, idx: usize) {

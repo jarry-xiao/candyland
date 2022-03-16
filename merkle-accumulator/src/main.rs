@@ -65,7 +65,6 @@ impl MerkleAccumulator {
                 return None;
             }
         }
-        println!("Failed to get proof");
         return None;
     }
 
