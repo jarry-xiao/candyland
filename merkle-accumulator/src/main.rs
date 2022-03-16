@@ -16,9 +16,9 @@ pub struct ChangeLog {
 pub struct MerkleAccumulator {
     roots: [Node; MAX_SIZE],
     change_logs: [ChangeLog; MAX_SIZE],
-    rightmost_path: ChangeLog,
     active_index: usize,
     buffer_size: usize,
+    rightmost_path: ChangeLog,
     rightmost_index: usize,
 }
 
@@ -37,9 +37,9 @@ impl MerkleAccumulator {
                 changes: [[0; 32]; MAX_DEPTH],
                 path: 0,
             }; MAX_SIZE],
-            rightmost_path,
             active_index: 0,
             buffer_size: 0,
+            rightmost_path,
             rightmost_index: 0,
         }
     }
