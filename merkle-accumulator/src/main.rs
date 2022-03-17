@@ -108,6 +108,10 @@ impl MerkleAccumulator {
             if old_root == current_root {
                 return Some(self.update_and_apply_proof(new_leaf, &mut proof, path, j));
             } else {
+                println!("recomputed root: {:?}", old_root);
+                println!("expected root: {:?}", current_root);
+                println!("leaf: {:?}", leaf);
+                println!("j: {}", j);
                 assert!(false);
                 return None;
             }
@@ -399,9 +403,10 @@ mod test {
         (merkle, off_chain_merkle)
     }
 
-    /// Test: add_leaf, remove_leaf for on-chain tree prepopulated with a root
+    /// Test: remove_leaf
+    /// Removes all the leaves
     #[test]
-    fn test_new_with_root() {
+    fn test_new_with_root_remove_all() {
         let mut rng = thread_rng();
         let (mut merkle, mut off_chain_merkle) = setup_new_with_root(&mut rng);
 
@@ -414,12 +419,92 @@ mod test {
         let root = merkle.get();
         println!("root is: {:?}", root);
 
-        // Test removes
         let mut leaf_inds: Vec<usize> = (0..1 << MAX_DEPTH).collect();
         leaf_inds.shuffle(&mut rng);
-        let removed_inds: Vec<usize> = leaf_inds.into_iter().take(MAX_SIZE >> 1).collect();
 
-        for idx in removed_inds.iter() {
+        // Remove all leaves
+        for (i, idx) in leaf_inds.iter().enumerate() {
+            println!("removing leaf {}: {}", i, idx);
+            let (proof_vec, path) = off_chain_merkle.get_proof_of_leaf(*idx);
+
+            merkle.remove(
+                off_chain_merkle.get(),
+                off_chain_merkle.get_node(*idx),
+                proof_to_slice(proof_vec),
+                path,
+            );
+            off_chain_merkle.remove_leaf(*idx);
+
+            assert_eq!(
+                merkle.get(),
+                off_chain_merkle.get(),
+                "Removing node modifies root correctly"
+            );
+        }
+    }
+
+    /// Test: remove_leaf
+    /// Removes all the leaves in batches of max_size
+    #[test]
+    fn test_new_with_root_remove_all_batched() {
+        let mut rng = thread_rng();
+        let (mut merkle, mut off_chain_merkle) = setup_new_with_root(&mut rng);
+
+        assert_eq!(
+            merkle.get(),
+            off_chain_merkle.get(),
+            "New with root works as expected"
+        );
+
+        let root = merkle.get();
+        println!("root is: {:?}", root);
+
+        let mut leaf_inds: Vec<usize> = (0..1 << MAX_DEPTH).collect();
+        leaf_inds.shuffle(&mut rng);
+
+        // Remove all leaves
+        for (batch_idx, chunk) in leaf_inds.chunks(MAX_SIZE).enumerate() {
+            println!("Batch index: {}", batch_idx);
+
+            let root = off_chain_merkle.get();
+            for (i, leaf_idx) in chunk.iter().enumerate() {
+                println!("removing leaf {}: {}", i, leaf_idx);
+                let (proof_vec, path) = off_chain_merkle.get_proof_of_leaf(*leaf_idx);
+
+                merkle.remove(
+                    root,
+                    off_chain_merkle.get_node(*leaf_idx),
+                    proof_to_slice(proof_vec),
+                    path,
+                );
+                off_chain_merkle.remove_leaf(*leaf_idx);
+
+                assert_eq!(
+                    merkle.get(),
+                    off_chain_merkle.get(),
+                    "Removing node modifies root correctly"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_new_with_root_mixed() {
+        let mut rng = thread_rng();
+        let (mut merkle, off_chain_merkle) = setup_new_with_root(&mut rng);
+        let root = merkle.get();
+        println!("root is: {:?}", root);
+
+        // Test remove_leaf
+        let mut leaf_inds: Vec<usize> = (0..1 << MAX_DEPTH).collect();
+        leaf_inds.shuffle(&mut rng);
+        let num_to_take = 2; // (MAX_SIZE >> 1)- 1;
+        let removed_inds: Vec<usize> = leaf_inds.into_iter().take(num_to_take).collect();
+        println!("Removing {} indices", removed_inds.len());
+
+        // - remove leaves
+        for idx in removed_inds.iter().rev() {
+            println!("removing leaf: {}", idx);
             let (proof_vec, path) = off_chain_merkle.get_proof_of_leaf(*idx);
             merkle.remove(
                 root,
@@ -427,11 +512,25 @@ mod test {
                 proof_to_slice(proof_vec),
                 path,
             );
+
+            assert_eq!(
+                merkle.get(),
+                off_chain_merkle.get(),
+                "Removing node modifies root correctly"
+            );
         }
 
-        for idx in removed_inds.iter() {
-            off_chain_merkle.remove_leaf(*idx);
-        }
+        // // - add leaves back
+        // for idx in removed_inds.iter() {
+        //     println!("adding leaf back: {}", idx);
+        //     let (proof_vec, path) = off_chain_merkle.get_proof_of_leaf(*idx);
+        //     merkle.add(
+        //         root,
+        //         off_chain_merkle.get_node(*idx),
+        //         proof_to_slice(proof_vec),
+        //         path,
+        //     );
+        // }
 
         assert_eq!(
             merkle.get(),
