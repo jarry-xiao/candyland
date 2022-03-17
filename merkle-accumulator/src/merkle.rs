@@ -6,13 +6,13 @@ use std::rc::Rc;
 
 pub type Node = [u8; 32];
 
-/// Max number of concurrent changes to tree supported before having to regenerate proofs 
+/// Max number of concurrent changes to tree supported before having to regenerate proofs
 pub const MAX_SIZE: usize = 64;
 
 /// Max depth of the Merkle tree
 pub const MAX_DEPTH: usize = 10;
 
-pub const PADDING: usize = 32 - MAX_DEPTH; 
+pub const PADDING: usize = 32 - MAX_DEPTH;
 
 /// Used for node parity when hashing
 pub const MASK: usize = MAX_SIZE - 1;
@@ -45,7 +45,7 @@ impl MerkleTree {
         let mut leaf_nodes = vec![];
         for (i, node) in leaves.iter().enumerate() {
             let mut tree_node = TreeNode::new_empty(0, i as u128);
-            tree_node.node = node.clone();
+            tree_node.node = *node;
             leaf_nodes.push(Rc::new(RefCell::new(tree_node)));
         }
         let root = MerkleTree::build_root(&leaf_nodes);
@@ -58,7 +58,7 @@ impl MerkleTree {
 
     /// Builds root from stack of leaves
     pub fn build_root(leaves: &Vec<Rc<RefCell<TreeNode>>>) -> Node {
-        let mut tree = VecDeque::from_iter(leaves.iter().map(|x| Rc::clone(x)));
+        let mut tree = VecDeque::from_iter(leaves.iter().map(Rc::clone));
         let mut seq_num = leaves.len() as u128;
         while tree.len() > 1 {
             let mut left = tree.pop_front().unwrap();
@@ -87,7 +87,7 @@ impl MerkleTree {
             seq_num += 1;
         }
 
-        let root = tree[0].borrow().node.clone();
+        let root = tree[0].borrow().node;
         root
     }
 
@@ -101,7 +101,7 @@ impl MerkleTree {
             if ref_node.borrow().parent.is_none() {
                 break;
             }
-            let parent = Rc::clone(&ref_node.borrow().parent.as_ref().unwrap());
+            let parent = Rc::clone(ref_node.borrow().parent.as_ref().unwrap());
             if parent.borrow().left.as_ref().unwrap().borrow().id == ref_node.borrow().id {
                 proof_vec.push(ProofNode {
                     node: parent.borrow().right.as_ref().unwrap().borrow().node,
@@ -124,7 +124,7 @@ impl MerkleTree {
         (proof, path)
     }
 
-    /// Updates root from an updated leaf node set at index: `idx` 
+    /// Updates root from an updated leaf node set at index: `idx`
     fn update_root_from_leaf(&mut self, leaf_idx: usize) {
         let mut node = Rc::clone(&self.leaf_nodes[leaf_idx]);
         loop {
@@ -133,7 +133,7 @@ impl MerkleTree {
                 self.root = ref_node.borrow().node;
                 break;
             }
-            let parent = Rc::clone(&ref_node.borrow().parent.as_ref().unwrap());
+            let parent = Rc::clone(ref_node.borrow().parent.as_ref().unwrap());
             let hash = if parent.borrow().left.as_ref().unwrap().borrow().id == ref_node.borrow().id
             {
                 hashv(&[
@@ -206,8 +206,8 @@ impl TreeNode {
             left: None,
             right: None,
             parent: None,
-            level: level,
-            id 
+            level,
+            id,
         }
     }
 
@@ -233,4 +233,3 @@ pub fn empty_node(level: u32) -> Node {
     }
     data
 }
-
