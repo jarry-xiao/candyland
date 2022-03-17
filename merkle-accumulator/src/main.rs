@@ -148,6 +148,7 @@ impl MerkleAccumulator {
     }
 
     /// Creates a new root from a proof that is valid for the root at `self.active_index`
+    /// Saves hashed nodes for new root in change log
     fn apply_changes(&mut self, mut start: Node, proof: &[Node], path: u32, i: usize) -> Node {
         let change_log = &mut self.change_logs[i];
         change_log.changes[0] = start;
@@ -199,6 +200,7 @@ mod test {
     }
 
     /// Adds random leaves to on-chain & records off-chain
+    /// sync_on_chain: False if we are using new_with_root()
     fn add_random_leafs(
         merkle: &mut MerkleAccumulator,
         off_chain_merkle: &mut MerkleTree,
@@ -212,12 +214,6 @@ mod test {
             merkle.add(off_chain_merkle.root, leaf, proof_to_slice(proof_vec), path);
             off_chain_merkle.add_leaf(leaf, i);
         }
-
-        assert_eq!(
-            merkle.get(),
-            off_chain_merkle.root,
-            "Adding random leaves keeps roots synced"
-        );
     }
 
     fn proof_to_slice(proof_vec: Vec<Node>) -> [Node; MAX_DEPTH] {
@@ -268,7 +264,11 @@ mod test {
 
         add_random_leafs(&mut merkle, &mut off_chain_merkle, &mut rng, 1 << MAX_DEPTH);
 
-        assert_eq!(merkle.get(), off_chain_merkle.root);
+        assert_eq!(
+            merkle.get(),
+            off_chain_merkle.root,
+            "Adding random leaves keeps roots synced"
+        );
     }
 
     /// Test: remove_leaf
@@ -385,5 +385,58 @@ mod test {
                 off_chain_merkle.root,
             );
         }
+    }
+
+    #[inline]
+    fn setup_new_with_root(rng: &mut ThreadRng) -> (MerkleAccumulator, MerkleTree) {
+        let mut random_leaves = Vec::<Node>::new();
+        for _ in 0..(1 << MAX_DEPTH) {
+            random_leaves.push(rng.gen::<Node>());
+        }
+
+        let off_chain_merkle = MerkleTree::new(random_leaves);
+        let merkle = MerkleAccumulator::new_with_root(off_chain_merkle.get());
+        (merkle, off_chain_merkle)
+    }
+
+    /// Test: add_leaf, remove_leaf for on-chain tree prepopulated with a root
+    #[test]
+    fn test_new_with_root() {
+        let mut rng = thread_rng();
+        let (mut merkle, mut off_chain_merkle) = setup_new_with_root(&mut rng);
+
+        assert_eq!(
+            merkle.get(),
+            off_chain_merkle.get(),
+            "New with root works as expected"
+        );
+
+        let root = merkle.get();
+        println!("root is: {:?}", root);
+
+        // Test removes
+        let mut leaf_inds: Vec<usize> = (0..1 << MAX_DEPTH).collect();
+        leaf_inds.shuffle(&mut rng);
+        let removed_inds: Vec<usize> = leaf_inds.into_iter().take(MAX_SIZE >> 1).collect();
+
+        for idx in removed_inds.iter() {
+            let (proof_vec, path) = off_chain_merkle.get_proof_of_leaf(*idx);
+            merkle.remove(
+                root,
+                off_chain_merkle.get_node(*idx),
+                proof_to_slice(proof_vec),
+                path,
+            );
+        }
+
+        for idx in removed_inds.iter() {
+            off_chain_merkle.remove_leaf(*idx);
+        }
+
+        assert_eq!(
+            merkle.get(),
+            off_chain_merkle.get(),
+            "Removing node modifies root correctly"
+        );
     }
 }

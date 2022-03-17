@@ -34,8 +34,6 @@ pub fn recompute(mut leaf: Node, proof: &[Node], path: u32) -> Node {
 // Off-chain implentation to keep track of nodes
 pub struct MerkleTree {
     pub leaf_nodes: Vec<Rc<RefCell<TreeNode>>>,
-    /// Empty leaf nodes indices we can directly write to
-    pub free_list: VecDeque<Rc<RefCell<TreeNode>>>,
     pub root: Node,
 }
 
@@ -49,11 +47,7 @@ impl MerkleTree {
             leaf_nodes.push(Rc::new(RefCell::new(tree_node)));
         }
         let root = MerkleTree::build_root(&leaf_nodes);
-        Self {
-            leaf_nodes,
-            free_list: VecDeque::new(),
-            root,
-        }
+        Self { leaf_nodes, root }
     }
 
     /// Builds root from stack of leaves
