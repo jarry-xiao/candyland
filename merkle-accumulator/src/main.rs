@@ -1,3 +1,5 @@
+use std::collections::btree_set::IntoIter;
+
 use merkle::MerkleTree;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
@@ -18,19 +20,10 @@ pub struct MerkleAccumulator {
     change_logs: [ChangeLog; MAX_SIZE],
     active_index: usize,
     buffer_size: usize,
-    rightmost_path: ChangeLog,
-    rightmost_index: usize,
 }
 
 impl MerkleAccumulator {
     pub fn new() -> Self {
-        let mut rightmost_path = ChangeLog {
-            changes: [[0; 32]; MAX_DEPTH],
-            path: (1 << MAX_DEPTH) - 1,
-        };
-        for (i, node) in rightmost_path.changes.iter_mut().enumerate() {
-            node.copy_from_slice(&empty_node(i as u32))
-        }
         Self {
             roots: [empty_node(MAX_DEPTH as u32); MAX_SIZE],
             change_logs: [ChangeLog {
@@ -39,8 +32,20 @@ impl MerkleAccumulator {
             }; MAX_SIZE],
             active_index: 0,
             buffer_size: 0,
-            rightmost_path,
-            rightmost_index: 0,
+        }
+    }
+
+    pub fn new_with_root(root: Node) -> Self {
+        let mut roots = [empty_node(MAX_DEPTH as u32); MAX_SIZE];
+        roots[0] = root;
+        Self {
+            roots,
+            change_logs: [ChangeLog {
+                changes: [[0; 32]; MAX_DEPTH],
+                path: 0,
+            }; MAX_SIZE],
+            active_index: 0,
+            buffer_size: 1,
         }
     }
 
@@ -55,18 +60,6 @@ impl MerkleAccumulator {
         mut proof: [Node; MAX_DEPTH],
         path: u32,
     ) -> Option<Node> {
-        for i in 0..self.buffer_size {
-            let j = self.active_index.wrapping_sub(i) & MASK;
-            if self.roots[j] != current_root {
-                continue;
-            }
-            let old_root = recompute([0; 32], &proof, path);
-            if old_root == current_root {
-                return Some(self.update_and_apply_proof(leaf, &mut proof, path, j));
-            } else {
-                return None;
-            }
-        }
         if self.buffer_size == 0 {
             let old_root = recompute([0; 32], &proof, path);
             if old_root == empty_node(MAX_DEPTH as u32) {
@@ -76,7 +69,7 @@ impl MerkleAccumulator {
                 return None;
             }
         }
-        return None;
+        self.replace(current_root, [0; 32], leaf, proof, path)
     }
 
     pub fn remove(
@@ -117,8 +110,6 @@ impl MerkleAccumulator {
         println!("Failed to find root");
         return None;
     }
-
-    fn append(&mut self, leaf: Node) {}
 
     fn update_and_apply_proof(
         &mut self,
