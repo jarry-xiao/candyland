@@ -1,5 +1,3 @@
-use std::collections::btree_set::IntoIter;
-
 use merkle::MerkleTree;
 use rand::prelude::SliceRandom;
 use rand::thread_rng;
