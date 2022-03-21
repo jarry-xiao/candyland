@@ -562,6 +562,9 @@ mod test {
         );
     }
 
+    /// Test multiple replaces within same block to same index
+    /// ---
+    /// All replaces should work, and only the last one should be reflected
     #[test]
     fn test_new_with_root_replace_bunch() {
         let mut rng = thread_rng();
