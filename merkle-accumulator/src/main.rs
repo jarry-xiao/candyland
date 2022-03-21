@@ -129,19 +129,34 @@ impl MerkleAccumulator {
         mut j: usize,
     ) -> Node {
         while j != self.active_index {
+            // Implement circular index addition
             j += 1;
             j &= MASK;
+
+            // Calculate the index to the first differing node between current proof & changelog
             let path_len = ((path ^ self.change_logs[j].path) << PADDING).leading_zeros() as usize;
+
+            // Skip updates to current proof if we encounter a proof for the same index
+            if path_len == 32 {
+                continue;
+            }
+
+            // Calculate index to the node in current proof that needs updating from change log
             let critbit_index = (MAX_DEPTH - 1) - path_len;
             proof[critbit_index] = self.change_logs[j].changes[critbit_index];
         }
+
+        // Only time we don't update active_index is for the first modification made
+        // to a tree created from new_with_root
         if self.buffer_size > 0 {
             self.active_index += 1;
             self.active_index &= MASK;
         }
+
         if self.buffer_size < MAX_SIZE {
             self.buffer_size += 1;
         }
+
         let new_root = self.apply_changes(leaf, proof, path, self.active_index);
         self.roots[self.active_index] = new_root;
         new_root
@@ -352,7 +367,7 @@ mod test {
 
     /// Currently failing, need some fancy on-chain instructions & storage to be able to dynamically handle this
     #[test]
-    fn test_write_conflict() {
+    fn test_write_conflict_should_fail() {
         let (mut merkle, mut off_chain_merkle) = setup();
         let mut rng = thread_rng();
 
@@ -485,6 +500,67 @@ mod test {
                 "Removing node modifies root correctly"
             );
         }
+    }
+
+    /// Test new with root replace same
+    /// ----
+    /// Replace the same leaves within the same block
+    /// This should work... but might cause unexpected behavior
+    #[test]
+    fn test_new_with_root_replace_same() {
+        let mut rng = thread_rng();
+        let (mut merkle, mut off_chain_merkle) = setup_new_with_root(&mut rng);
+
+        // Test remove_leaf
+        let mut leaf_inds: Vec<usize> = (0..1 << MAX_DEPTH).collect();
+        leaf_inds.shuffle(&mut rng);
+
+        // Replace (max size / 2) leaves 2x
+        // this is the exact # of items that can be updated before off chain tree has to sync
+        let num_to_take = MAX_SIZE >> 1;
+
+        let replaced_inds: Vec<usize> = leaf_inds.into_iter().take(num_to_take).collect();
+        println!("Removing {} indices", replaced_inds.len());
+
+        let root = off_chain_merkle.get();
+        println!("root is: {:?}", root);
+
+        // - replace same leaves with 0s
+        for idx in replaced_inds.iter().rev() {
+            println!("Zero-ing leaf at index: {}", idx);
+            let (proof_vec, path) = off_chain_merkle.get_proof_of_leaf(*idx);
+            merkle.replace(
+                root,
+                off_chain_merkle.get_node(*idx),
+                [0;32],
+                proof_to_slice(proof_vec),
+                path,
+            );
+        }
+
+        // - replace same leaves with 1s
+        for idx in replaced_inds.iter().rev() {
+            println!("One-ing leaf at index: {}", idx);
+            let (proof_vec, path) = off_chain_merkle.get_proof_of_leaf(*idx);
+            merkle.replace(
+                root,
+                off_chain_merkle.get_node(*idx),
+                [1;32],
+                proof_to_slice(proof_vec),
+                path,
+            );
+        }
+
+        // Update off-chain merkle tree to match
+        for idx in replaced_inds.iter() {
+            off_chain_merkle.add_leaf([1; 32], *idx);
+        }
+
+        assert_eq!(
+            merkle.get(),
+            off_chain_merkle.get(),
+            "Removing node modifies root correctly"
+        );
     }
 
     /// Text new with root mixed (SHOULD FAIL)
