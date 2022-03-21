@@ -532,7 +532,7 @@ mod test {
             merkle.replace(
                 root,
                 off_chain_merkle.get_node(*idx),
-                [0;32],
+                [0; 32],
                 proof_to_slice(proof_vec),
                 path,
             );
@@ -545,7 +545,7 @@ mod test {
             merkle.replace(
                 root,
                 off_chain_merkle.get_node(*idx),
-                [1;32],
+                [1; 32],
                 proof_to_slice(proof_vec),
                 path,
             );
@@ -569,8 +569,8 @@ mod test {
     /// 1. First removes the leaves
     /// 2. Then adds the same leaves back
     /// (within the same block)
-    /// 
-    /// Should fail to add the first leaf back because the proof is wrong 
+    ///
+    /// Should fail to add the first leaf back because the proof is wrong
     /// - `add` instruction assumes that the previous leaf value was 0s
     #[test]
     fn test_new_with_root_mixed_should_fail() {
@@ -580,7 +580,7 @@ mod test {
         // Test remove_leaf
         let mut leaf_inds: Vec<usize> = (0..1 << MAX_DEPTH).collect();
         leaf_inds.shuffle(&mut rng);
-        let num_to_take = 1; 
+        let num_to_take = 1;
 
         let removed_inds: Vec<usize> = leaf_inds.into_iter().take(num_to_take).collect();
         println!("Removing {} indices", removed_inds.len());
