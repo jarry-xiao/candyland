@@ -511,7 +511,6 @@ mod test {
         let mut rng = thread_rng();
         let (mut merkle, mut off_chain_merkle) = setup_new_with_root(&mut rng);
 
-        // Test remove_leaf
         let mut leaf_inds: Vec<usize> = (0..1 << MAX_DEPTH).collect();
         leaf_inds.shuffle(&mut rng);
 
@@ -563,6 +562,40 @@ mod test {
         );
     }
 
+    #[test]
+    fn test_new_with_root_replace_bunch() {
+        let mut rng = thread_rng();
+        let (mut merkle, mut off_chain_merkle) = setup_new_with_root(&mut rng);
+
+        let idx_to_replace = rng.gen_range(0, 1<<MAX_DEPTH);
+        let (proof_vec, path) = off_chain_merkle.get_proof_of_leaf(idx_to_replace);
+        let proof_slice = proof_to_slice(proof_vec);
+        let root = off_chain_merkle.get();
+        let mut last_node = [0;32];
+
+        // replace same index with random #s
+        for _ in 0..MAX_SIZE {
+            last_node = rng.gen::<Node>();
+            println!("Setting leaf to value: {:?}", last_node);
+            merkle.replace(
+                root,
+                off_chain_merkle.get_node(idx_to_replace),
+                last_node,
+                proof_slice,
+                path,
+            );
+        }
+
+        off_chain_merkle.add_leaf(last_node, idx_to_replace);
+
+        assert_eq!(
+            merkle.get(),
+            off_chain_merkle.get(),
+            "Removing node modifies root correctly"
+        );
+    }
+
+
     /// Text new with root mixed (SHOULD FAIL)
     /// ------
     /// Queue instructions to add and remove the same leaves within the same block
@@ -577,7 +610,6 @@ mod test {
         let mut rng = thread_rng();
         let (mut merkle, off_chain_merkle) = setup_new_with_root(&mut rng);
 
-        // Test remove_leaf
         let mut leaf_inds: Vec<usize> = (0..1 << MAX_DEPTH).collect();
         leaf_inds.shuffle(&mut rng);
         let num_to_take = 1;
