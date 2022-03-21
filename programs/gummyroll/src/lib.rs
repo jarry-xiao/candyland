@@ -1,19 +1,29 @@
-use anchor_lang::prelude::*;
-use anchor_lang::solana_program::keccak::hashv;
+use anchor_lang::{
+    prelude::*,
+    solana_program::{
+        keccak::hashv,
+        program::{invoke_signed},
+        system_instruction,
+        sysvar::rent::Rent
+    }
+};
 use std::convert::AsRef;
 use std::ops::Deref;
 use std::ops::DerefMut;
+use std::mem::size_of;
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+// declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("21qUUADZpCsa37m4fXSybmVJWxtX3DZAkh422RRZ9e9t");
+
 // type Node = [u8; 32];
 
 /// Max number of concurrent changes to tree supported before having to regenerate proofs
 // pub const MAX_SIZE: u64 = 64;
 
 /// Max depth of the Merkle tree
-// pub const MAX_DEPTH: u64 = 10;
+// pub const MAX_DEPTH: u64 = 20;
 
-// pub const PADDING: u64 = 32 - 20;
+// pub const PADDING: u64 = 32 - MAX_DEPTH;
 
 /// Used for node parity when hashing
 // pub const MASK: u64 = 64 - 1;
@@ -47,26 +57,22 @@ pub fn recompute(mut leaf: Node, proof: &[Node], path: u32) -> Node {
 pub mod gummyroll {
     use super::*;
 
-    pub fn init_gummyroll(ctx: Context<Initialize>, root: Node, _seed: u8) -> Result<()> {
+    pub fn init_gummyroll(ctx: Context<Initialize>, root: Node) -> Result<()> {
+        msg!(&format!("node: {:?}", root.inner));
         let mut merkle_roll = ctx.accounts.merkle_roll.load_init()?;
-        merkle_roll.initialize(root, ctx.accounts.authority.key());
+        msg!(&format!("merkle roll root: {:?}", *merkle_roll.roots[0]));
+        merkle_roll.initialize(root, ctx.accounts.payer.key());
         Ok(())
     }
 }
 
 #[derive(Accounts)]
-#[instruction(seed: u32)]
 pub struct Initialize<'info> {
-    #[account(
-        mut,
-        seeds = [
-            authority.key().as_ref(),
-            seed.to_le_bytes().as_ref(),
-        ],
-        bump,
-    )]
+    #[account(zero)]
     pub merkle_roll: AccountLoader<'info, MerkleRoll>,
-    pub authority: Signer<'info>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Copy, Clone, Default, AnchorSerialize, AnchorDeserialize)]
@@ -94,6 +100,22 @@ pub struct MerkleRoll {
     active_index: u64,
     /// Number of active changes we are tracking
     buffer_size: u64,
+}
+
+impl Default for MerkleRoll {
+    fn default() -> Self {
+        Self {
+            authority: Pubkey::new(&[0; 32]),
+            roots: [Node::new([0; 32]); 64],
+            change_logs: [ChangeLog {
+                changes: [Node::new([0; 32]); 20],
+                path: 0,
+                _padding: 0
+            }; 64],
+            active_index: 0,
+            buffer_size: 1,
+        }
+    }
 }
 
 impl MerkleRoll {
