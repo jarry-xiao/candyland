@@ -24,7 +24,7 @@ pub fn assert_with_msg(v: bool, err: ProgramError, msg: &str) -> ProgramResult {
     if !v {
         let caller = std::panic::Location::caller();
         msg!("{}. \n{}", msg, caller);
-        Err(err.into())
+        Err(err)
     } else {
         Ok(())
     }
@@ -198,13 +198,13 @@ pub mod merkle_wallet {
             _ => {}
         };
         let leaf = generate_leaf_node(&[
-            &ctx.accounts
+            ctx.accounts
                 .metadata
                 .to_account_info()
                 .try_borrow_mut_data()?
                 .as_ref(),
-            &mint_creator.as_ref(),
-            &index.to_le_bytes().as_ref(),
+            mint_creator.as_ref(),
+            index.to_le_bytes().as_ref(),
         ])?;
         let new_root = recompute(leaf, proof.as_ref(), path);
         ctx.accounts.merkle_wallet.root = new_root;
