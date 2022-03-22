@@ -1,7 +1,6 @@
 import { BN } from "@project-serum/anchor";
 import { keccak_256 } from "js-sha3";
-import { BothPartiesNeedToAgreeToSaleError } from "../deps/metaplex-program-library/auction-house/js/src/generated";
-import { TreasuryIsNotEmptyError } from "../deps/metaplex-program-library/fixed-price-sale/js/src";
+import * as Collections from 'typescript-collections';
 
 const MAX_DEPTH = 20;
 let CACHE_EMPTY_NODE = new Map<number, Buffer>();
@@ -17,7 +16,7 @@ type TreeNode = {
     right: TreeNode | undefined,
     parent: TreeNode | undefined,
     level: number,
-    id: BN,
+    id: number,
 }
 
 const generateLeafNode = (seeds) => {
@@ -42,7 +41,7 @@ function emptyNode(level: number): Buffer {
     return result;
 }
 
-function emptyTreeNode(level: number, id: BN): TreeNode {
+function emptyTreeNode(level: number, id: number): TreeNode {
     return {
         node: emptyNode(level),
         left: undefined,
@@ -53,38 +52,40 @@ function emptyTreeNode(level: number, id: BN): TreeNode {
     }
 }
 
-function buildLeaves(leaves: Buffer[]): TreeNode[] {
-    let nodes = [];
+function buildLeaves(leaves: Buffer[]): [Collections.Queue<TreeNode>, TreeNode[]] {
+    let nodes = new Collections.Queue<TreeNode>();
+    let finalLeaves = [];
     leaves.forEach((buffer, index) => {
-        nodes.push({
+        const treeNode = {
             node: buffer,
             left: undefined,
             right: undefined,
             parent: undefined,
             level: 0,
-            id: new BN(index)
-        })
+            id: index
+        };
+        nodes.enqueue(treeNode);
+        finalLeaves.push(treeNode)
     })
-    return nodes;
+    return [nodes, finalLeaves];
 }
 
 /**
  * Initializes the tree from the array of leaves passed in
  */
 export function buildTree(leaves: Buffer[]): Tree {
-    const initialLeaves = buildLeaves(leaves);
-    let nodes = initialLeaves;
-    let seqNum = new BN(leaves.length);
-    while (nodes.length > 1) {
-        let left = nodes.pop();
+    let [nodes, finalLeaves] = buildLeaves(leaves);
+    let seqNum = leaves.length;
+    while (nodes.size() > 1) {
+        let left = nodes.dequeue();
         const level = left.level;
 
         let right: TreeNode;
-        if (level != nodes[0].level) {
+        if (level != nodes.peek().level) {
             right = emptyTreeNode(level, seqNum);
-            seqNum = seqNum.add(new BN(1));
+            seqNum++;
         } else {
-            right = nodes.pop();
+            right = nodes.dequeue();
         }
 
         let parent: TreeNode = {
@@ -97,36 +98,53 @@ export function buildTree(leaves: Buffer[]): Tree {
         }
         left.parent = parent;
         right.parent = parent;
-        nodes.push(parent)
-        
+        nodes.enqueue(parent);    
     }
 
     return {
-        root: nodes[0].node,
-        leaves: initialLeaves,
+        root: nodes.peek().node,
+        leaves: finalLeaves,
     }
 }
 
 /**
  * Takes a built Tree and returns the proof to leaf
  */
-function getProofOfLeaf(tree: Tree, idx: BN) {
+export function getProofOfLeaf(tree: Tree, idx: number): [TreeNode[], number] {
+    let proof: TreeNode[] = [];
+
     let node: TreeNode;
-    if (idx.gt(new BN(tree.leaves.length - 1))) {
-        node = emptyTreeNode(0, idx);
-    } else {
-        node = tree.leaves[idx.toNumber()]
+    node = tree.leaves[idx];
+
+    while (typeof node.parent !== 'undefined') {
+        let parent = node.parent;
+        if (parent.left.id === node.id) {
+            proof.push(parent.right);
+        } else {
+            proof.push(parent.left);
+        }
+        node = node.parent;
     }
 
-    while (typeof node.parent != 'undefined') {
+    return [proof, ~idx];
+}
 
+export function updateTree(tree: Tree, newNode: Buffer, index: number) {
+    let leaf = tree.leaves[index];
+    leaf.node = newNode;
+    let node = leaf.parent;
+    while (typeof node.parent !== 'undefined') {
+        node.node = hash(node.left.node, node.right.node);
+        node = node.parent;
     }
 }
 
-function hash(left: Buffer, right: Buffer): Buffer {
+/**
+ * Uses on-chain hash fn to hash together buffers
+ */
+export function hash(left: Buffer, right: Buffer): Buffer {
     return Buffer.from(keccak_256.digest(Buffer.concat([left, right])));
 }
-
 
 /**
  *  Does not build tree, just returns root of tree from leaves
