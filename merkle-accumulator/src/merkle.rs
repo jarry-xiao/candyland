@@ -20,7 +20,7 @@ pub const MASK: usize = MAX_SIZE - 1;
 /// Recomputes root of the Merkle tree from Node & proof
 pub fn recompute(mut leaf: Node, proof: &[Node], path: u32) -> Node {
     for (ix, s) in proof.iter().enumerate() {
-        if path >> ix & 1 == 1 {
+        if path >> ix & 1 == 0 {
             let res = hashv(&[&leaf, s.as_ref()]);
             leaf.copy_from_slice(res.as_ref());
         } else {
@@ -87,8 +87,8 @@ impl MerkleTree {
 
     /// Traverses TreeNodes upwards to root from a Leaf TreeNode
     /// hashing along the way
-    pub fn get_proof_of_leaf(&self, idx: usize) -> (Vec<Node>, u32) {
-        let mut proof_vec = Vec::<ProofNode>::new();
+    pub fn get_proof_of_leaf(&self, idx: usize) -> Vec<Node> {
+        let mut proof = vec![];
         let mut node = Rc::clone(&self.leaf_nodes[idx]);
         loop {
             let ref_node = Rc::clone(&node);
@@ -97,25 +97,13 @@ impl MerkleTree {
             }
             let parent = Rc::clone(ref_node.borrow().parent.as_ref().unwrap());
             if parent.borrow().left.as_ref().unwrap().borrow().id == ref_node.borrow().id {
-                proof_vec.push(ProofNode {
-                    node: parent.borrow().right.as_ref().unwrap().borrow().node,
-                    is_right: true,
-                });
+                proof.push(parent.borrow().right.as_ref().unwrap().borrow().node);
             } else {
-                proof_vec.push(ProofNode {
-                    node: parent.borrow().left.as_ref().unwrap().borrow().node,
-                    is_right: false,
-                });
+                proof.push(parent.borrow().left.as_ref().unwrap().borrow().node);
             }
             node = parent;
         }
-        let proof: Vec<Node> = proof_vec.iter().map(|x| x.node).collect();
-        let mut path = 0;
-        for p in proof_vec.iter().rev() {
-            path <<= 1;
-            path |= (p.is_right) as u32;
-        }
-        (proof, path)
+        proof
     }
 
     /// Updates root from an updated leaf node set at index: `idx`
@@ -149,7 +137,7 @@ impl MerkleTree {
         self.leaf_nodes[idx].borrow().node
     }
 
-    pub fn get(&self) -> Node {
+    pub fn get_root(&self) -> Node {
         self.root
     }
 
@@ -209,11 +197,6 @@ impl TreeNode {
     pub fn assign_parent(node: &mut Rc<RefCell<TreeNode>>, parent: Rc<RefCell<TreeNode>>) {
         node.borrow_mut().parent = Some(parent);
     }
-}
-
-pub struct ProofNode {
-    node: Node,
-    is_right: bool,
 }
 
 /// Calculates hash of empty nodes up to level i
