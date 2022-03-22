@@ -33,7 +33,7 @@ const generateLeafNode = (seeds) => {
   return leaf;
 };
 
-describe("merkle-wallet", () => {
+describe.skip("merkle-wallet", () => {
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.Provider.env());
 

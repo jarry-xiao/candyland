@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "programs/merkle_wallet",
+    "programs/gummyroll",
     "merkle-accumulator"
 ]
