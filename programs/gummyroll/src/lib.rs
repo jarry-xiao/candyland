@@ -60,8 +60,8 @@ pub mod gummyroll {
     pub fn init_gummyroll(ctx: Context<Initialize>, root: Node) -> Result<()> {
         msg!(&format!("node: {:?}", root.inner));
         let mut merkle_roll = ctx.accounts.merkle_roll.load_init()?;
-        msg!(&format!("merkle roll root: {:?}", *merkle_roll.roots[0]));
         merkle_roll.initialize(root, ctx.accounts.payer.key());
+        msg!(&format!("merkle roll root: {:?}", *merkle_roll.roots[0]));
         Ok(())
     }
 }

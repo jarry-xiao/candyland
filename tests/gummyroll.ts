@@ -13,6 +13,7 @@ import {
 import { PublicKey, Keypair, SystemProgram, Transaction } from "@solana/web3.js";
 import { Token, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { assert } from "chai";
+import { buildTree } from './merkle-tree';
 
 const TOKEN_PROGRAM_2022_ID = new PublicKey(
   "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
@@ -26,24 +27,16 @@ const logTx = async (provider, tx) => {
   );
 };
 
-const generateLeafNode = (seeds) => {
-  let leaf = Buffer.alloc(32);
-  for (const seed of seeds) {
-    leaf = Buffer.from(keccak_256.digest([...leaf, ...seed]));
-  }
-  return leaf;
-};
-
-type Node = {
-    inner: PublicKey
-}
-
 describe("gummyroll", () => {
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.Provider.env());
 
   const program = anchor.workspace.Gummyroll as Program<Gummyroll>;
   const payer = Keypair.generate();
+
+  const leaf = Keypair.generate().publicKey;
+  let tree = buildTree([leaf.toBuffer()]);
+  console.log("Created root using leaf pubkey: ", tree.root);
   console.log("program id:", program.programId.toString());
 
   it("Initialize keypairs with Sol", async () => {
@@ -58,15 +51,6 @@ describe("gummyroll", () => {
   });
 
   it("Initialize root with prepopulated leaves", async () => {
-    // console.log("Hmmm tasty logs");
-    // const seeds = [payer.publicKey.toBuffer(), Uint8Array.from([0])];
-    // const seeds = [payer.publicKey.toBuffer()];
-    // console.log("Seeds: ", seeds);
-
-    // const [merkleWalletKey, bump] = await PublicKey.findProgramAddress(
-    //     seeds,
-    //     program.programId,
-    // );
     const merkleRollKeypair = Keypair.generate();
     console.log("Payer key:", payer.publicKey);
 
@@ -80,7 +64,7 @@ describe("gummyroll", () => {
     });
 
     const initGummyrollIx = await program.instruction.initGummyroll(
-        { inner: Array.from(payer.publicKey.toBytes()) },
+        { inner: Array.from(tree.root) },
         {
             accounts: {
                 merkleRoll: merkleRollKeypair.publicKey,
@@ -98,4 +82,7 @@ describe("gummyroll", () => {
     })
     await logTx(program.provider, txid);
   });
+  it.skip("Add leaf", async () => {
+    // console.log("skipping leaf");
+  })
 });
