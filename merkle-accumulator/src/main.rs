@@ -1,5 +1,5 @@
+pub mod merkle;
 use solana_program::keccak::hashv;
-mod merkle;
 use crate::merkle::{empty_node, recompute, Node, MASK, MAX_DEPTH, MAX_SIZE, PADDING};
 
 #[derive(Default, Copy, Clone, PartialEq)]
@@ -90,6 +90,7 @@ impl MerkleAccumulator {
         let mut change_list = [[0; 32]; MAX_DEPTH];
         let mut intersection_node = self.rightmost_proof.leaf;
 
+        // Compute proof to the appended node from empty nodes
         for i in 0..intersection {
             change_list[i] = node;
             let hash = hashv(&[&node, &empty_node(i as u32)]);
@@ -102,10 +103,14 @@ impl MerkleAccumulator {
             intersection_node.copy_from_slice(rightmost_hash.as_ref());
             self.rightmost_proof.proof[i] = empty_node(i as u32);
         }
+
+        // Compute the where the new node intersects the main tree 
         change_list[intersection] = node;
         let hash = hashv(&[&intersection_node, &node]);
         node.copy_from_slice(hash.as_ref());
         self.rightmost_proof.proof[intersection] = intersection_node;
+
+        // Update the change list path up to the root 
         for i in intersection + 1..MAX_DEPTH {
             change_list[i] = node;
             let hash = if (self.rightmost_proof.index >> i) & 1 == 1 {
@@ -115,6 +120,7 @@ impl MerkleAccumulator {
             };
             node.copy_from_slice(hash.as_ref());
         }
+
         self.increment_active_index();
         self.roots[self.active_index] = node;
         self.change_logs[self.active_index] = ChangeLog {
@@ -133,7 +139,6 @@ impl MerkleAccumulator {
         if old_root == empty_node(MAX_DEPTH as u32) {
             self.update_and_apply_proof([0; 32], leaf, &mut proof, 0, 0)
         } else {
-            println!("Bad proof");
             None
         }
     }
@@ -221,7 +226,7 @@ impl MerkleAccumulator {
         }
         let old_root = recompute(updated_leaf, proof, index);
         assert!(old_root == self.get_root());
-        if updated_leaf != leaf {
+        if updated_leaf != [0; 32] && updated_leaf != leaf {
             if leaf == [0; 32] {
                 println!("Value is updated, appending to tree");
                 return self.append(new_leaf);
@@ -276,12 +281,11 @@ impl MerkleAccumulator {
                 let critbit_index = (MAX_DEPTH - 1) - common_path_len;
                 self.rightmost_proof.proof[critbit_index] = change_log.path[critbit_index];
             }
-        } else if index == self.rightmost_proof.index {
+        } else {
+            assert!(index == self.rightmost_proof.index);
             self.rightmost_proof.proof.copy_from_slice(&proof);
             self.rightmost_proof.index = index + 1;
             self.rightmost_proof.leaf = curr_leaf;
-        } else {
-            unreachable!();
         }
         start
     }
@@ -650,7 +654,7 @@ mod test {
                     root,
                     off_chain_merkle.get_node(*leaf_idx),
                     proof_to_slice(proof_vec),
-                    i as u32,
+                    *leaf_idx as u32,
                 );
             }
 
@@ -661,7 +665,7 @@ mod test {
             assert_eq!(
                 merkle.get_root(),
                 off_chain_merkle.get_root(),
-                "Removing node modifies root correctly"
+                "Root mismatch"
             );
         }
     }
@@ -728,7 +732,7 @@ mod test {
 
     /// Test multiple replaces within same block to same index
     /// ---
-    /// All replaces should work, and only the last one should be reflected
+    /// Only the first replace should go through 
     #[test]
     fn test_new_with_root_replace_bunch() {
         let mut rng = thread_rng();
@@ -738,11 +742,11 @@ mod test {
         let proof_vec = off_chain_merkle.get_proof_of_leaf(idx_to_replace);
         let proof_slice = proof_to_slice(proof_vec);
         let root = off_chain_merkle.get_root();
-        let mut last_node = [0; 32];
+        let start_node = rng.gen::<Node>();
+        let mut last_node = start_node.clone(); 
 
         // replace same index with random #s
         for _ in 0..MAX_SIZE {
-            last_node = rng.gen::<Node>();
             println!("Setting leaf to value: {:?}", last_node);
             merkle.replace(
                 root,
@@ -751,28 +755,26 @@ mod test {
                 proof_slice,
                 idx_to_replace as u32,
             );
+            last_node = rng.gen::<Node>();
         }
 
-        off_chain_merkle.add_leaf(last_node, idx_to_replace);
+        off_chain_merkle.add_leaf(start_node, idx_to_replace);
 
         assert_eq!(
             merkle.get_root(),
             off_chain_merkle.get_root(),
-            "Removing node modifies root correctly"
         );
     }
 
-    /// Text new with root mixed (SHOULD FAIL)
+    /// Text new with root mixed
     /// ------
     /// Queue instructions to add and remove the same leaves within the same block
     /// 1. First removes the leaves
     /// 2. Then adds the same leaves back
     /// (within the same block)
     ///
-    /// Should fail to add the first leaf back because the proof is wrong
-    /// - `add` instruction assumes that the previous leaf value was 0s
     #[test]
-    fn test_new_with_root_mixed_should_fail() {
+    fn test_new_with_root_mixed() {
         let mut rng = thread_rng();
         let (mut merkle, off_chain_merkle) = setup_new_with_root(&mut rng);
 

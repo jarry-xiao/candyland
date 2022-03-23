@@ -18,9 +18,9 @@ pub const PADDING: usize = 32 - MAX_DEPTH;
 pub const MASK: usize = MAX_SIZE - 1;
 
 /// Recomputes root of the Merkle tree from Node & proof
-pub fn recompute(mut leaf: Node, proof: &[Node], path: u32) -> Node {
-    for (ix, s) in proof.iter().enumerate() {
-        if path >> ix & 1 == 0 {
+pub fn recompute(mut leaf: Node, proof: &[Node], index: u32) -> Node {
+    for (i, s) in proof.iter().enumerate() {
+        if index >> i & 1 == 0 {
             let res = hashv(&[&leaf, s.as_ref()]);
             leaf.copy_from_slice(res.as_ref());
         } else {
@@ -55,9 +55,9 @@ impl MerkleTree {
         let mut tree = VecDeque::from_iter(leaves.iter().map(Rc::clone));
         let mut seq_num = leaves.len() as u128;
         while tree.len() > 1 {
-            let mut left = tree.pop_front().unwrap();
+            let left = tree.pop_front().unwrap();
             let level = left.borrow().level;
-            let mut right = if level != tree[0].borrow().level {
+            let right = if level != tree[0].borrow().level {
                 let node = Rc::new(RefCell::new(TreeNode::new_empty(level, seq_num)));
                 seq_num += 1;
                 node
@@ -75,8 +75,8 @@ impl MerkleTree {
                 level + 1,
                 seq_num,
             )));
-            TreeNode::assign_parent(&mut left, parent.clone());
-            TreeNode::assign_parent(&mut right, parent.clone());
+            left.borrow_mut().assign_parent(parent.clone());
+            right.borrow_mut().assign_parent(parent.clone());
             tree.push_back(parent);
             seq_num += 1;
         }
@@ -89,13 +89,13 @@ impl MerkleTree {
     /// hashing along the way
     pub fn get_proof_of_leaf(&self, idx: usize) -> Vec<Node> {
         let mut proof = vec![];
-        let mut node = Rc::clone(&self.leaf_nodes[idx]);
+        let mut node = self.leaf_nodes[idx].clone();
         loop {
-            let ref_node = Rc::clone(&node);
+            let ref_node = node.clone();
             if ref_node.borrow().parent.is_none() {
                 break;
             }
-            let parent = Rc::clone(ref_node.borrow().parent.as_ref().unwrap());
+            let parent = ref_node.borrow().parent.as_ref().unwrap().clone();
             if parent.borrow().left.as_ref().unwrap().borrow().id == ref_node.borrow().id {
                 proof.push(parent.borrow().right.as_ref().unwrap().borrow().node);
             } else {
@@ -108,14 +108,14 @@ impl MerkleTree {
 
     /// Updates root from an updated leaf node set at index: `idx`
     fn update_root_from_leaf(&mut self, leaf_idx: usize) {
-        let mut node = Rc::clone(&self.leaf_nodes[leaf_idx]);
+        let mut node = self.leaf_nodes[leaf_idx].clone();
         loop {
-            let ref_node = Rc::clone(&node);
+            let ref_node = node.clone(); 
             if ref_node.borrow().parent.is_none() {
                 self.root = ref_node.borrow().node;
                 break;
             }
-            let parent = Rc::clone(ref_node.borrow().parent.as_ref().unwrap());
+            let parent = ref_node.borrow().parent.as_ref().unwrap().clone();
             let hash = if parent.borrow().left.as_ref().unwrap().borrow().id == ref_node.borrow().id
             {
                 hashv(&[
@@ -194,8 +194,8 @@ impl TreeNode {
     }
 
     /// Allows to propagate parent assignment
-    pub fn assign_parent(node: &mut Rc<RefCell<TreeNode>>, parent: Rc<RefCell<TreeNode>>) {
-        node.borrow_mut().parent = Some(parent);
+    pub fn assign_parent(&mut self, parent: Rc<RefCell<TreeNode>>) {
+        self.parent = Some(parent);
     }
 }
 
