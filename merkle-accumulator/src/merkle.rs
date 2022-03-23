@@ -5,12 +5,13 @@ use std::iter::FromIterator;
 use std::rc::Rc;
 
 pub type Node = [u8; 32];
+pub const EMPTY: Node = [0; 32];
 
 /// Max number of concurrent changes to tree supported before having to regenerate proofs
 pub const MAX_SIZE: usize = 64;
 
 /// Max depth of the Merkle tree
-pub const MAX_DEPTH: usize = 10;
+pub const MAX_DEPTH: usize = 14;
 
 pub const PADDING: usize = 32 - MAX_DEPTH;
 
@@ -64,7 +65,7 @@ impl MerkleTree {
             } else {
                 tree.pop_front().unwrap()
             };
-            let mut hashed_parent = [0; 32];
+            let mut hashed_parent = EMPTY;
 
             hashed_parent
                 .copy_from_slice(hashv(&[&left.borrow().node, &right.borrow().node]).as_ref());
@@ -147,7 +148,7 @@ impl MerkleTree {
     }
 
     pub fn remove_leaf(&mut self, leaf_idx: usize) {
-        self.leaf_nodes[leaf_idx].borrow_mut().node = [0; 32];
+        self.leaf_nodes[leaf_idx].borrow_mut().node = EMPTY;
         self.update_root_from_leaf(leaf_idx)
     }
 }
@@ -202,7 +203,7 @@ impl TreeNode {
 /// Calculates hash of empty nodes up to level i
 /// TODO: cache this
 pub fn empty_node(level: u32) -> Node {
-    let mut data = [0; 32];
+    let mut data = EMPTY;
     if level != 0 {
         let lower_empty = empty_node(level - 1);
         let hash = hashv(&[&lower_empty, &lower_empty]);

@@ -1,6 +1,7 @@
 use anchor_lang::{
     prelude::*,
     solana_program::{
+        entrypoint::ProgramResult,
         keccak::hashv,
         program::{invoke_signed},
         system_instruction,
@@ -54,7 +55,7 @@ pub fn recompute(mut leaf: Node, proof: &[Node], path: u32) -> Node {
 }
 
 /// Inverts the path
-pub fn indexToPath(index: u32) -> u32 {
+pub fn index_to_path(index: u32) -> u32 {
     ((1 << 20) - 1) & (!index)
 }
 
@@ -63,26 +64,31 @@ pub mod gummyroll {
     use super::*;
 
     pub fn init_gummyroll(ctx: Context<Initialize>, root: Node) -> Result<()> {
-        msg!(&format!("node: {:?}", root.inner));
         let mut merkle_roll = ctx.accounts.merkle_roll.load_init()?;
         merkle_roll.initialize(root, ctx.accounts.payer.key());
-        msg!(&format!("merkle roll root: {:?}", *merkle_roll.roots[0]));
         Ok(())
     }
 
-    pub fn replace_leaf(ctx: Context<ReplaceLeaf>, root: Node, previous_leaf: Node, new_leaf: Node, proof: [Node; 20], index: u32) -> Result<()> {
+    pub fn replace_leaf(ctx: Context<ReplaceLeaf>, root: Node, previous_leaf: Node, new_leaf: Node, proof: [Node; 20], index: u32) -> ProgramResult {
+        msg!(&format!("root: {:?}", root.inner));
+        msg!(&format!("prev_leaf: {:?}", previous_leaf.inner));
+        msg!(&format!("new_leaf: {:?}", new_leaf.inner));
+        msg!(&format!("index: {:?}", index));
+
         let mut merkle_roll = ctx.accounts.merkle_roll.load_mut()?;
-        let path = indexToPath(index);
-        msg!(&format!("Root: {:?}", root.inner));
-        msg!(&format!("Index: {:?}", index));
-        msg!(&format!("Path: {:?} (leading zeros: {})", path, path.leading_zeros()));
+        let path = index_to_path(index);
+
+        msg!(&format!("path: {:?}", path));
 
         // Copy argument data to make mutable copy (needed for efficient fast-forwarding)
         let mut mutable_proof = [Node::default(); 20];
         mutable_proof.copy_from_slice(&proof);
 
-        merkle_roll.replace(root, previous_leaf, new_leaf, proof, path);
-        msg!(&format!("New root: {:?}", merkle_roll.get().inner)); 
+        let opt_new_root = merkle_roll.replace(root, previous_leaf, new_leaf, proof, path);
+        match opt_new_root {
+            Some(new_root) => msg!(&format!("Succeeded replacing, new root: {:?}", new_root.inner)),
+            None => return Err(ProgramError::InvalidInstructionData)
+        }
         Ok(())
     }
 }
@@ -131,22 +137,6 @@ pub struct MerkleRoll {
     buffer_size: u64,
 }
 
-impl Default for MerkleRoll {
-    fn default() -> Self {
-        Self {
-            authority: Pubkey::new(&[0; 32]),
-            roots: [Node::new([0; 32]); 64],
-            change_logs: [ChangeLog {
-                changes: [Node::new([0; 32]); 20],
-                path: 0,
-                _padding: 0
-            }; 64],
-            active_index: 0,
-            buffer_size: 1,
-        }
-    }
-}
-
 impl MerkleRoll {
     pub fn initialize(&mut self, root: Node, authority: Pubkey) {
         self.roots = [empty_node(20_u32); 64];
@@ -178,7 +168,7 @@ impl MerkleRoll {
             if old_root == empty_node(20_u32) {
                 return Some(self.update_and_apply_proof(leaf, &mut proof, path, 0));
             } else {
-                println!("Bad proof");
+                msg!("Bad proof");
                 return None;
             }
         }
@@ -197,8 +187,8 @@ impl MerkleRoll {
 
     pub fn replace(
         &mut self,
-        current_root: Node,
-        leaf: Node,
+        validating_root: Node,
+        prev_leaf: Node,
         new_leaf: Node,
         mut proof: [Node; 20],
         path: u32,
@@ -206,23 +196,18 @@ impl MerkleRoll {
         for i in 0..self.buffer_size {
             let j = self.active_index.wrapping_sub(i) & 63;
 
-            if self.roots[j as usize] != current_root {
-                if self.change_logs[j as usize].changes[20 - 1] == leaf {
-                    return None;
-                }
+            if self.roots[j as usize] != validating_root {
                 continue;
             }
-            let old_root = recompute(leaf, &proof, path);
-            if old_root == current_root {
+            let old_root = recompute(prev_leaf, &proof, path);
+            if old_root == validating_root {
                 return Some(self.update_and_apply_proof(new_leaf, &mut proof, path, j));
             } else {
-                msg!(&format!("Recomputed old root: {:?}", old_root.inner));
-                msg!(&format!("Expected root      : {:?}", current_root.inner));
                 assert!(false);
                 return None;
             }
         }
-        println!("Failed to find root");
+        msg!("Failed to find root");
         None
     }
 
@@ -295,7 +280,7 @@ impl MerkleRoll {
     }
 }
 
-#[derive(Copy, Clone, AnchorDeserialize, AnchorSerialize, Default, PartialEq)]
+#[derive(Debug, Copy, Clone, AnchorDeserialize, AnchorSerialize, Default, PartialEq)]
 pub struct Node {
     inner: [u8; 32],
 }

@@ -3,6 +3,7 @@ import { keccak_256 } from "js-sha3";
 import * as Collections from 'typescript-collections';
 
 const MAX_DEPTH = 20;
+export const MAX_SIZE = 64;
 let CACHE_EMPTY_NODE = new Map<number, Buffer>();
 
 type Tree = {
@@ -99,6 +100,7 @@ export function buildTree(leaves: Buffer[]): Tree {
         left.parent = parent;
         right.parent = parent;
         nodes.enqueue(parent);    
+        seqNum++;
     }
 
     return {
@@ -110,33 +112,50 @@ export function buildTree(leaves: Buffer[]): Tree {
 /**
  * Takes a built Tree and returns the proof to leaf
  */
-export function getProofOfLeaf(tree: Tree, idx: number): [TreeNode[], number] {
+export function getProofOfLeaf(tree: Tree, idx: number): TreeNode[] {
     let proof: TreeNode[] = [];
 
-    let node: TreeNode;
-    node = tree.leaves[idx];
+    let node = tree.leaves[idx];
 
     while (typeof node.parent !== 'undefined') {
         let parent = node.parent;
         if (parent.left.id === node.id) {
             proof.push(parent.right);
+
+            const hashed = hash(node.node, parent.right.node);
+            if (!hashed.equals(parent.node)) {
+                console.log(hashed);
+                console.log(parent.node);
+                throw new Error("Invariant broken when hashing left node")
+            }
         } else {
             proof.push(parent.left);
+
+            const hashed = hash(parent.left.node, node.node);
+            if (!hashed.equals(parent.node)) {
+                console.log(hashed);
+                console.log(parent.node);
+                throw new Error("Invariant broken when hashing right node")
+            }
         }
-        node = node.parent;
+        node = parent;
     }
 
-    return [proof, ~idx];
+    return proof;
 }
 
 export function updateTree(tree: Tree, newNode: Buffer, index: number) {
     let leaf = tree.leaves[index];
     leaf.node = newNode;
-    let node = leaf.parent;
+    let node = leaf;
+
+    var i = 0;
     while (typeof node.parent !== 'undefined') {
-        node.node = hash(node.left.node, node.right.node);
         node = node.parent;
+        node.node = hash(node.left.node, node.right.node);
+        i++;
     }
+    tree.root = node.node;
 }
 
 /**
@@ -149,7 +168,7 @@ export function hash(left: Buffer, right: Buffer): Buffer {
 /**
  *  Does not build tree, just returns root of tree from leaves
  */
-function hashLeaves(leaves: Buffer[]): Buffer {
+export function hashLeaves(leaves: Buffer[]): Buffer {
     let nodes = leaves;
     let level = 0;
     while (level < MAX_DEPTH) {
