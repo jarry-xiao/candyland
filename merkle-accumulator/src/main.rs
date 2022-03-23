@@ -1,14 +1,24 @@
+pub mod merkle;
 use solana_program::keccak::hashv;
-mod merkle;
 use crate::merkle::{empty_node, recompute, Node, MASK, MAX_DEPTH, MAX_SIZE, PADDING};
 
-#[derive(Copy, Clone)]
+#[derive(Default, Copy, Clone, PartialEq)]
 /// Stores proof for a given Merkle root update
 pub struct ChangeLog {
     /// Nodes of off-chain merkle tree
-    changes: [Node; MAX_DEPTH],
+    path: [Node; MAX_DEPTH],
+    prev_leaf: Node,
+    curr_leaf: Node,
     /// Bitmap of node parity (used when hashing)
-    path: u32,
+    index: u32,
+}
+
+#[derive(Default, Copy, Clone, PartialEq)]
+/// Stores proof for a given Merkle root update
+pub struct Path {
+    proof: [Node; MAX_DEPTH],
+    leaf: Node,
+    index: u32,
 }
 
 /// Tracks updates to off-chain Merkle tree
@@ -24,57 +34,128 @@ pub struct MerkleAccumulator {
     active_index: usize,
     /// Number of active changes we are tracking
     buffer_size: usize,
+    rightmost_proof: Path,
 }
 
 impl MerkleAccumulator {
     pub fn new() -> Self {
+        let mut rightmost_proof = Path::default();
+        for (i, node) in rightmost_proof.proof.iter_mut().enumerate() {
+            *node = empty_node(i as u32);
+        }
         Self {
             roots: [empty_node(MAX_DEPTH as u32); MAX_SIZE],
-            change_logs: [ChangeLog {
-                changes: [[0; 32]; MAX_DEPTH],
-                path: 0,
-            }; MAX_SIZE],
+            change_logs: [ChangeLog::default(); MAX_SIZE],
             active_index: 0,
-            buffer_size: 0,
+            buffer_size: 1,
+            rightmost_proof,
         }
     }
 
-    pub fn new_with_root(root: Node) -> Self {
+    pub fn new_with_root(root: Node, leaf: Node, proof: [Node; MAX_DEPTH], index: u32) -> Self {
         let mut roots = [empty_node(MAX_DEPTH as u32); MAX_SIZE];
         roots[0] = root;
+        let rightmost_proof = Path {
+            proof,
+            index: index + 1,
+            leaf,
+        };
+        assert_eq!(root, recompute(leaf, &proof, index));
         Self {
             roots,
-            change_logs: [ChangeLog {
-                changes: [[0; 32]; MAX_DEPTH],
-                path: 0,
-            }; MAX_SIZE],
+            change_logs: [ChangeLog::default(); MAX_SIZE],
             active_index: 0,
             buffer_size: 1,
+            rightmost_proof,
         }
     }
 
     /// Returns on-chain root
-    pub fn get(&self) -> Node {
+    pub fn get_root(&self) -> Node {
         self.roots[self.active_index]
+    }
+
+    pub fn append(&mut self, mut node: Node) -> Option<Node> {
+        if node == [0; 32] {
+            return Some(node);
+        }
+        if self.rightmost_proof.index >= 1 << MAX_DEPTH {
+            return None;
+        }
+        if self.rightmost_proof.index == 0 {
+            return self.initialize_tree(node, self.rightmost_proof.proof);
+        }
+        let leaf = node.clone();
+        let intersection = self.rightmost_proof.index.trailing_zeros() as usize;
+        let mut change_list = [[0; 32]; MAX_DEPTH];
+        let mut intersection_node = self.rightmost_proof.leaf;
+
+        // Compute proof to the appended node from empty nodes
+        for i in 0..intersection {
+            change_list[i] = node;
+            let hash = hashv(&[&node, &empty_node(i as u32)]);
+            node.copy_from_slice(hash.as_ref());
+            let rightmost_hash = if ((self.rightmost_proof.index - 1) >> i) & 1 == 1 {
+                hashv(&[&self.rightmost_proof.proof[i], &intersection_node])
+            } else {
+                hashv(&[&intersection_node, &self.rightmost_proof.proof[i]])
+            };
+            intersection_node.copy_from_slice(rightmost_hash.as_ref());
+            self.rightmost_proof.proof[i] = empty_node(i as u32);
+        }
+
+        // Compute the where the new node intersects the main tree 
+        change_list[intersection] = node;
+        let hash = hashv(&[&intersection_node, &node]);
+        node.copy_from_slice(hash.as_ref());
+        self.rightmost_proof.proof[intersection] = intersection_node;
+
+        // Update the change list path up to the root 
+        for i in intersection + 1..MAX_DEPTH {
+            change_list[i] = node;
+            let hash = if (self.rightmost_proof.index >> i) & 1 == 1 {
+                hashv(&[&self.rightmost_proof.proof[i], &node])
+            } else {
+                hashv(&[&node, &self.rightmost_proof.proof[i]])
+            };
+            node.copy_from_slice(hash.as_ref());
+        }
+
+        self.increment_active_index();
+        self.roots[self.active_index] = node;
+        self.change_logs[self.active_index] = ChangeLog {
+            path: change_list,
+            curr_leaf: leaf,
+            prev_leaf: [0; 32],
+            index: self.rightmost_proof.index,
+        };
+        self.rightmost_proof.index = self.rightmost_proof.index + 1;
+        self.rightmost_proof.leaf = leaf;
+        Some(node)
+    }
+
+    fn initialize_tree(&mut self, leaf: Node, mut proof: [Node; MAX_DEPTH]) -> Option<Node> {
+        let old_root = recompute([0; 32], &proof, 0);
+        if old_root == empty_node(MAX_DEPTH as u32) {
+            self.update_and_apply_proof([0; 32], leaf, &mut proof, 0, 0)
+        } else {
+            None
+        }
     }
 
     pub fn add(
         &mut self,
         current_root: Node,
         leaf: Node,
-        mut proof: [Node; MAX_DEPTH],
-        path: u32,
+        proof: [Node; MAX_DEPTH],
+        index: u32,
     ) -> Option<Node> {
-        if self.buffer_size == 0 {
-            let old_root = recompute([0; 32], &proof, path);
-            if old_root == empty_node(MAX_DEPTH as u32) {
-                return Some(self.update_and_apply_proof(leaf, &mut proof, path, 0));
-            } else {
-                println!("Bad proof");
-                return None;
-            }
-        }
-        self.replace(current_root, [0; 32], leaf, proof, path)
+        let root = if self.buffer_size == 0 {
+            self.initialize_tree(leaf, proof)
+        } else {
+            self.replace(current_root, [0; 32], leaf, proof, index)
+        };
+        root
     }
 
     pub fn remove(
@@ -82,9 +163,12 @@ impl MerkleAccumulator {
         current_root: Node,
         leaf: Node,
         proof: [Node; MAX_DEPTH],
-        path: u32,
+        index: u32,
     ) -> Option<Node> {
-        self.replace(current_root, leaf, [0; 32], proof, path)
+        if index > self.rightmost_proof.index {
+            return None;
+        }
+        self.replace(current_root, leaf, [0; 32], proof, index)
     }
 
     pub fn replace(
@@ -93,24 +177,27 @@ impl MerkleAccumulator {
         leaf: Node,
         new_leaf: Node,
         mut proof: [Node; MAX_DEPTH],
-        path: u32,
+        index: u32,
     ) -> Option<Node> {
         for i in 0..self.buffer_size {
             let j = self.active_index.wrapping_sub(i) & MASK;
-
             if self.roots[j] != current_root {
+<<<<<<< HEAD
                 /*
                 if self.change_logs[j].changes[MAX_DEPTH - 1] == leaf {
                     return None;
                 }
                 */
+=======
+>>>>>>> bcb8cbe6b4ad9a989d3a2b0eae1fae2845c5d8b3
                 continue;
             }
-            let old_root = recompute(leaf, &proof, path);
-            if old_root == current_root {
-                return Some(self.update_and_apply_proof(new_leaf, &mut proof, path, j));
+            let old_root = recompute(leaf, &proof, index);
+            if old_root == current_root && index > self.rightmost_proof.index {
+                return self.append(new_leaf);
+            } else if old_root == current_root {
+                return self.update_and_apply_proof(leaf, new_leaf, &mut proof, index, j);
             } else {
-                assert!(false);
                 return None;
             }
         }
@@ -126,51 +213,62 @@ impl MerkleAccumulator {
     fn update_and_apply_proof(
         &mut self,
         leaf: Node,
+        new_leaf: Node,
         proof: &mut [Node; MAX_DEPTH],
-        path: u32,
+        index: u32,
         mut j: usize,
-    ) -> Node {
+    ) -> Option<Node> {
+        let mut updated_leaf = leaf;
         while j != self.active_index {
             // Implement circular index addition
             j += 1;
             j &= MASK;
-
-            // Calculate the index to the first differing node between current proof & changelog
-            let path_len = ((path ^ self.change_logs[j].path) << PADDING).leading_zeros() as usize;
-
-            // Skip updates to current proof if we encounter a proof for the same index
-            if path_len == 32 {
-                continue;
+            if index != self.change_logs[j].index {
+                let common_path_len =
+                    ((index ^ self.change_logs[j].index) << PADDING).leading_zeros() as usize;
+                let critbit_index = (MAX_DEPTH - 1) - common_path_len;
+                proof[critbit_index] = self.change_logs[j].path[critbit_index];
+            } else {
+                updated_leaf = self.change_logs[j].curr_leaf;
             }
-
-            // Calculate index to the node in current proof that needs updating from change log
-            let critbit_index = (MAX_DEPTH - 1) - path_len;
-            proof[critbit_index] = self.change_logs[j].changes[critbit_index];
         }
-
-        // Only time we don't update active_index is for the first modification made
-        // to a tree created from new_with_root
-        if self.buffer_size > 0 {
-            self.active_index += 1;
-            self.active_index &= MASK;
+        let old_root = recompute(updated_leaf, proof, index);
+        assert!(old_root == self.get_root());
+        if updated_leaf != [0; 32] && updated_leaf != leaf {
+            if leaf == [0; 32] {
+                println!("Value is updated, appending to tree");
+                return self.append(new_leaf);
+            } else {
+                return None;
+            }
         }
+        self.increment_active_index();
+        let new_root = self.apply_changes(leaf, new_leaf, proof, index);
+        self.roots[self.active_index] = new_root;
+        Some(new_root)
+    }
 
+    fn increment_active_index(&mut self) {
+        self.active_index += 1;
+        self.active_index &= MASK;
         if self.buffer_size < MAX_SIZE {
             self.buffer_size += 1;
         }
-
-        let new_root = self.apply_changes(leaf, proof, path, self.active_index);
-        self.roots[self.active_index] = new_root;
-        new_root
     }
 
     /// Creates a new root from a proof that is valid for the root at `self.active_index`
-    /// Saves hashed nodes for new root in change log
-    fn apply_changes(&mut self, mut start: Node, proof: &[Node], path: u32, i: usize) -> Node {
-        let change_log = &mut self.change_logs[i];
-        change_log.changes[0] = start;
+    fn apply_changes(
+        &mut self,
+        prev_leaf: Node,
+        mut start: Node,
+        proof: &[Node],
+        index: u32,
+    ) -> Node {
+        let curr_leaf = start.clone();
+        let change_log = &mut self.change_logs[self.active_index];
+        change_log.path[0] = start;
         for (ix, s) in proof.iter().enumerate() {
-            if path >> ix & 1 == 1 {
+            if index >> ix & 1 == 0 {
                 let res = hashv(&[&start, s.as_ref()]);
                 start.copy_from_slice(res.as_ref());
             } else {
@@ -178,17 +276,30 @@ impl MerkleAccumulator {
                 start.copy_from_slice(res.as_ref());
             }
             if ix < MAX_DEPTH - 1 {
-                change_log.changes[ix + 1] = start;
+                change_log.path[ix + 1] = start;
             }
         }
-        change_log.path = path;
+        change_log.index = index;
+        change_log.prev_leaf = prev_leaf;
+        change_log.curr_leaf = curr_leaf;
+        if index < self.rightmost_proof.index as u32 {
+            if index != self.rightmost_proof.index - 1 {
+                let common_path_len = ((index ^ (self.rightmost_proof.index - 1) as u32) << PADDING)
+                    .leading_zeros() as usize;
+                let critbit_index = (MAX_DEPTH - 1) - common_path_len;
+                self.rightmost_proof.proof[critbit_index] = change_log.path[critbit_index];
+            }
+        } else {
+            assert!(index == self.rightmost_proof.index);
+            self.rightmost_proof.proof.copy_from_slice(&proof);
+            self.rightmost_proof.index = index + 1;
+            self.rightmost_proof.leaf = curr_leaf;
+        }
         start
     }
 }
 
-fn main() {
-    println!("Hello world!");
-}
+fn main() {}
 
 #[cfg(test)]
 mod test {
@@ -224,13 +335,24 @@ mod test {
         rng: &mut ThreadRng,
         num: usize,
     ) {
+        println!("Starting root {:?}", off_chain_merkle.get_root());
         for i in 0..num {
             let leaf = rng.gen::<Node>();
-            let (proof_vec, path) = off_chain_merkle.get_proof_of_leaf(i);
-
-            merkle.add(off_chain_merkle.root, leaf, proof_to_slice(proof_vec), path);
+            let proof = off_chain_merkle.get_proof_of_leaf(i);
+            merkle.add(
+                off_chain_merkle.get_root(),
+                leaf,
+                proof_to_slice(proof),
+                i as u32,
+            );
             off_chain_merkle.add_leaf(leaf, i);
         }
+
+        assert_eq!(
+            merkle.get_root(),
+            off_chain_merkle.get_root(),
+            "Adding random leaves keeps roots synced"
+        );
     }
 
     fn proof_to_slice(proof_vec: Vec<Node>) -> [Node; MAX_DEPTH] {
@@ -248,19 +370,18 @@ mod test {
         off_chain_merkle: &MerkleTree,
         rng: &mut ThreadRng,
         num_leaves: usize,
-    ) -> (Vec<(usize, Node, [Node; MAX_DEPTH], u32)>, Vec<usize>) {
+    ) -> (Vec<(usize, Node, [Node; MAX_DEPTH])>, Vec<usize>) {
         let mut inds: Vec<usize> = (0..num_leaves).collect();
         inds.shuffle(rng);
         let mut proofs = vec![];
         let mut indices = vec![];
 
         for i in inds.into_iter().take(MAX_SIZE - 1) {
-            let (proof_vec, path) = off_chain_merkle.get_proof_of_leaf(i);
+            let proof = off_chain_merkle.get_proof_of_leaf(i);
 
             // Make on-chain readable proof
-            let proof = proof_to_slice(proof_vec);
 
-            proofs.push((i, off_chain_merkle.get_node(i), proof, path));
+            proofs.push((i, off_chain_merkle.get_node(i), proof_to_slice(proof)));
             indices.push(i);
         }
         (proofs, indices)
@@ -276,16 +397,38 @@ mod test {
         let (mut merkle, mut off_chain_merkle) = setup();
         let mut rng = thread_rng();
 
-        println!("Accumulator init root     : {:?}", merkle.get());
+        println!("Accumulator init root     : {:?}", merkle.get_root());
         println!("Off-chain merkle init root: {:?}", off_chain_merkle.root);
 
         add_random_leafs(&mut merkle, &mut off_chain_merkle, &mut rng, 1 << MAX_DEPTH);
 
         assert_eq!(
-            merkle.get(),
+            merkle.get_root(),
             off_chain_merkle.root,
             "Adding random leaves keeps roots synced"
         );
+    }
+
+    // Test: add_leaf
+    // ------
+    // Note: we are not initializing on-chain merkle accumulator, we just start using it to track changes
+    // Off-chain: replace 1st half of leaves with random values
+    // On-chain: record updates to the root
+    #[test]
+    fn test_append() {
+        let (mut merkle, mut off_chain_merkle) = setup();
+        let mut rng = thread_rng();
+
+        println!("Accumulator init root     : {:?}", merkle.get_root());
+        println!("Off-chain merkle init root: {:?}", off_chain_merkle.root);
+
+        for i in 0..128 {
+            let leaf = rng.gen::<Node>();
+            merkle.append(leaf);
+            off_chain_merkle.add_leaf(leaf, i);
+        }
+
+        assert_eq!(merkle.get_root(), off_chain_merkle.root);
     }
 
     /// Test: remove_leaf
@@ -304,18 +447,18 @@ mod test {
         inds.shuffle(&mut rng);
 
         for idx in inds.into_iter() {
-            let root = merkle.get();
-            let (proof, path) = off_chain_merkle.get_proof_of_leaf(idx);
+            let root = merkle.get_root();
+            let proof = off_chain_merkle.get_proof_of_leaf(idx);
             merkle.remove(
                 root,
                 off_chain_merkle.get_node(idx),
                 proof_to_slice(proof),
-                path,
+                idx as u32,
             );
             off_chain_merkle.remove_leaf(idx);
         }
 
-        assert_eq!(merkle.get(), off_chain_merkle.root);
+        assert_eq!(merkle.get_root(), off_chain_merkle.root);
     }
 
     /// Test: add_leaf, remove_leaf
@@ -351,19 +494,36 @@ mod test {
             create_proofs_of_existence(&merkle, &off_chain_merkle, &mut rng, 1 << MAX_DEPTH);
 
         // Apply "concurrent" changes to on-chain merkle accumulator
-        let root = merkle.get();
-        for (i, leaf, proof, path) in proofs.iter() {
+        let root = merkle.get_root();
+        let mut appended_indices = vec![];
+        for (i, leaf, proof) in proofs.iter() {
             if *leaf != [0; 32] {
                 println!("Remove {}", i);
-                merkle.remove(root, off_chain_merkle.get_node(*i), *proof, *path);
+                merkle.remove(root, off_chain_merkle.get_node(*i), *proof, *i as u32);
                 off_chain_merkle.remove_leaf(*i);
+                if appended_indices.contains(i) {
+                    appended_indices.retain(|&x| x != *i);
+                }
             } else {
                 println!("Add {}", i);
                 let random_leaf = rng.gen::<Node>();
-                merkle.add(root, random_leaf, *proof, *path);
-                off_chain_merkle.add_leaf(random_leaf, *i);
+                let j = if *i >= merkle.rightmost_proof.index as usize {
+                    let j = merkle.rightmost_proof.index as usize;
+                    appended_indices.push(j);
+                    j
+                } else {
+                    if appended_indices.contains(i) {
+                        let j = merkle.rightmost_proof.index as usize;
+                        appended_indices.push(j);
+                        j
+                    } else {
+                        *i
+                    }
+                };
+                merkle.add(root, random_leaf, *proof, j as u32);
+                off_chain_merkle.add_leaf(random_leaf, j);
             }
-            assert_eq!(merkle.get(), off_chain_merkle.root);
+            assert_eq!(merkle.get_root(), off_chain_merkle.root);
         }
     }
 
@@ -374,9 +534,12 @@ mod test {
         let mut rng = thread_rng();
 
         // Setup on-chain & off-chain trees with a random node at index 0
-        add_random_leafs(&mut merkle, &mut off_chain_merkle, &mut rng, 10);
+        let proof_of_conflict = off_chain_merkle.get_proof_of_leaf(0);
+        let root = off_chain_merkle.get_root();
+        println!("Starting root (conflict) {:?}", off_chain_merkle.get_root());
+        assert_eq!(off_chain_merkle.get_root(), merkle.get_root());
 
-        let root = merkle.get();
+        add_random_leafs(&mut merkle, &mut off_chain_merkle, &mut rng, 10);
 
         println!("Pre conflict active tree root: {:?}", off_chain_merkle.root);
 
@@ -384,21 +547,18 @@ mod test {
         println!("Starting write conflict...");
         {
             let node_conflict = rng.gen::<Node>();
-            off_chain_merkle.add_leaf(node_conflict, 0);
-            let (proof_of_conflict, path_conflict) = off_chain_merkle.get_proof_of_leaf(0);
+            off_chain_merkle.add_leaf(node_conflict, 10);
             println!("Writing on-chain merkle root");
-            merkle.add(
-                root,
-                node_conflict,
-                proof_to_slice(proof_of_conflict),
-                path_conflict,
-            );
+            for x in proof_of_conflict.iter() {
+                println!("    {:?}", x);
+            }
+            merkle.add(root, node_conflict, proof_to_slice(proof_of_conflict), 0);
 
             assert_eq!(
-                merkle.get(),
+                merkle.get_root(),
                 off_chain_merkle.root,
                 "\n\nComparing roots after write-conflict. \nOn chain: {:?} \nOff chain {:?}\n",
-                merkle.get(),
+                merkle.get_root(),
                 off_chain_merkle.root,
             );
         }
@@ -411,8 +571,17 @@ mod test {
             random_leaves.push(rng.gen::<Node>());
         }
 
+        let i = (1 << MAX_DEPTH) - 1;
+        let leaf = random_leaves[i].clone();
         let off_chain_merkle = MerkleTree::new(random_leaves);
-        let merkle = MerkleAccumulator::new_with_root(off_chain_merkle.get());
+        let proof = off_chain_merkle.get_proof_of_leaf(i);
+
+        let merkle = MerkleAccumulator::new_with_root(
+            off_chain_merkle.get_root(),
+            leaf,
+            proof.try_into().unwrap(),
+            i as u32,
+        );
         (merkle, off_chain_merkle)
     }
 
@@ -424,12 +593,12 @@ mod test {
         let (mut merkle, mut off_chain_merkle) = setup_new_with_root(&mut rng);
 
         assert_eq!(
-            merkle.get(),
-            off_chain_merkle.get(),
+            merkle.get_root(),
+            off_chain_merkle.get_root(),
             "New with root works as expected"
         );
 
-        let root = merkle.get();
+        let root = merkle.get_root();
         println!("root is: {:?}", root);
 
         let mut leaf_inds: Vec<usize> = (0..1 << MAX_DEPTH).collect();
@@ -437,21 +606,26 @@ mod test {
 
         // Remove all leaves
         for (i, idx) in leaf_inds.iter().enumerate() {
-            println!("removing leaf {}: {}", i, idx);
-            let (proof_vec, path) = off_chain_merkle.get_proof_of_leaf(*idx);
+            let proof_vec = off_chain_merkle.get_proof_of_leaf(*idx);
 
+            println!("off-chain");
+            for x in proof_vec.iter() {
+                println!("  {:?}", x);
+            }
             merkle.remove(
-                off_chain_merkle.get(),
+                off_chain_merkle.get_root(),
                 off_chain_merkle.get_node(*idx),
                 proof_to_slice(proof_vec),
-                path,
+                *idx as u32,
             );
             off_chain_merkle.remove_leaf(*idx);
 
             assert_eq!(
-                merkle.get(),
-                off_chain_merkle.get(),
-                "Removing node modifies root correctly"
+                merkle.get_root(),
+                off_chain_merkle.get_root(),
+                "Removing node modifies root correctly {} {}",
+                i,
+                idx,
             );
         }
     }
@@ -464,12 +638,12 @@ mod test {
         let (mut merkle, mut off_chain_merkle) = setup_new_with_root(&mut rng);
 
         assert_eq!(
-            merkle.get(),
-            off_chain_merkle.get(),
+            merkle.get_root(),
+            off_chain_merkle.get_root(),
             "New with root works as expected"
         );
 
-        let root = merkle.get();
+        let root = merkle.get_root();
         println!("root is: {:?}", root);
 
         let mut leaf_inds: Vec<usize> = (0..1 << MAX_DEPTH).collect();
@@ -479,16 +653,16 @@ mod test {
         for (batch_idx, chunk) in leaf_inds.chunks(MAX_SIZE).enumerate() {
             println!("Batch index: {}", batch_idx);
 
-            let root = off_chain_merkle.get();
+            let root = off_chain_merkle.get_root();
             for (i, leaf_idx) in chunk.iter().enumerate() {
                 println!("removing leaf {}: {}", i, leaf_idx);
-                let (proof_vec, path) = off_chain_merkle.get_proof_of_leaf(*leaf_idx);
+                let proof_vec = off_chain_merkle.get_proof_of_leaf(*leaf_idx);
 
                 merkle.remove(
                     root,
                     off_chain_merkle.get_node(*leaf_idx),
                     proof_to_slice(proof_vec),
-                    path,
+                    *leaf_idx as u32,
                 );
             }
 
@@ -497,9 +671,9 @@ mod test {
             }
 
             assert_eq!(
-                merkle.get(),
-                off_chain_merkle.get(),
-                "Removing node modifies root correctly"
+                merkle.get_root(),
+                off_chain_merkle.get_root(),
+                "Root mismatch"
             );
         }
     }
@@ -523,32 +697,32 @@ mod test {
         let replaced_inds: Vec<usize> = leaf_inds.into_iter().take(num_to_take).collect();
         println!("Removing {} indices", replaced_inds.len());
 
-        let root = off_chain_merkle.get();
+        let root = off_chain_merkle.get_root();
         println!("root is: {:?}", root);
 
         // - replace same leaves with 0s
         for idx in replaced_inds.iter().rev() {
             println!("Zero-ing leaf at index: {}", idx);
-            let (proof_vec, path) = off_chain_merkle.get_proof_of_leaf(*idx);
+            let proof_vec = off_chain_merkle.get_proof_of_leaf(*idx);
             merkle.replace(
                 root,
                 off_chain_merkle.get_node(*idx),
                 [0; 32],
                 proof_to_slice(proof_vec),
-                path,
+                *idx as u32,
             );
         }
 
         // - replace same leaves with 1s
         for idx in replaced_inds.iter().rev() {
             println!("One-ing leaf at index: {}", idx);
-            let (proof_vec, path) = off_chain_merkle.get_proof_of_leaf(*idx);
+            let proof_vec = off_chain_merkle.get_proof_of_leaf(*idx);
             merkle.replace(
                 root,
                 off_chain_merkle.get_node(*idx),
                 [1; 32],
                 proof_to_slice(proof_vec),
-                path,
+                *idx as u32,
             );
         }
 
@@ -558,60 +732,57 @@ mod test {
         }
 
         assert_eq!(
-            merkle.get(),
-            off_chain_merkle.get(),
+            merkle.get_root(),
+            off_chain_merkle.get_root(),
             "Removing node modifies root correctly"
         );
     }
 
     /// Test multiple replaces within same block to same index
     /// ---
-    /// All replaces should work, and only the last one should be reflected
+    /// Only the first replace should go through 
     #[test]
     fn test_new_with_root_replace_bunch() {
         let mut rng = thread_rng();
         let (mut merkle, mut off_chain_merkle) = setup_new_with_root(&mut rng);
 
-        let idx_to_replace = rng.gen_range(0, 1<<MAX_DEPTH);
-        let (proof_vec, path) = off_chain_merkle.get_proof_of_leaf(idx_to_replace);
+        let idx_to_replace = rng.gen_range(0, 1 << MAX_DEPTH);
+        let proof_vec = off_chain_merkle.get_proof_of_leaf(idx_to_replace);
         let proof_slice = proof_to_slice(proof_vec);
-        let root = off_chain_merkle.get();
-        let mut last_node = [0;32];
+        let root = off_chain_merkle.get_root();
+        let start_node = rng.gen::<Node>();
+        let mut last_node = start_node.clone(); 
 
         // replace same index with random #s
         for _ in 0..MAX_SIZE {
-            last_node = rng.gen::<Node>();
             println!("Setting leaf to value: {:?}", last_node);
             merkle.replace(
                 root,
                 off_chain_merkle.get_node(idx_to_replace),
                 last_node,
                 proof_slice,
-                path,
+                idx_to_replace as u32,
             );
+            last_node = rng.gen::<Node>();
         }
 
-        off_chain_merkle.add_leaf(last_node, idx_to_replace);
+        off_chain_merkle.add_leaf(start_node, idx_to_replace);
 
         assert_eq!(
-            merkle.get(),
-            off_chain_merkle.get(),
-            "Removing node modifies root correctly"
+            merkle.get_root(),
+            off_chain_merkle.get_root(),
         );
     }
 
-
-    /// Text new with root mixed (SHOULD FAIL)
+    /// Text new with root mixed
     /// ------
     /// Queue instructions to add and remove the same leaves within the same block
     /// 1. First removes the leaves
     /// 2. Then adds the same leaves back
     /// (within the same block)
     ///
-    /// Should fail to add the first leaf back because the proof is wrong
-    /// - `add` instruction assumes that the previous leaf value was 0s
     #[test]
-    fn test_new_with_root_mixed_should_fail() {
+    fn test_new_with_root_mixed() {
         let mut rng = thread_rng();
         let (mut merkle, off_chain_merkle) = setup_new_with_root(&mut rng);
 
@@ -622,31 +793,31 @@ mod test {
         let removed_inds: Vec<usize> = leaf_inds.into_iter().take(num_to_take).collect();
         println!("Removing {} indices", removed_inds.len());
 
-        let root = off_chain_merkle.get();
+        let root = off_chain_merkle.get_root();
         println!("root is: {:?}", root);
         // - remove leaves
         for idx in removed_inds.iter().rev() {
             println!("removing leaf: {}", idx);
-            let (proof_vec, path) = off_chain_merkle.get_proof_of_leaf(*idx);
+            let proof_vec = off_chain_merkle.get_proof_of_leaf(*idx);
             merkle.remove(
                 root,
                 off_chain_merkle.get_node(*idx),
                 proof_to_slice(proof_vec),
-                path,
+                *idx as u32,
             );
         }
 
         // - add leaves back
         for idx in removed_inds.iter() {
             println!("adding leaf back: {}", idx);
-            let (proof_vec, path) = off_chain_merkle.get_proof_of_leaf(*idx);
+            let proof_vec = off_chain_merkle.get_proof_of_leaf(*idx);
 
             // First call here should fail
             merkle.add(
                 root,
                 off_chain_merkle.get_node(*idx),
                 proof_to_slice(proof_vec),
-                path,
+                *idx as u32,
             );
         }
     }
