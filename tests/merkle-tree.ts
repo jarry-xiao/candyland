@@ -112,12 +112,15 @@ export function buildTree(leaves: Buffer[]): Tree {
 /**
  * Takes a built Tree and returns the proof to leaf
  */
-export function getProofOfLeaf(tree: Tree, idx: number): TreeNode[] {
+export function getProofOfLeaf(tree: Tree, idx: number, verbose = false): TreeNode[] {
     let proof: TreeNode[] = [];
 
     let node = tree.leaves[idx];
 
     while (typeof node.parent !== 'undefined') {
+        if (verbose) {
+            console.log(`${node.level}: ${Uint8Array.from(node.node)}`);
+        }
         let parent = node.parent;
         if (parent.left.id === node.id) {
             proof.push(parent.right);
@@ -144,13 +147,16 @@ export function getProofOfLeaf(tree: Tree, idx: number): TreeNode[] {
     return proof;
 }
 
-export function updateTree(tree: Tree, newNode: Buffer, index: number) {
+export function updateTree(tree: Tree, newNode: Buffer, index: number, verbose = false) {
     let leaf = tree.leaves[index];
     leaf.node = newNode;
     let node = leaf;
 
     var i = 0;
     while (typeof node.parent !== 'undefined') {
+        if (verbose) {
+            console.log(`${i}: ${Uint8Array.from(node.node)}`);
+        }
         node = node.parent;
         node.node = hash(node.left.node, node.right.node);
         i++;

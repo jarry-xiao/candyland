@@ -43,7 +43,7 @@ describe("gummyroll", () => {
   const merkleRollKeypair = Keypair.generate();
   console.log("Payer key:", payer.publicKey);
 
-  const requiredSpace = 43568 + 8;
+  const requiredSpace = 44248 + 8;
   const leaves = Array(2**20).fill(Buffer.alloc(32));
   leaves[0] = Keypair.generate().publicKey.toBuffer();
   let tree = buildTree(leaves);
@@ -70,13 +70,15 @@ describe("gummyroll", () => {
         programId: program.programId,
     });
 
-    const initGummyrollIx = await program.instruction.initGummyroll(
-        { inner: Array.from(tree.root) },
+    const root = { inner: Array.from(tree.root) };
+    const leaf = { inner: Array.from(leaves[0]) };
+    const proof = getProofOfLeaf(tree, 0).map((node) => { return {inner : Array.from(node.node) }});
+    const initGummyrollIx = await program.instruction.initGummyrollWithRoot(
+        root, leaf, proof, 0,
         {
             accounts: {
                 merkleRoll: merkleRollKeypair.publicKey,
-                payer: payer.publicKey,
-                systemProgram: anchor.web3.SystemProgram.programId,
+                authority: payer.publicKey,
             },
             signers: [payer],
         }
@@ -91,6 +93,37 @@ describe("gummyroll", () => {
     assert(
         Buffer.from(merkleRoll.roots[0].inner).equals(tree.root),
         "On chain root matches root passed in instruction", 
+    );
+  });
+  it("Append single leaf", async () => {
+    const newLeaf = hash(payer.publicKey.toBuffer(), payer.publicKey.toBuffer());
+
+    const appendIx = await program.instruction.append(
+        { inner: Array.from(newLeaf) },
+        {
+            accounts: {
+                merkleRoll: merkleRollKeypair.publicKey,
+                authority: payer.publicKey,
+            },
+            signers: [payer],
+        }
+    );
+
+    const tx = new Transaction().add(appendIx);
+    const txid = await program.provider.send(tx, [payer], {
+        commitment: 'confirmed',
+    });
+    logTx(program.provider, txid);
+
+    updateTree(tree, newLeaf, 1, true);
+
+    const merkleRoll = await program.account.merkleRoll.fetch(merkleRollKeypair.publicKey);
+    const onChainRoot = merkleRoll.roots[merkleRoll.activeIndex.toNumber()].inner;
+    console.log(Uint8Array.from(onChainRoot), Uint8Array.from(tree.root));
+
+    assert(
+        Buffer.from(onChainRoot).equals(tree.root),
+        "Updated on chain root matches root of updated off chain tree", 
     );
   });
   it("Replace single leaf", async () => {
@@ -110,7 +143,7 @@ describe("gummyroll", () => {
         {
             accounts: {
                 merkleRoll: merkleRollKeypair.publicKey,
-                payer: payer.publicKey,
+                authority: payer.publicKey,
             },
             signers: [payer],
         }
@@ -122,17 +155,18 @@ describe("gummyroll", () => {
     });
     logTx(program.provider, txid);
 
-    updateTree(tree, newLeaf, index);
+    updateTree(tree, newLeaf, index, true);
 
     const merkleRoll = await program.account.merkleRoll.fetch(merkleRollKeypair.publicKey);
     const onChainRoot = merkleRoll.roots[merkleRoll.activeIndex.toNumber()].inner;
+    console.log(Uint8Array.from(onChainRoot), Uint8Array.from(tree.root));
 
     assert(
         Buffer.from(onChainRoot).equals(tree.root),
         "Updated on chain root matches root of updated off chain tree", 
     );
   });
-  it("Replace leaf - max block (64)", async () => {
+  it.skip("Replace leaf - max block (64)", async () => {
     /// Replace 64 leaves before syncing off-chain tree with on-chain tree
 
     let changeArray = [];
@@ -157,7 +191,7 @@ describe("gummyroll", () => {
             {
                 accounts: {
                     merkleRoll: merkleRollKeypair.publicKey,
-                    payer: payer.publicKey,
+                    authority: payer.publicKey,
                 },
                 signers: [payer],
             }
@@ -184,7 +218,7 @@ describe("gummyroll", () => {
         "Updated on chain root matches root of updated off chain tree", 
     );
   });
-  it("Replace leaf - max block + 1 (65)", async () => {
+  it.skip("Replace leaf - max block + 1 (65)", async () => {
     /// Replace more leaves than MAX_SIZE, which should fail
 
     let changeArray = [];
@@ -210,7 +244,7 @@ describe("gummyroll", () => {
             {
                 accounts: {
                     merkleRoll: merkleRollKeypair.publicKey,
-                    payer: payer.publicKey,
+                    authority: payer.publicKey,
                 },
                 signers: [payer],
             }
