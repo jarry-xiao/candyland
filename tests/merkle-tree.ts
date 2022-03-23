@@ -161,6 +161,9 @@ export function updateTree(tree: Tree, newNode: Buffer, index: number, verbose =
         node.node = hash(node.left.node, node.right.node);
         i++;
     }
+    if (verbose) {
+        console.log(`${i}: ${Uint8Array.from(node.node)}`);
+    }
     tree.root = node.node;
 }
 

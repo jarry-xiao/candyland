@@ -1,18 +1,15 @@
 use anchor_lang::{
-    prelude::*,
-    Event,
     emit,
-    solana_program::{entrypoint::ProgramResult, keccak::hashv, sysvar::rent::Rent}, Discriminator,
+    prelude::*,
+    solana_program::{entrypoint::ProgramResult, log::sol_log_compute_units, keccak::hashv, sysvar::rent::Rent},
+    Discriminator, Event,
 };
 use std::convert::AsRef;
 use std::ops::Deref;
 use std::ops::DerefMut;
 
-// declare_id!("DhpK18H3tzRBNWV6X4J4Cb9Z3Hm8MBxMAXVKJkc5aDj6");
-// declare_id!("DhpK18H3tzRBNWV6X4J4Cb9Z3Hm8MBxMAXVKJkc5aDj6");
 declare_id!("DhpK18H3tzRBNWV6X4J4Cb9Z3Hm8MBxMAXVKJkc5aDj6");
 
-// type Node = [u8; 32];
 
 /// Max number of concurrent changes to tree supported before having to regenerate proofs
 #[constant]
@@ -46,6 +43,8 @@ pub fn empty_node(level: u32) -> Node {
 
 /// Recomputes root of the Merkle tree from Node & proof
 pub fn recompute(mut leaf: Node, proof: &[Node], index: u32) -> Node {
+    msg!("Recompute");
+    sol_log_compute_units();
     for (i, s) in proof.iter().enumerate() {
         if index >> i & 1 == 0 {
             let res = hashv(&[leaf.as_ref(), s.as_ref()]);
@@ -55,6 +54,7 @@ pub fn recompute(mut leaf: Node, proof: &[Node], index: u32) -> Node {
             leaf.copy_from_slice(res.as_ref());
         }
     }
+    sol_log_compute_units();
     leaf
 }
 
@@ -94,23 +94,20 @@ pub mod gummyroll {
         let mut merkle_roll = ctx.accounts.merkle_roll.load_mut()?;
         match merkle_roll.set_leaf(root, previous_leaf, new_leaf, proof, index) {
             Some(new_root) => {
-                msg!("New Root: {:?}", new_root);
-                emit!(merkle_roll.get_change_log());
+                // msg!("New Root: {:?}", new_root);
+                // emit!(merkle_roll.get_change_log());
             }
             None => return Err(ProgramError::InvalidInstructionData),
         }
         Ok(())
     }
 
-    pub fn append(
-        ctx: Context<Modify>,
-        leaf: Node,
-    ) -> ProgramResult {
+    pub fn append(ctx: Context<Modify>, leaf: Node) -> ProgramResult {
         let mut merkle_roll = ctx.accounts.merkle_roll.load_mut()?;
         match merkle_roll.append(leaf) {
             Some(new_root) => {
-                msg!("New Root: {:?}", new_root);
-                emit!(merkle_roll.get_change_log());
+                // msg!("New Root: {:?}", new_root);
+                // emit!(merkle_roll.get_change_log());
             }
             None => return Err(ProgramError::InvalidInstructionData),
         }
@@ -127,8 +124,8 @@ pub mod gummyroll {
         let mut merkle_roll = ctx.accounts.merkle_roll.load_mut()?;
         match merkle_roll.fill_empty_or_append(root, leaf, proof, index) {
             Some(new_root) => {
-                msg!("New Root: {:?}", new_root);
-                emit!(merkle_roll.get_change_log());
+                // msg!("New Root: {:?}", new_root);
+                // emit!(merkle_roll.get_change_log());
             }
             None => return Err(ProgramError::InvalidInstructionData),
         }
@@ -213,7 +210,7 @@ impl ChangeLog {
         self.path[0]
     }
 
-    pub fn recompute_path(&mut self, mut start: Node, proof: &[Node]) {
+    pub fn recompute_path(&mut self, mut start: Node, proof: &[Node]) -> Node {
         self.path[0] = start;
         for (ix, s) in proof.iter().enumerate() {
             if self.index >> ix & 1 == 0 {
@@ -227,6 +224,7 @@ impl ChangeLog {
                 self.path[ix + 1] = start;
             }
         }
+        start
     }
 }
 
@@ -392,7 +390,10 @@ impl MerkleRoll {
         proof: [Node; MAX_DEPTH],
         index: u32,
     ) -> Option<Node> {
-        self.find_and_update_leaf(current_root, EMPTY, leaf, proof, index, true)
+        sol_log_compute_units();
+        let root = self.find_and_update_leaf(current_root, EMPTY, leaf, proof, index, true);
+        sol_log_compute_units();
+        root
     }
 
     /// On write conflict:
@@ -405,7 +406,19 @@ impl MerkleRoll {
         proof: [Node; MAX_DEPTH],
         index: u32,
     ) -> Option<Node> {
-        self.find_and_update_leaf(current_root, leaf, new_leaf, proof, index, false)
+        if index > self.rightmost_proof.index {
+            msg!(
+                "Received an index larger than the rightmost index {} > {}",
+                index,
+                self.rightmost_proof.index
+            );
+            None
+        } else {
+            sol_log_compute_units();
+            let root = self.find_and_update_leaf(current_root, leaf, new_leaf, proof, index, false);
+            sol_log_compute_units();
+            root
+        }
     }
 
     /// Internal function used to set leaf value & record changelog
@@ -426,8 +439,6 @@ impl MerkleRoll {
             let old_root = recompute(leaf, &proof, index);
             if old_root == current_root && index > self.rightmost_proof.index && append_on_conflict
             {
-                println!("RMP index: {}", self.rightmost_proof.index);
-                println!("Leaf index: {}", index);
                 return self.append(new_leaf);
             } else if old_root == current_root {
                 return self.update_and_apply_proof(
@@ -460,21 +471,22 @@ impl MerkleRoll {
         append_on_conflict: bool,
     ) -> Option<Node> {
         let mut updated_leaf = leaf;
+        msg!("Fast-forwarding proof");
+        sol_log_compute_units();
         while j != self.active_index {
             // Implement circular index addition
             j += 1;
             j &= MASK as u64;
             if index != self.change_logs[j as usize].index {
-                let common_path_len =
-                    ((index ^ self.change_logs[j as usize].index) << PADDING).leading_zeros() as usize;
+                let common_path_len = ((index ^ self.change_logs[j as usize].index) << PADDING)
+                    .leading_zeros() as usize;
                 let critbit_index = (MAX_DEPTH - 1) - common_path_len;
                 proof[critbit_index] = self.change_logs[j as usize].path[critbit_index];
             } else {
                 updated_leaf = self.change_logs[j as usize].get_leaf();
             }
         }
-        let old_root = recompute(updated_leaf, proof, index);
-        assert!(old_root == self.get_root());
+        sol_log_compute_units();
         if updated_leaf != leaf {
             if leaf == EMPTY && append_on_conflict {
                 return self.append(new_leaf);
@@ -497,15 +509,10 @@ impl MerkleRoll {
     }
 
     /// Creates a new root from a proof that is valid for the root at `self.active_index`
-    fn apply_changes(
-        &mut self,
-        start: Node,
-        proof: &[Node],
-        index: u32,
-    ) -> Node {
+    fn apply_changes(&mut self, start: Node, proof: &[Node], index: u32) -> Node {
         let change_log = &mut self.change_logs[self.active_index as usize];
         change_log.index = index;
-        change_log.recompute_path(start, proof);
+        let root = change_log.recompute_path(start, proof);
         if index < self.rightmost_proof.index as u32 {
             if index != self.rightmost_proof.index - 1 {
                 let common_path_len = ((index ^ (self.rightmost_proof.index - 1) as u32) << PADDING)
@@ -515,10 +522,11 @@ impl MerkleRoll {
             }
         } else {
             assert!(index == self.rightmost_proof.index);
+            msg!("Appending rightmost leaf");
             self.rightmost_proof.proof.copy_from_slice(&proof);
             self.rightmost_proof.index = index + 1;
             self.rightmost_proof.leaf = change_log.get_leaf();
         }
-        start
+        root
     }
 }

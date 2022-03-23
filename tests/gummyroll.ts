@@ -28,7 +28,10 @@ const logTx = async (provider, tx) => {
   );
 };
 
-async function checkTxStatus(provider: anchor.Provider, tx: string): Promise<boolean> {
+async function checkTxStatus(provider: anchor.Provider, tx: string, verbose = false): Promise<boolean> {
+  if (verbose) {
+    await logTx(provider, tx);
+  }
   let metaTx = await provider.connection.getTransaction(tx, { commitment: "confirmed" });
   return metaTx.meta.err === null;
 }
@@ -115,11 +118,10 @@ describe("gummyroll", () => {
     });
     logTx(program.provider, txid);
 
-    updateTree(tree, newLeaf, 1, true);
+    updateTree(tree, newLeaf, 1);
 
     const merkleRoll = await program.account.merkleRoll.fetch(merkleRollKeypair.publicKey);
     const onChainRoot = merkleRoll.roots[merkleRoll.activeIndex.toNumber()].inner;
-    console.log(Uint8Array.from(onChainRoot), Uint8Array.from(tree.root));
 
     assert(
         Buffer.from(onChainRoot).equals(tree.root),
@@ -155,24 +157,23 @@ describe("gummyroll", () => {
     });
     logTx(program.provider, txid);
 
-    updateTree(tree, newLeaf, index, true);
+    updateTree(tree, newLeaf, index);
 
     const merkleRoll = await program.account.merkleRoll.fetch(merkleRollKeypair.publicKey);
     const onChainRoot = merkleRoll.roots[merkleRoll.activeIndex.toNumber()].inner;
-    console.log(Uint8Array.from(onChainRoot), Uint8Array.from(tree.root));
 
     assert(
         Buffer.from(onChainRoot).equals(tree.root),
         "Updated on chain root matches root of updated off chain tree", 
     );
   });
-  it.skip("Replace leaf - max block (64)", async () => {
+  it("Replace leaf - max block (64)", async () => {
     /// Replace 64 leaves before syncing off-chain tree with on-chain tree
 
     let changeArray = [];
     let txList = [];
 
-    for(let i = 0; i < MAX_SIZE; i++) {
+    for(let i = 0; i < 1; i++) {
         const index = 3+i;
         const newLeaf = hash(payer.publicKey.toBuffer(), Buffer.from(new BN(i).toArray()));
         const proof = getProofOfLeaf(tree, index);
@@ -182,9 +183,8 @@ describe("gummyroll", () => {
 
         const nodeProof = proof.map((treeNode) => { return { inner: treeNode.node } });
 
-        const replaceLeafIx = await program.instruction.replaceLeaf(
+        const replaceLeafIx = await program.instruction.insertOrAppend(
             { inner: Array.from(tree.root) },
-            { inner: Array.from(Buffer.alloc(32)) },
             { inner: Array.from(newLeaf) },
             nodeProof,
             index,
@@ -200,10 +200,11 @@ describe("gummyroll", () => {
         const tx = new Transaction().add(replaceLeafIx);
         txList.push(
             program.provider.send(tx, [payer], {
-                commitment: 'confirmed',
+                commitment: 'confirmed', skipPreflight: true, 
             })
-            .then((txId) => checkTxStatus(program.provider, txId))
+            .then((txId) => checkTxStatus(program.provider, txId, false))
             .then((txOk) => { if (!txOk) { throw Error("Encountered failed tx")} })
+            .catch((reason) => console.error(reason))
         );
     }
     await Promise.all(txList);
@@ -218,7 +219,7 @@ describe("gummyroll", () => {
         "Updated on chain root matches root of updated off chain tree", 
     );
   });
-  it.skip("Replace leaf - max block + 1 (65)", async () => {
+  it("Replace leaf - max block + 1 (65)", async () => {
     /// Replace more leaves than MAX_SIZE, which should fail
 
     let changeArray = [];
@@ -235,9 +236,8 @@ describe("gummyroll", () => {
 
         const nodeProof = proof.map((treeNode) => { return { inner: treeNode.node } });
 
-        const replaceLeafIx = await program.instruction.replaceLeaf(
+        const replaceLeafIx = await program.instruction.insertOrAppend(
             { inner: Array.from(tree.root) },
-            { inner: Array.from(Buffer.alloc(32)) },
             { inner: Array.from(newLeaf) },
             nodeProof,
             index,
