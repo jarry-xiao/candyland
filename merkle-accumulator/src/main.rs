@@ -6,10 +6,18 @@ use crate::merkle::{empty_node, recompute, Node, MASK, MAX_DEPTH, MAX_SIZE, PADD
 /// Stores proof for a given Merkle root update
 pub struct ChangeLog {
     /// Nodes of off-chain merkle tree
-    proof: [Node; MAX_DEPTH],
+    path: [Node; MAX_DEPTH],
     prev_leaf: Node,
     curr_leaf: Node,
     /// Bitmap of node parity (used when hashing)
+    index: u32,
+}
+
+#[derive(Default, Copy, Clone, PartialEq)]
+/// Stores proof for a given Merkle root update
+pub struct Path {
+    proof: [Node; MAX_DEPTH],
+    leaf: Node,
     index: u32,
 }
 
@@ -26,12 +34,12 @@ pub struct MerkleAccumulator {
     active_index: usize,
     /// Number of active changes we are tracking
     buffer_size: usize,
-    rightmost_proof: ChangeLog,
+    rightmost_proof: Path,
 }
 
 impl MerkleAccumulator {
     pub fn new() -> Self {
-        let mut rightmost_proof = ChangeLog::default();
+        let mut rightmost_proof = Path::default();
         for (i, node) in rightmost_proof.proof.iter_mut().enumerate() {
             *node = empty_node(i as u32);
         }
@@ -47,11 +55,12 @@ impl MerkleAccumulator {
     pub fn new_with_root(root: Node, leaf: Node, proof: [Node; MAX_DEPTH], index: u32) -> Self {
         let mut roots = [empty_node(MAX_DEPTH as u32); MAX_SIZE];
         roots[0] = root;
-        let mut rightmost_proof = ChangeLog::default();
-        rightmost_proof.proof = proof;
-        rightmost_proof.index = index;
-        rightmost_proof.prev_leaf = [0; 32];
-        rightmost_proof.curr_leaf = leaf;
+        let rightmost_proof = Path {
+            proof,
+            index: index + 1,
+            leaf,
+        };
+        assert_eq!(root, recompute(leaf, &proof, index));
         Self {
             roots,
             change_logs: [ChangeLog::default(); MAX_SIZE],
@@ -77,9 +86,9 @@ impl MerkleAccumulator {
             return self.initialize_tree(node, self.rightmost_proof.proof);
         }
         let leaf = node.clone();
-        let intersection = self.rightmost_proof.index.trailing_zeros() as usize % 32;
+        let intersection = self.rightmost_proof.index.trailing_zeros() as usize;
         let mut change_list = [[0; 32]; MAX_DEPTH];
-        let mut intersection_node = self.rightmost_proof.curr_leaf;
+        let mut intersection_node = self.rightmost_proof.leaf;
 
         for i in 0..intersection {
             change_list[i] = node;
@@ -109,13 +118,13 @@ impl MerkleAccumulator {
         self.increment_active_index();
         self.roots[self.active_index] = node;
         self.change_logs[self.active_index] = ChangeLog {
-            proof: change_list,
+            path: change_list,
             curr_leaf: leaf,
             prev_leaf: [0; 32],
             index: self.rightmost_proof.index,
         };
         self.rightmost_proof.index = self.rightmost_proof.index + 1;
-        self.rightmost_proof.curr_leaf = leaf;
+        self.rightmost_proof.leaf = leaf;
         Some(node)
     }
 
@@ -151,7 +160,7 @@ impl MerkleAccumulator {
         proof: [Node; MAX_DEPTH],
         index: u32,
     ) -> Option<Node> {
-        if index >= self.rightmost_proof.index {
+        if index > self.rightmost_proof.index {
             return None;
         }
         self.replace(current_root, leaf, [0; 32], proof, index)
@@ -176,7 +185,6 @@ impl MerkleAccumulator {
             } else if old_root == current_root {
                 return self.update_and_apply_proof(leaf, new_leaf, &mut proof, index, j);
             } else {
-                println!("bad proof");
                 return None;
             }
         }
@@ -206,7 +214,7 @@ impl MerkleAccumulator {
                 let common_path_len =
                     ((index ^ self.change_logs[j].index) << PADDING).leading_zeros() as usize;
                 let critbit_index = (MAX_DEPTH - 1) - common_path_len;
-                proof[critbit_index] = self.change_logs[j].proof[critbit_index];
+                proof[critbit_index] = self.change_logs[j].path[critbit_index];
             } else {
                 updated_leaf = self.change_logs[j].curr_leaf;
             }
@@ -222,7 +230,7 @@ impl MerkleAccumulator {
             }
         }
         self.increment_active_index();
-        let new_root = self.apply_changes(leaf, new_leaf, proof, index, self.active_index);
+        let new_root = self.apply_changes(leaf, new_leaf, proof, index);
         self.roots[self.active_index] = new_root;
         Some(new_root)
     }
@@ -242,11 +250,10 @@ impl MerkleAccumulator {
         mut start: Node,
         proof: &[Node],
         index: u32,
-        i: usize,
     ) -> Node {
-        let leaf = start.clone();
-        let change_log = &mut self.change_logs[i];
-        change_log.proof[0] = start;
+        let curr_leaf = start.clone();
+        let change_log = &mut self.change_logs[self.active_index];
+        change_log.path[0] = start;
         for (ix, s) in proof.iter().enumerate() {
             if index >> ix & 1 == 0 {
                 let res = hashv(&[&start, s.as_ref()]);
@@ -256,23 +263,23 @@ impl MerkleAccumulator {
                 start.copy_from_slice(res.as_ref());
             }
             if ix < MAX_DEPTH - 1 {
-                change_log.proof[ix + 1] = start;
+                change_log.path[ix + 1] = start;
             }
         }
         change_log.index = index;
         change_log.prev_leaf = prev_leaf;
-        change_log.curr_leaf = leaf;
+        change_log.curr_leaf = curr_leaf;
         if index < self.rightmost_proof.index as u32 {
             if index != self.rightmost_proof.index - 1 {
                 let common_path_len = ((index ^ (self.rightmost_proof.index - 1) as u32) << PADDING)
                     .leading_zeros() as usize;
                 let critbit_index = (MAX_DEPTH - 1) - common_path_len;
-                self.rightmost_proof.proof[critbit_index] = change_log.proof[critbit_index];
+                self.rightmost_proof.proof[critbit_index] = change_log.path[critbit_index];
             }
         } else if index == self.rightmost_proof.index {
             self.rightmost_proof.proof.copy_from_slice(&proof);
             self.rightmost_proof.index = index + 1;
-            self.rightmost_proof.curr_leaf = leaf;
+            self.rightmost_proof.leaf = curr_leaf;
         } else {
             unreachable!();
         }
@@ -587,21 +594,26 @@ mod test {
 
         // Remove all leaves
         for (i, idx) in leaf_inds.iter().enumerate() {
-            println!("removing leaf {}: {}", i, idx);
             let proof_vec = off_chain_merkle.get_proof_of_leaf(*idx);
 
+            println!("off-chain");
+            for x in proof_vec.iter() {
+                println!("  {:?}", x);
+            }
             merkle.remove(
                 off_chain_merkle.get_root(),
                 off_chain_merkle.get_node(*idx),
                 proof_to_slice(proof_vec),
-                i as u32,
+                *idx as u32,
             );
             off_chain_merkle.remove_leaf(*idx);
 
             assert_eq!(
                 merkle.get_root(),
                 off_chain_merkle.get_root(),
-                "Removing node modifies root correctly"
+                "Removing node modifies root correctly {} {}",
+                i,
+                idx,
             );
         }
     }
