@@ -28,7 +28,10 @@ const logTx = async (provider, tx) => {
   );
 };
 
-async function checkTxStatus(provider: anchor.Provider, tx: string): Promise<boolean> {
+async function checkTxStatus(provider: anchor.Provider, tx: string, verbose = false): Promise<boolean> {
+  if (verbose) {
+    await logTx(provider, tx);
+  }
   let metaTx = await provider.connection.getTransaction(tx, { commitment: "confirmed" });
   return metaTx.meta.err === null;
 }
@@ -43,7 +46,7 @@ describe("gummyroll", () => {
   const merkleRollKeypair = Keypair.generate();
   console.log("Payer key:", payer.publicKey);
 
-  const requiredSpace = 43568 + 8;
+  const requiredSpace = 44248 + 8;
   const leaves = Array(2**20).fill(Buffer.alloc(32));
   leaves[0] = Keypair.generate().publicKey.toBuffer();
   let tree = buildTree(leaves);
@@ -70,13 +73,15 @@ describe("gummyroll", () => {
         programId: program.programId,
     });
 
-    const initGummyrollIx = await program.instruction.initGummyroll(
-        { inner: Array.from(tree.root) },
+    const root = { inner: Array.from(tree.root) };
+    const leaf = { inner: Array.from(leaves[0]) };
+    const proof = getProofOfLeaf(tree, 0).map((node) => { return {inner : Array.from(node.node) }});
+    const initGummyrollIx = await program.instruction.initGummyrollWithRoot(
+        root, leaf, proof, 0,
         {
             accounts: {
                 merkleRoll: merkleRollKeypair.publicKey,
-                payer: payer.publicKey,
-                systemProgram: anchor.web3.SystemProgram.programId,
+                authority: payer.publicKey,
             },
             signers: [payer],
         }
@@ -91,6 +96,36 @@ describe("gummyroll", () => {
     assert(
         Buffer.from(merkleRoll.roots[0].inner).equals(tree.root),
         "On chain root matches root passed in instruction", 
+    );
+  });
+  it("Append single leaf", async () => {
+    const newLeaf = hash(payer.publicKey.toBuffer(), payer.publicKey.toBuffer());
+
+    const appendIx = await program.instruction.append(
+        { inner: Array.from(newLeaf) },
+        {
+            accounts: {
+                merkleRoll: merkleRollKeypair.publicKey,
+                authority: payer.publicKey,
+            },
+            signers: [payer],
+        }
+    );
+
+    const tx = new Transaction().add(appendIx);
+    const txid = await program.provider.send(tx, [payer], {
+        commitment: 'confirmed',
+    });
+    logTx(program.provider, txid);
+
+    updateTree(tree, newLeaf, 1);
+
+    const merkleRoll = await program.account.merkleRoll.fetch(merkleRollKeypair.publicKey);
+    const onChainRoot = merkleRoll.roots[merkleRoll.activeIndex.toNumber()].inner;
+
+    assert(
+        Buffer.from(onChainRoot).equals(tree.root),
+        "Updated on chain root matches root of updated off chain tree", 
     );
   });
   it("Replace single leaf", async () => {
@@ -110,7 +145,7 @@ describe("gummyroll", () => {
         {
             accounts: {
                 merkleRoll: merkleRollKeypair.publicKey,
-                payer: payer.publicKey,
+                authority: payer.publicKey,
             },
             signers: [payer],
         }
@@ -138,7 +173,7 @@ describe("gummyroll", () => {
     let changeArray = [];
     let txList = [];
 
-    for(let i = 0; i < MAX_SIZE; i++) {
+    for(let i = 0; i < 1; i++) {
         const index = 3+i;
         const newLeaf = hash(payer.publicKey.toBuffer(), Buffer.from(new BN(i).toArray()));
         const proof = getProofOfLeaf(tree, index);
@@ -148,16 +183,15 @@ describe("gummyroll", () => {
 
         const nodeProof = proof.map((treeNode) => { return { inner: treeNode.node } });
 
-        const replaceLeafIx = await program.instruction.replaceLeaf(
+        const replaceLeafIx = await program.instruction.insertOrAppend(
             { inner: Array.from(tree.root) },
-            { inner: Array.from(Buffer.alloc(32)) },
             { inner: Array.from(newLeaf) },
             nodeProof,
             index,
             {
                 accounts: {
                     merkleRoll: merkleRollKeypair.publicKey,
-                    payer: payer.publicKey,
+                    authority: payer.publicKey,
                 },
                 signers: [payer],
             }
@@ -166,10 +200,11 @@ describe("gummyroll", () => {
         const tx = new Transaction().add(replaceLeafIx);
         txList.push(
             program.provider.send(tx, [payer], {
-                commitment: 'confirmed',
+                commitment: 'confirmed', skipPreflight: true, 
             })
-            .then((txId) => checkTxStatus(program.provider, txId))
+            .then((txId) => checkTxStatus(program.provider, txId, false))
             .then((txOk) => { if (!txOk) { throw Error("Encountered failed tx")} })
+            .catch((reason) => console.error(reason))
         );
     }
     await Promise.all(txList);
@@ -201,16 +236,15 @@ describe("gummyroll", () => {
 
         const nodeProof = proof.map((treeNode) => { return { inner: treeNode.node } });
 
-        const replaceLeafIx = await program.instruction.replaceLeaf(
+        const replaceLeafIx = await program.instruction.insertOrAppend(
             { inner: Array.from(tree.root) },
-            { inner: Array.from(Buffer.alloc(32)) },
             { inner: Array.from(newLeaf) },
             nodeProof,
             index,
             {
                 accounts: {
                     merkleRoll: merkleRollKeypair.publicKey,
-                    payer: payer.publicKey,
+                    authority: payer.publicKey,
                 },
                 signers: [payer],
             }

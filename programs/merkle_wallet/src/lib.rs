@@ -17,7 +17,7 @@ pub mod state;
 
 const MERKLE_PREFIX: &str = "MERKLE";
 
-declare_id!("HCrUkHVeMqhsDuMvLSQa6HFKdB2ypF27r2pL2tpfLPBq");
+declare_id!("DjivbZKBMvk3SDywtFryHoFQsSWXd9gSBwvfoLk5TUcR");
 
 #[inline(always)]
 pub fn assert_with_msg(v: bool, err: ProgramError, msg: &str) -> ProgramResult {
@@ -285,6 +285,7 @@ pub struct InitializeMerkleWallet<'info> {
             payer.key().as_ref(),
         ],
         bump,
+        space = 49 + 8,
         payer = payer,
     )]
     pub merkle_wallet: Box<Account<'info, MerkleWallet>>,
