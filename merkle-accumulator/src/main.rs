@@ -99,9 +99,11 @@ impl MerkleAccumulator {
             let j = self.active_index.wrapping_sub(i) & MASK;
 
             if self.roots[j] != current_root {
+                /*
                 if self.change_logs[j].changes[MAX_DEPTH - 1] == leaf {
                     return None;
                 }
+                */
                 continue;
             }
             let old_root = recompute(leaf, &proof, path);

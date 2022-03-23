@@ -14,7 +14,7 @@ import { PublicKey, Keypair, SystemProgram, Transaction } from "@solana/web3.js"
 import { Token, ASSOCIATED_TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { assert } from "chai";
 
-import { buildTree, hash, getProofOfLeaf, updateTree } from './merkle-tree';
+import { buildTree, hash, getProofOfLeaf, updateTree, hashLeaves } from './merkle-tree';
 
 const TOKEN_PROGRAM_2022_ID = new PublicKey(
   "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
@@ -42,7 +42,7 @@ describe("gummyroll", () => {
   const leaves = Array(2**20).fill(Buffer.alloc(32));
   leaves[0] = Keypair.generate().publicKey.toBuffer();
   let tree = buildTree(leaves);
-  console.log("Created root using leaf pubkey: ", tree.root);
+  console.log("Created root using leaf pubkey: ", leaves[0]);
   console.log("program id:", program.programId.toString());
 
   it("Initialize keypairs with Sol", async () => {
@@ -92,18 +92,23 @@ describe("gummyroll", () => {
         Buffer.from(merkleRoll.roots[0].inner) === tree.root
     );
   });
-  it("Replace leaf", async () => {
+  it("Replace single leaf", async () => {
     const previousLeaf = Buffer.alloc(32);
     const newLeaf = hash(payer.publicKey.toBuffer(), payer.publicKey.toBuffer());
-    const index = 1;
-    const [proof, path] = getProofOfLeaf(tree, index);
+    const index = 2;
+    const proof = getProofOfLeaf(tree, index);
     // console.log("typescript path: ", path);
     // console.log("proof:", proof);
 
-    const nodeProof = proof.map((treeNode) => { return { inner: treeNode.node }});
-    // console.log("nodeProof:", nodeProof);
+    const recomputed = hashLeaves(tree.leaves.map((node) => {return node.node}));
+    console.log("Recomputed matches root?");
+    console.log("             Recomputed:", recomputed);
+    console.log("                   Root:", tree.root);
 
-    updateTree(tree, newLeaf, index);
+    const nodeProof = proof.map((treeNode) => { return { inner: treeNode.node }});
+    console.log("nodeProof:", nodeProof.map((node) => { return node.inner } ));
+
+    // updateTree(tree, newLeaf, index);
 
     const replaceLeafIx = await program.instruction.replaceLeaf(
         { inner: Array.from(tree.root) },
@@ -133,6 +138,61 @@ describe("gummyroll", () => {
     // console.log("       root:", onChainRoot);
     // console.log("   expected:", tree.root);
 
+    assert(
+        "Updated on chain root matches root of updated off chain tree", 
+        Buffer.from(onChainRoot) === tree.root
+    );
+  });
+  it.skip("Replace leaf - max block (64)", async () => {
+    /// Replace 64 leaves before syncing off-chain tree with on-chain tree
+
+    let changeArray = [];
+    for(let i = 0; i < 64; i++) {
+        const index = 3+i;
+        const newLeaf = hash(payer.publicKey.toBuffer(), Buffer.from(new BN(i).toArray()));
+        const proof = getProofOfLeaf(tree, index);
+        // const recomputed = hashLeaves(tree.leaves.map((node) => {return node.node}));
+        // console.log("Recomputed matches root?");
+        // console.log("             Recomputed:", recomputed);
+        // console.log("                   Root:", tree.root);
+        // console.log("Proof: ", proof);
+
+        /// Use this to sync off-chain tree
+        changeArray.push({newLeaf, index});
+
+        const nodeProof = proof.map((treeNode) => { return { inner: treeNode.node } });
+
+        const replaceLeafIx = await program.instruction.replaceLeaf(
+            { inner: Array.from(tree.root) },
+            { inner: Array.from(Buffer.alloc(32)) },
+            { inner: Array.from(newLeaf) },
+            nodeProof,
+            index,
+            {
+                accounts: {
+                    merkleRoll: merkleRollKeypair.publicKey,
+                    payer: payer.publicKey,
+                },
+                signers: [payer],
+            }
+        );
+
+        const tx = new Transaction().add(replaceLeafIx);
+        const txid = await program.provider.send(tx, [payer], {
+            commitment: 'confirmed',
+        });
+        logTx(program.provider, txid);
+    }
+
+    changeArray.forEach((change) => {
+        updateTree(tree, change.newLeaf, change.index);
+    })
+    const merkleRoll = await program.account.merkleRoll.fetch(merkleRollKeypair.publicKey);
+    const onChainRoot = merkleRoll.roots[merkleRoll.activeIndex.toNumber()].inner;
+    console.log("Merkle roll loaded...");
+    console.log("       root:", onChainRoot);
+    console.log("   expected:", tree.root);
+    
     assert(
         "Updated on chain root matches root of updated off chain tree", 
         Buffer.from(onChainRoot) === tree.root
