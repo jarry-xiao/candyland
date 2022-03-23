@@ -102,8 +102,6 @@ export function buildTree(leaves: Buffer[]): Tree {
         seqNum++;
     }
 
-    console.log("LEVEL:", nodes.peek().level);
-
     return {
         root: nodes.peek().node,
         leaves: finalLeaves,
@@ -118,58 +116,35 @@ export function getProofOfLeaf(tree: Tree, idx: number): TreeNode[] {
 
     let node = tree.leaves[idx];
 
-    console.log("Start");
-    console.log(Uint8Array.from(node.node));
     while (typeof node.parent !== 'undefined') {
         let parent = node.parent;
         if (parent.left.id === node.id) {
             proof.push(parent.right);
+
             if (hash(node.node, parent.right.node) !== parent.node) {
-                console.log("fuck 0");
+                throw new Error("Invariant broken when hashing left node")
             }
         } else {
             proof.push(parent.left);
+
             if (hash(node.node, parent.right.node) !== parent.node) {
-                console.log("fuck 1");
+                throw new Error("Invariant broken when hashing right node")
             }
         }
-        console.log(Uint8Array.from(parent.node));
         node = parent;
     }
-    console.log("Proof length:", proof.length);
 
     return proof;
 }
 
-// export function hashProof(path: number, leaf: TreeNode, proof: TreeNode[]) {
-//     // let isLeft = proof[0].parent.left.id === leaf.id;
-//     // let start: Buffer = isLeft ? hash(leaf.node, proof[0].node) : hash(proof[0].node, leaf.node);
-//     let start = leaf.node;
-
-//     proof.forEach((node, idx) => {
-//         if (idx == 0) { return }
-        
-//         if (proof[idx - 1].id === node.left.id) {
-//             start = hash(node.node,)
-//         }
-
-//         if (isLeft) {
-//             start = hash(leaf, )
-//         }
-//     })
-//     return start;
-// }
-
 export function updateTree(tree: Tree, newNode: Buffer, index: number) {
     let leaf = tree.leaves[index];
     leaf.node = newNode;
-    console.log("Leaf: ", Uint8Array.from(leaf.node));
     let node = leaf.parent;
 
     var i = 0;
     while (typeof node.parent !== 'undefined') {
         node.node = hash(node.left.node, node.right.node);
-        console.log(`${i}: `, Uint8Array.from(node.node));
         node = node.parent;
         i++;
     }
