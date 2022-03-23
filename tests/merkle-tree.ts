@@ -3,6 +3,7 @@ import { keccak_256 } from "js-sha3";
 import * as Collections from 'typescript-collections';
 
 const MAX_DEPTH = 20;
+export const MAX_SIZE = 64;
 let CACHE_EMPTY_NODE = new Map<number, Buffer>();
 
 type Tree = {
@@ -121,13 +122,19 @@ export function getProofOfLeaf(tree: Tree, idx: number): TreeNode[] {
         if (parent.left.id === node.id) {
             proof.push(parent.right);
 
-            if (hash(node.node, parent.right.node) !== parent.node) {
+            const hashed = hash(node.node, parent.right.node);
+            if (!hashed.equals(parent.node)) {
+                console.log(hashed);
+                console.log(parent.node);
                 throw new Error("Invariant broken when hashing left node")
             }
         } else {
             proof.push(parent.left);
 
-            if (hash(node.node, parent.right.node) !== parent.node) {
+            const hashed = hash(parent.left.node, node.node);
+            if (!hashed.equals(parent.node)) {
+                console.log(hashed);
+                console.log(parent.node);
                 throw new Error("Invariant broken when hashing right node")
             }
         }
@@ -140,12 +147,12 @@ export function getProofOfLeaf(tree: Tree, idx: number): TreeNode[] {
 export function updateTree(tree: Tree, newNode: Buffer, index: number) {
     let leaf = tree.leaves[index];
     leaf.node = newNode;
-    let node = leaf.parent;
+    let node = leaf;
 
     var i = 0;
     while (typeof node.parent !== 'undefined') {
-        node.node = hash(node.left.node, node.right.node);
         node = node.parent;
+        node.node = hash(node.left.node, node.right.node);
         i++;
     }
     tree.root = node.node;
