@@ -182,14 +182,6 @@ impl MerkleAccumulator {
         for i in 0..self.buffer_size {
             let j = self.active_index.wrapping_sub(i) & MASK;
             if self.roots[j] != current_root {
-<<<<<<< HEAD
-                /*
-                if self.change_logs[j].changes[MAX_DEPTH - 1] == leaf {
-                    return None;
-                }
-                */
-=======
->>>>>>> bcb8cbe6b4ad9a989d3a2b0eae1fae2845c5d8b3
                 continue;
             }
             let old_root = recompute(leaf, &proof, index);
