@@ -202,7 +202,7 @@ describe("gummyroll", () => {
     let changeArray = [];
     let txList = [];
 
-    for (let i = 0; i < 64; i++) {
+    for (let i = 0; i < 128; i++) {
       const index = 3 + i;
       const newLeaf = hash(
         payer.publicKey.toBuffer(),
@@ -252,7 +252,6 @@ describe("gummyroll", () => {
               entry.includes("Inserted Index")
             )[0];
             let leafIndex = parseInt(leafIndexStr.split(" - ")[1]);
-            console.log(leafIndex);
             updateTree(tree, newLeaf, leafIndex);
             return true;
           })
@@ -283,8 +282,8 @@ describe("gummyroll", () => {
     let changeArray = [];
     let txList = [];
 
-    const offset = 3 + 64;
-    for (let i = 0; i < 64 + 1; i++) {
+    const offset = 3 + 128;
+    for (let i = 0; i < 128 + 1; i++) {
       const index = offset + i;
       const newLeaf = hash(
         payer.publicKey.toBuffer(),
