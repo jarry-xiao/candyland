@@ -2,7 +2,6 @@ use anchor_lang::{
     emit,
     prelude::*,
     solana_program::{entrypoint::ProgramResult, log::sol_log_compute_units, keccak::hashv, sysvar::rent::Rent},
-    Discriminator, Event,
 };
 use std::convert::AsRef;
 use std::ops::Deref;
@@ -95,7 +94,7 @@ pub mod gummyroll {
         match merkle_roll.set_leaf(root, previous_leaf, new_leaf, proof, index) {
             Some(new_root) => {
                 msg!("New Root: {:?}", new_root);
-                emit!(merkle_roll.get_change_log());
+                emit!(merkle_roll.get_change_log().to_event());
             }
             None => return Err(ProgramError::InvalidInstructionData),
         }
@@ -107,7 +106,7 @@ pub mod gummyroll {
         match merkle_roll.append(leaf) {
             Some(new_root) => {
                 msg!("New Root: {:?}", new_root);
-                emit!(merkle_roll.get_change_log());
+                emit!(merkle_roll.get_change_log().to_event());
             }
             None => return Err(ProgramError::InvalidInstructionData),
         }
@@ -127,7 +126,7 @@ pub mod gummyroll {
                 let change_log = merkle_roll.get_change_log();
                 msg!("New Root: {:?}", new_root);
                 msg!("Inserted Index - {:?}", change_log.index);
-                emit!(change_log);
+                emit!(change_log.to_event());
             }
             None => return Err(ProgramError::InvalidInstructionData),
         }
@@ -184,6 +183,13 @@ impl From<[u8; 32]> for Node {
         Self { inner }
     }
 }
+#[event]
+pub struct ChangeLogEvent {
+    /// Nodes of off-chain merkle tree
+    path: [Node; MAX_DEPTH],
+    /// Bitmap of node parity (used when hashing)
+    index: u32,
+}
 
 #[derive(Default, Copy, Clone, PartialEq, AnchorDeserialize, AnchorSerialize)]
 /// Stores proof for a given Merkle root update
@@ -195,19 +201,13 @@ pub struct ChangeLog {
     _padding: u32,
 }
 
-impl Discriminator for ChangeLog {
-    fn discriminator() -> [u8; 8] {
-        [u8::MAX; 8]
-    }
-}
-
-impl Event for ChangeLog {
-    fn data(&self) -> Vec<u8> {
-        self.try_to_vec().unwrap()
-    }
-}
-
 impl ChangeLog {
+    pub fn to_event(&self) -> ChangeLogEvent {
+        ChangeLogEvent {
+            path: self.path,
+            index: self.index,
+        }
+    }
     pub fn get_leaf(&self) -> Node {
         self.path[0]
     }

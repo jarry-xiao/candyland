@@ -41,6 +41,7 @@ describe("gummyroll", () => {
   const payer = Keypair.generate();
   const MAX_SIZE = parseInt(program.idl.constants[0].value);
   const MAX_DEPTH = parseInt(program.idl.constants[1].value);
+
   const merkleRollKeypair = Keypair.generate();
   console.log("Payer key:", payer.publicKey);
 
@@ -57,6 +58,10 @@ describe("gummyroll", () => {
   let tree = buildTree(leaves);
   console.log("Created root using leaf pubkey: ", leaves[0]);
   console.log("program id:", program.programId.toString());
+
+  let listener = program.addEventListener("ChangeLogEvent", (event) => {
+    updateTree(tree, Buffer.from(event.path[0].inner), event.index);
+  });
 
   it("Initialize keypairs with Sol", async () => {
     await program.provider.connection.confirmTransaction(
@@ -196,13 +201,17 @@ describe("gummyroll", () => {
       "Updated on chain root matches root of updated off chain tree"
     );
   });
-  it("Replace leaf - max block (64)", async () => {
+  it(`Replace leaf - max block ${MAX_SIZE}`, async () => {
     /// Replace 64 leaves before syncing off-chain tree with on-chain tree
 
     let changeArray = [];
     let txList = [];
 
-    for (let i = 0; i < 128; i++) {
+    const failedRoot = { inner: Array.from(tree.root) };
+    const failedLeaf = { inner: Array.from(tree.leaves[2].node) };
+    const failedProof = getProofOfLeaf(tree, 2);
+
+    for (let i = 0; i < MAX_SIZE; i++) {
       const index = 3 + i;
       const newLeaf = hash(
         payer.publicKey.toBuffer(),
@@ -217,7 +226,7 @@ describe("gummyroll", () => {
         return { inner: treeNode.node };
       });
 
-      const replaceLeafIx = await program.instruction.insertOrAppend(
+      const insertOrAppendIx = await program.instruction.insertOrAppend(
         { inner: Array.from(tree.root) },
         { inner: Array.from(newLeaf) },
         nodeProof,
@@ -231,41 +240,15 @@ describe("gummyroll", () => {
         }
       );
 
-      const tx = new Transaction().add(replaceLeafIx);
+      const tx = new Transaction().add(insertOrAppendIx);
       txList.push(
-        program.provider
-          .send(tx, [payer], {
-            commitment: "confirmed",
-            skipPreflight: true,
-          })
-          .then(async (txId) => {
-            let metaTx = await program.provider.connection.getTransaction(
-              txId,
-              {
-                commitment: "confirmed",
-              }
-            );
-            if (metaTx.meta.err !== null) {
-              return false;
-            }
-            let leafIndexStr = metaTx.meta.logMessages.filter((entry) =>
-              entry.includes("Inserted Index")
-            )[0];
-            let leafIndex = parseInt(leafIndexStr.split(" - ")[1]);
-            updateTree(tree, newLeaf, leafIndex);
-            return true;
-          })
-          .catch(() => {
-            return false;
-          })
+        program.provider.send(tx, [payer], {
+          commitment: "confirmed",
+          skipPreflight: true,
+        })
       );
     }
-    let results = await Promise.all(txList);
-    let failures = results
-      .map((txOk) => Number(!txOk))
-      .reduce((left, right) => left + right, 0);
-
-    assert(failures === 0, `Encountered ${failures} failed transactions`);
+    await Promise.all(txList);
     const merkleRoll = await program.account.merkleRoll.fetch(
       merkleRollKeypair.publicKey
     );
@@ -275,15 +258,36 @@ describe("gummyroll", () => {
       Buffer.from(onChainRoot).equals(tree.root),
       "Updated on chain root matches root of updated off chain tree"
     );
+
+    try {
+      const replaceLeafIx = await program.instruction.replaceLeaf(
+        failedRoot,
+        failedLeaf,
+        Buffer.alloc(32),
+        failedProof,
+        2,
+        {
+          accounts: {
+            merkleRoll: merkleRollKeypair.publicKey,
+            authority: payer.publicKey,
+          },
+          signers: [payer],
+        }
+      );
+      console.log("Unexpected success");
+      assert(false);
+    } catch (e) {
+      console.log("Expected failure");
+    }
   });
-  it("Replace leaf - max block + 1", async () => {
+  it.skip("Replace leaf - max block + 1", async () => {
     /// Replace more leaves than MAX_SIZE, which should fail
 
     let changeArray = [];
     let txList = [];
 
-    const offset = 3 + 128;
-    for (let i = 0; i < 128 + 1; i++) {
+    const offset = 3 + 64;
+    for (let i = 0; i < 64 + 1; i++) {
       const index = offset + i;
       const newLeaf = hash(
         payer.publicKey.toBuffer(),
