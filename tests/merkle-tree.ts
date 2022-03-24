@@ -3,7 +3,6 @@ import { keccak_256 } from "js-sha3";
 import * as Collections from 'typescript-collections';
 
 const MAX_DEPTH = 20;
-export const MAX_SIZE = 64;
 let CACHE_EMPTY_NODE = new Map<number, Buffer>();
 
 type Tree = {

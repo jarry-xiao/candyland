@@ -13,7 +13,7 @@ declare_id!("DhpK18H3tzRBNWV6X4J4Cb9Z3Hm8MBxMAXVKJkc5aDj6");
 
 /// Max number of concurrent changes to tree supported before having to regenerate proofs
 #[constant]
-pub const MAX_SIZE: usize = 64;
+pub const MAX_SIZE: usize = 512;
 
 /// Max depth of the Merkle tree
 #[constant]
@@ -94,8 +94,8 @@ pub mod gummyroll {
         let mut merkle_roll = ctx.accounts.merkle_roll.load_mut()?;
         match merkle_roll.set_leaf(root, previous_leaf, new_leaf, proof, index) {
             Some(new_root) => {
-                // msg!("New Root: {:?}", new_root);
-                // emit!(merkle_roll.get_change_log());
+                msg!("New Root: {:?}", new_root);
+                emit!(merkle_roll.get_change_log());
             }
             None => return Err(ProgramError::InvalidInstructionData),
         }
@@ -106,8 +106,8 @@ pub mod gummyroll {
         let mut merkle_roll = ctx.accounts.merkle_roll.load_mut()?;
         match merkle_roll.append(leaf) {
             Some(new_root) => {
-                // msg!("New Root: {:?}", new_root);
-                // emit!(merkle_roll.get_change_log());
+                msg!("New Root: {:?}", new_root);
+                emit!(merkle_roll.get_change_log());
             }
             None => return Err(ProgramError::InvalidInstructionData),
         }
@@ -124,8 +124,10 @@ pub mod gummyroll {
         let mut merkle_roll = ctx.accounts.merkle_roll.load_mut()?;
         match merkle_roll.fill_empty_or_append(root, leaf, proof, index) {
             Some(new_root) => {
-                // msg!("New Root: {:?}", new_root);
-                // emit!(merkle_roll.get_change_log());
+                let change_log = merkle_roll.get_change_log();
+                msg!("New Root: {:?}", new_root);
+                msg!("Inserted Index - {:?}", change_log.index);
+                emit!(change_log);
             }
             None => return Err(ProgramError::InvalidInstructionData),
         }
@@ -261,8 +263,7 @@ impl MerkleRoll {
             *node = empty_node(i as u32);
         }
         self.authority = authority;
-        self.roots = [empty_node(MAX_DEPTH as u32); MAX_SIZE];
-        self.change_logs = [ChangeLog::default(); MAX_SIZE];
+        self.roots[0] = empty_node(MAX_DEPTH as u32);
         self.active_index = 0;
         self.buffer_size = 1;
         self.rightmost_proof = rightmost_proof;
@@ -277,8 +278,6 @@ impl MerkleRoll {
         proof: [Node; MAX_DEPTH],
         index: u32,
     ) -> ProgramResult {
-        let mut roots = [empty_node(MAX_DEPTH as u32); MAX_SIZE];
-        roots[0] = root;
         let rightmost_proof = Path {
             proof,
             index: index + 1,
@@ -287,8 +286,7 @@ impl MerkleRoll {
         };
         assert_eq!(root, recompute(rightmost_leaf, &proof, index));
         self.authority = authority;
-        self.roots = roots;
-        self.change_logs = [ChangeLog::default(); MAX_SIZE];
+        self.roots[0] = root;
         self.active_index = 0;
         self.buffer_size = 1;
         self.rightmost_proof = rightmost_proof;
@@ -431,6 +429,10 @@ impl MerkleRoll {
         index: u32,
         append_on_conflict: bool,
     ) -> Option<Node> {
+        msg!("Active Index: {}", self.active_index);
+        msg!("Rightmost Index: {}", self.rightmost_proof.index);
+        msg!("Buffer Size: {}", self.buffer_size);
+        msg!("Leaf Index: {}", index);
         for i in 0..self.buffer_size {
             let j = self.active_index.wrapping_sub(i) & MASK as u64;
             if self.roots[j as usize] != current_root {
@@ -450,9 +452,11 @@ impl MerkleRoll {
                     append_on_conflict,
                 );
             } else {
+                msg!("Invalid proof");
                 return None;
             }
         }
+        msg!("Failed to find root");
         None
     }
 
@@ -491,6 +495,7 @@ impl MerkleRoll {
             if leaf == EMPTY && append_on_conflict {
                 return self.append(new_leaf);
             } else {
+                msg!("Leaf already updated");
                 return None;
             }
         }
