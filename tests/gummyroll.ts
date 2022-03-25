@@ -11,6 +11,7 @@ import * as borsh from 'borsh';
 import { assert } from "chai";
 
 import { buildTree, hash, getProofOfLeaf, updateTree } from "./merkle-tree";
+import { decodeMerkleRoll, getMerkleRollAccountSize, OnChainMerkleRoll } from "./merkle-roll-serde";
 
 const logTx = async (provider, tx) => {
   await provider.connection.confirmTransaction(tx, "confirmed");
@@ -34,19 +35,13 @@ async function checkTxStatus(
   return metaTx.meta.err === null;
 }
 
-function getMerkleRollAccountSize(maxDepth: number, maxBufferSize: number): number {
-  let headerSize = 8 + 32;
-  let changeLogSize = (maxDepth * 32 + 32 + 4 + 4) * maxBufferSize;
-  let rightMostPathSize = maxDepth * 32 + 32 + 4 + 4;
-  let merkleRollSize = 8 + 8 + changeLogSize + rightMostPathSize;
-  return merkleRollSize + headerSize; 
-}
-
 describe("gummyroll", () => {
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.Provider.env());
 
+  /// @ts-ignore
   const program = anchor.workspace.Gummyroll as Program<Gummyroll>;
+
   const payer = Keypair.generate();
   const MAX_SIZE = 64; //parseInt(program.idl.constants[0].value);
   const MAX_DEPTH = 20;//parseInt(program.idl.constants[1].value);
@@ -118,26 +113,23 @@ describe("gummyroll", () => {
       merkleRollKeypair.publicKey
     );
 
+    let onChainMerkle = decodeMerkleRoll(merkleRoll.data);
+    
     // Check header bytes are set correctly
-    let reader = new borsh.BinaryReader(merkleRoll.data.slice(0, 8));
-    let maxBufferSize = reader.readU32();
-    let maxDepth = reader.readU32();
+    assert(onChainMerkle.header.maxDepth === MAX_DEPTH, `Max depth does not match ${onChainMerkle.header.maxDepth}, expected ${MAX_DEPTH}`);
+    assert(onChainMerkle.header.maxBufferSize === MAX_SIZE, `Max buffer size does not match ${onChainMerkle.header.maxBufferSize}, expected ${MAX_SIZE}`);
 
-    assert(maxDepth === MAX_DEPTH, `Max depth does not match ${maxDepth}, expected ${MAX_DEPTH}`);
-    assert(maxBufferSize === MAX_SIZE, `Max buffer size does not match ${maxBufferSize}, expected ${MAX_SIZE}`);
-
-    let accountPubkey = new PublicKey(merkleRoll.data.slice(8, 8+32));
     assert(
-      accountPubkey.equals(payer.publicKey),
+      onChainMerkle.header.authority.equals(payer.publicKey),
       "Failed to write auth pubkey"
     );
 
-    // assert(
-    //   Buffer.from(merkleRoll.roots[0].inner).equals(tree.root),
-    //   "On chain root matches root passed in instruction"
-    // );
+    assert(
+      onChainMerkle.roll.changeLogs[0].root.equals(new PublicKey(tree.root)),
+      "On chain root does not match root passed in instruction"
+    );
   });
-  it.skip("Append single leaf", async () => {
+  it("Append single leaf", async () => {
     const newLeaf = hash(
       payer.publicKey.toBuffer(),
       payer.publicKey.toBuffer()
@@ -162,11 +154,12 @@ describe("gummyroll", () => {
 
     updateTree(tree, newLeaf, 1);
 
-    const merkleRoll = await program.account.merkleRoll.fetch(
+    const merkleRollAccount = await program.provider.connection.getAccountInfo(
       merkleRollKeypair.publicKey
     );
+    const merkleRoll = decodeMerkleRoll(merkleRollAccount.data);
     const onChainRoot =
-      merkleRoll.roots[merkleRoll.activeIndex.toNumber()].inner;
+      merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
 
     assert(
       Buffer.from(onChainRoot).equals(tree.root),
@@ -179,14 +172,14 @@ describe("gummyroll", () => {
       payer.publicKey.toBuffer(),
       payer.publicKey.toBuffer()
     );
-    const index = 1;
+    const index = 2;
     const proof = getProofOfLeaf(tree, index);
 
     const nodeProof = proof.map((treeNode) => {
       return { inner: treeNode.node };
     });
 
-    const replaceLeafIx = await program.instruction.replaceLeaf(
+    const replaceLeafIx = program.instruction.replaceLeaf(
       { inner: Array.from(tree.root) },
       { inner: Array.from(previousLeaf) },
       { inner: Array.from(newLeaf) },
@@ -209,18 +202,19 @@ describe("gummyroll", () => {
 
     updateTree(tree, newLeaf, index);
 
-    const merkleRoll = await program.provider.connection.getAccountInfo(
+    const merkleRollAccount = await program.provider.connection.getAccountInfo(
       merkleRollKeypair.publicKey
     );
+    const merkleRoll = decodeMerkleRoll(merkleRollAccount.data);
     const onChainRoot =
-      merkleRoll.roots[merkleRoll.activeIndex.toNumber()].inner;
+      merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
 
     assert(
       Buffer.from(onChainRoot).equals(tree.root),
       "Updated on chain root matches root of updated off chain tree"
     );
   });
-  it.skip(`Replace leaf - max block ${MAX_SIZE}`, async () => {
+  it(`Replace leaf - max block ${MAX_SIZE}`, async () => {
     /// Replace 64 leaves before syncing off-chain tree with on-chain tree
 
     let changeArray = [];
@@ -268,18 +262,23 @@ describe("gummyroll", () => {
       );
     }
     await Promise.all(txList);
-    const merkleRoll = await program.account.merkleRoll.fetch(
+
+    
+
+    // Compare on-chain & off-chain roots
+    const merkleRoll = decodeMerkleRoll((await program.provider.connection.getAccountInfo(
       merkleRollKeypair.publicKey
-    );
+    )).data);
     const onChainRoot =
-      merkleRoll.roots[merkleRoll.activeIndex.toNumber()].inner;
+      merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
+
     assert(
       Buffer.from(onChainRoot).equals(tree.root),
-      "Updated on chain root matches root of updated off chain tree"
+      "Updated on chain root does not match root of updated off chain tree"
     );
 
     try {
-      const replaceLeafIx = await program.instruction.replaceLeaf(
+      await program.rpc.replaceLeaf(
         failedRoot,
         failedLeaf,
         Buffer.alloc(32),
@@ -299,75 +298,7 @@ describe("gummyroll", () => {
       console.log("Expected failure");
     }
   });
-  it.skip("Replace leaf - max block + 1", async () => {
-    /// Replace more leaves than MAX_SIZE, which should fail
-
-    let changeArray = [];
-    let txList = [];
-
-    const offset = 3 + 64;
-    for (let i = 0; i < 64 + 1; i++) {
-      const index = offset + i;
-      const newLeaf = hash(
-        payer.publicKey.toBuffer(),
-        Buffer.from(new BN(i).toArray())
-      );
-      const proof = getProofOfLeaf(tree, index);
-
-      /// Use this to sync off-chain tree
-      changeArray.push({ newLeaf, index });
-
-      const nodeProof = proof.map((treeNode) => {
-        return { inner: treeNode.node };
-      });
-
-      const replaceLeafIx = await program.instruction.insertOrAppend(
-        { inner: Array.from(tree.root) },
-        { inner: Array.from(newLeaf) },
-        nodeProof,
-        index,
-        {
-          accounts: {
-            merkleRoll: merkleRollKeypair.publicKey,
-            authority: payer.publicKey,
-          },
-          signers: [payer],
-        }
-      );
-
-      const tx = new Transaction().add(replaceLeafIx);
-      txList.push(
-        program.provider
-          .send(tx, [payer], {
-            commitment: "confirmed",
-            skipPreflight: true,
-          })
-          .then(async (txId) => {
-            let metaTx = await program.provider.connection.getTransaction(
-              txId,
-              {
-                commitment: "confirmed",
-              }
-            );
-            if (metaTx.meta.err !== null) {
-              return false;
-            }
-            let leafIndexStr = metaTx.meta.logMessages.filter((entry) =>
-              entry.includes("Inserted Index")
-            )[0];
-            let leafIndex = parseInt(leafIndexStr.split(" - ")[1]);
-            updateTree(tree, newLeaf, leafIndex);
-            return true;
-          })
-          .catch(() => {
-            return false;
-          })
-      );
-    }
-    let txIds = await Promise.all(txList);
-    let failures = txIds
-      .map((txOk) => Number(!txOk))
-      .reduce((left, right) => left + right, 0);
-    // assert(failures === 1, "Exactly 1 failure");
+  it("Kill listeners", async () => {
+    await program.removeEventListener(listener);
   });
 });

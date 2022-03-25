@@ -318,6 +318,7 @@ pub mod gummyroll {
 }
 
 #[derive(BorshDeserialize, BorshSerialize)]
+#[repr(C)]
 pub struct MerkleRollHeader {
     pub max_buffer_size: u32,
     pub max_depth: u32,
@@ -387,6 +388,7 @@ pub struct ChangeLogEvent {
 
 #[derive(Copy, Clone, PartialEq)]
 /// Stores proof for a given Merkle root update
+#[repr(C)]
 pub struct ChangeLog<const MAX_DEPTH: usize> {
     /// Historical root value before Path was applied
     root: Node,
@@ -430,6 +432,7 @@ impl<const MAX_DEPTH: usize> ChangeLog<MAX_DEPTH> {
 }
 
 #[derive(Copy, Clone, PartialEq)]
+#[repr(C)]
 pub struct Path<const MAX_DEPTH: usize> {
     proof: [Node; MAX_DEPTH],
     leaf: Node,
