@@ -173,7 +173,7 @@ describe("gummyroll", () => {
       payer.publicKey.toBuffer(),
       payer.publicKey.toBuffer()
     );
-    const index = 1;
+    const index = 2;
     const proof = getProofOfLeaf(tree, index);
 
     const nodeProof = proof.map((treeNode) => {
