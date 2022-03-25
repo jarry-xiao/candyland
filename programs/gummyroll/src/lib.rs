@@ -41,21 +41,6 @@ macro_rules! merkle_roll_apply_fn {
     };
 }
 
-/// Max number of concurrent changes to tree supported before having to regenerate proofs
-// #[constant]
-// pub const MAX_SIZE: usize = 512;
-
-/// Max depth of the Merkle tree
-// #[constant]
-// pub const MAX_DEPTH: usize = 20;
-
-// #[constant]
-// pub const PADDING: usize = 32 - MAX_DEPTH;
-
-/// Used for node parity when hashing
-// #[constant]
-// pub const MASK: usize = MAX_SIZE - 1;
-
 pub const EMPTY: Node = Node {
     inner: [0 as u8; 32],
 };
@@ -182,7 +167,6 @@ pub mod gummyroll {
             account_len,
             get_merkle_account_size(header.max_depth, header.max_buffer_size),
         );
-
         
         match merkle_roll_apply_fn!(header, roll_bytes, initialize_with_root, root, leaf, proof, index) {
             Some(new_root) => {
@@ -275,6 +259,7 @@ pub mod gummyroll {
 // let result: Option<Node> = match_shape!(header, roll_bytes, f, Node);
 
 #[derive(BorshDeserialize, BorshSerialize)]
+#[repr(C)]
 pub struct MerkleRollHeader {
     pub max_buffer_size: u32,
     pub max_depth: u32,
@@ -344,6 +329,7 @@ pub struct ChangeLogEvent {
 
 #[derive(Copy, Clone, PartialEq)]
 /// Stores proof for a given Merkle root update
+#[repr(C)]
 pub struct ChangeLog<const MAX_DEPTH: usize> {
     /// Historical root value before Path was applied
     root: Node,
@@ -387,6 +373,7 @@ impl<const MAX_DEPTH: usize> ChangeLog<MAX_DEPTH> {
 }
 
 #[derive(Copy, Clone, PartialEq)]
+#[repr(C)]
 pub struct Path<const MAX_DEPTH: usize> {
     proof: [Node; MAX_DEPTH],
     leaf: Node,

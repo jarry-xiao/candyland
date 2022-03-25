@@ -11,6 +11,7 @@ import * as borsh from 'borsh';
 import { assert } from "chai";
 
 import { buildTree, hash, getProofOfLeaf, updateTree } from "./merkle-tree";
+import { decodeMerkleRoll, getMerkleRollAccountSize } from "./merkle-roll-serde";
 
 const logTx = async (provider, tx) => {
   await provider.connection.confirmTransaction(tx, "confirmed");
@@ -34,19 +35,14 @@ async function checkTxStatus(
   return metaTx.meta.err === null;
 }
 
-function getMerkleRollAccountSize(maxDepth: number, maxBufferSize: number): number {
-  let headerSize = 8 + 32;
-  let changeLogSize = (maxDepth * 32 + 32 + 4 + 4) * maxBufferSize;
-  let rightMostPathSize = maxDepth * 32 + 32 + 4 + 4;
-  let merkleRollSize = 8 + 8 + changeLogSize + rightMostPathSize;
-  return merkleRollSize + headerSize; 
-}
 
 describe("gummyroll", () => {
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.Provider.env());
 
+  /// @ts-ignore
   const program = anchor.workspace.Gummyroll as Program<Gummyroll>;
+
   const payer = Keypair.generate();
   const MAX_SIZE = 64; //parseInt(program.idl.constants[0].value);
   const MAX_DEPTH = 20;//parseInt(program.idl.constants[1].value);
@@ -118,24 +114,22 @@ describe("gummyroll", () => {
       merkleRollKeypair.publicKey
     );
 
+    let onChainMerkle = decodeMerkleRoll(merkleRoll.data);
+    
     // Check header bytes are set correctly
-    let reader = new borsh.BinaryReader(merkleRoll.data.slice(0, 8));
-    let maxBufferSize = reader.readU32();
-    let maxDepth = reader.readU32();
+    assert(onChainMerkle.header.maxDepth === MAX_DEPTH, `Max depth does not match ${onChainMerkle.header.maxDepth}, expected ${MAX_DEPTH}`);
+    assert(onChainMerkle.header.maxBufferSize === MAX_SIZE, `Max buffer size does not match ${onChainMerkle.header.maxBufferSize}, expected ${MAX_SIZE}`);
 
-    assert(maxDepth === MAX_DEPTH, `Max depth does not match ${maxDepth}, expected ${MAX_DEPTH}`);
-    assert(maxBufferSize === MAX_SIZE, `Max buffer size does not match ${maxBufferSize}, expected ${MAX_SIZE}`);
-
-    let accountPubkey = new PublicKey(merkleRoll.data.slice(8, 8+32));
     assert(
-      accountPubkey.equals(payer.publicKey),
+      onChainMerkle.header.authority.equals(payer.publicKey),
       "Failed to write auth pubkey"
     );
 
-    // assert(
-    //   Buffer.from(merkleRoll.roots[0].inner).equals(tree.root),
-    //   "On chain root matches root passed in instruction"
-    // );
+    console.log("onChain root vs offTree root", onChainMerkle.roll.changeLogs[0].root.toBuffer(), tree.root);
+    assert(
+      onChainMerkle.roll.changeLogs[0].root.equals(new PublicKey(tree.root)),
+      "On chain root does not match root passed in instruction"
+    );
   });
   it.skip("Append single leaf", async () => {
     const newLeaf = hash(
@@ -186,7 +180,7 @@ describe("gummyroll", () => {
       return { inner: treeNode.node };
     });
 
-    const replaceLeafIx = await program.instruction.replaceLeaf(
+    const replaceLeafIx = program.instruction.replaceLeaf(
       { inner: Array.from(tree.root) },
       { inner: Array.from(previousLeaf) },
       { inner: Array.from(newLeaf) },
@@ -209,11 +203,12 @@ describe("gummyroll", () => {
 
     updateTree(tree, newLeaf, index);
 
-    const merkleRoll = await program.provider.connection.getAccountInfo(
+    const merkleRollAccount = await program.provider.connection.getAccountInfo(
       merkleRollKeypair.publicKey
     );
+    const merkleRoll = decodeMerkleRoll(merkleRollAccount.data);
     const onChainRoot =
-      merkleRoll.roots[merkleRoll.activeIndex.toNumber()].inner;
+      merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
 
     assert(
       Buffer.from(onChainRoot).equals(tree.root),
