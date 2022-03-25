@@ -1,4 +1,3 @@
-#[macro_use]
 use anchor_lang::{
     emit,
     prelude::*,
@@ -89,6 +88,32 @@ pub fn recompute(mut leaf: Node, proof: &[Node], index: u32) -> Node {
     leaf
 }
 
+fn set_header<'a>(mut header_bytes: &'a mut [u8], max_depth: u32, max_buffer_size: u32, 
+    authority: &Pubkey
+) -> Result<MerkleRollHeader> {
+    let mut header = MerkleRollHeader::try_from_slice(header_bytes)?;
+    // Check header is empty
+    assert_eq!(header.max_buffer_size, 0);
+    assert_eq!(header.max_depth, 0);
+
+    header.max_buffer_size = max_buffer_size;
+    header.max_depth = max_depth;
+    header.authority = *authority; 
+    header.serialize(&mut header_bytes)?;
+    Ok(header)
+}
+
+fn get_merkle_account_size(
+    max_depth: u32,
+    max_buffer_size: u32
+) -> usize {
+    let header_size: u64 = 4 + 4 + 32;
+    let change_log_size = (max_depth as u64 * 32 + 32 + 4 + 4) * max_buffer_size as u64;
+    let rightmost_path_size = max_depth as u64 * 32 + 32 + 4 + 4;
+    let merkle_roll_size = 8 + 8 + change_log_size + rightmost_path_size;
+    merkle_roll_size as usize + header_size as usize
+}
+
 #[program]
 pub mod gummyroll {
     use super::*;
@@ -98,20 +123,17 @@ pub mod gummyroll {
         max_depth: u32,
         max_buffer_size: u32,
     ) -> ProgramResult {
+        let account_len = ctx.accounts.merkle_roll.data_len();
         let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
 
-        let (mut header_bytes, roll_bytes) =
+        let (header_bytes, roll_bytes) =
             merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
-        let mut header = MerkleRollHeader::try_from_slice(&mut header_bytes)?;
-        // Check header is empty
-        assert_eq!(header.max_buffer_size, 0);
-        assert_eq!(header.max_depth, 0);
-
-        header.max_buffer_size = max_buffer_size;
-        header.max_depth = max_depth;
-        header.authority = ctx.accounts.authority.key();
-        header.serialize(&mut header_bytes)?;
+        let header = set_header(header_bytes, max_depth, max_buffer_size, &ctx.accounts.authority.key())?;
+        assert_eq!(
+            account_len,
+            get_merkle_account_size(header.max_depth, header.max_buffer_size)
+        );
 
         merkle_roll_apply_fn!(header, roll_bytes, initialize,)?;
 
@@ -127,22 +149,20 @@ pub mod gummyroll {
         proof: Vec<Node>,
         index: u32,
     ) -> ProgramResult {
+        let account_len = ctx.accounts.merkle_roll.data_len();
         let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
 
-        let (mut header_bytes, roll_bytes) =
+        let (header_bytes, roll_bytes) =
             merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
-        let mut header = MerkleRollHeader::try_from_slice(&mut header_bytes)?;
-        // Check header is empty
-        assert_eq!(header.max_buffer_size, 0);
-        assert_eq!(header.max_depth, 0);
-
-        header.max_buffer_size = max_buffer_size;
-        header.max_depth = max_depth;
-        header.authority = ctx.accounts.authority.key();
-        header.serialize(&mut header_bytes)?;
+        let header = set_header(header_bytes, max_depth, max_buffer_size, &ctx.accounts.authority.key())?;
+        assert_eq!(
+            account_len,
+            get_merkle_account_size(header.max_depth, header.max_buffer_size),
+        );
 
         merkle_roll_apply_fn!(header, roll_bytes, initialize_with_root, root, leaf, proof, index)?;
+
         Ok(())
     }
 
@@ -412,10 +432,6 @@ pub trait ZeroCopy: Pod {
 }
 
 impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH, MAX_BUFFER_SIZE> {
-    pub fn get_max_size(&self) -> usize {
-        MAX_BUFFER_SIZE
-    }
-
     pub fn initialize(&mut self) -> ProgramResult {
         let mut rightmost_proof = Path::default();
         for (i, node) in rightmost_proof.proof.iter_mut().enumerate() {

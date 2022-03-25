@@ -34,6 +34,14 @@ async function checkTxStatus(
   return metaTx.meta.err === null;
 }
 
+function getMerkleRollAccountSize(maxDepth: number, maxBufferSize: number): number {
+  let headerSize = 8 + 32;
+  let changeLogSize = (maxDepth * 32 + 32 + 4 + 4) * maxBufferSize;
+  let rightMostPathSize = maxDepth * 32 + 32 + 4 + 4;
+  let merkleRollSize = 8 + 8 + changeLogSize + rightMostPathSize;
+  return merkleRollSize + headerSize; 
+}
+
 describe("gummyroll", () => {
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.Provider.env());
@@ -46,14 +54,7 @@ describe("gummyroll", () => {
   const merkleRollKeypair = Keypair.generate();
   console.log("Payer key:", payer.publicKey);
 
-  const requiredSpace =
-    32 +
-    32 * MAX_SIZE +
-    (32 * MAX_DEPTH + 8) * MAX_SIZE +
-    16 +
-    32 * (MAX_DEPTH + 1) +
-    8 +
-    8;
+  const requiredSpace = getMerkleRollAccountSize(MAX_DEPTH, MAX_SIZE);
   const leaves = Array(2 ** 20).fill(Buffer.alloc(32));
   leaves[0] = Keypair.generate().publicKey.toBuffer();
   let tree = buildTree(leaves);
