@@ -9,7 +9,6 @@ use anchor_lang::{
 use borsh::{BorshDeserialize, BorshSerialize};
 use bytemuck::{Pod, PodCastError, Zeroable};
 use std::any::type_name;
-use std::cell::RefMut;
 use std::convert::AsRef;
 use std::mem::size_of;
 use std::ops::Deref;
