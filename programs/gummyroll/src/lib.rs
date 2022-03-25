@@ -19,11 +19,16 @@ declare_id!("2yq1qDXchNuzhTtJBzYgpE7LvmR4mgZBk87wwKjdeqKp");
 
 macro_rules! merkle_roll_depth_size_apply_fn {
     ($max_depth:literal, $max_size:literal, $bytes:ident, $func:ident, $($arg:tt)*) => {
-        match MerkleRoll::<$max_depth, $max_size>::load_mut_bytes($bytes) {
-            Ok(merkle_roll) => merkle_roll.$func($($arg)*),
-            Err(e) => {
-                msg!("Error zero copying merkle roll {}", e);
-                None
+        if size_of::<MerkleRoll::<$max_depth, $max_size>>() != $bytes.len() {
+            msg!("Received account of invalid length");
+            None 
+        } else {
+            match MerkleRoll::<$max_depth, $max_size>::load_mut_bytes($bytes) {
+                Ok(merkle_roll) => merkle_roll.$func($($arg)*),
+                Err(e) => {
+                    msg!("Error zero copying merkle roll {}", e);
+                    None
+                }
             }
         }
     }
@@ -33,6 +38,17 @@ macro_rules! merkle_roll_apply_fn {
     ($header:ident, $bytes:ident, $func:ident, $($arg:tt)*) => {
         match ($header.max_depth, $header.max_buffer_size) {
             (20, 64) => merkle_roll_depth_size_apply_fn!(20, 64, $bytes, $func, $($arg)*),
+            (20, 128) => merkle_roll_depth_size_apply_fn!(20, 128, $bytes, $func, $($arg)*),
+            (20, 256) => merkle_roll_depth_size_apply_fn!(20, 256, $bytes, $func, $($arg)*),
+            (20, 512) => merkle_roll_depth_size_apply_fn!(20, 512, $bytes, $func, $($arg)*),
+            (20, 1024) => merkle_roll_depth_size_apply_fn!(20, 1024, $bytes, $func, $($arg)*),
+            (20, 2048) => merkle_roll_depth_size_apply_fn!(20, 2048, $bytes, $func, $($arg)*),
+            (24, 64) => merkle_roll_depth_size_apply_fn!(24, 64, $bytes, $func, $($arg)*),
+            (24, 128) => merkle_roll_depth_size_apply_fn!(24, 128, $bytes, $func, $($arg)*),
+            (24, 256) => merkle_roll_depth_size_apply_fn!(24, 256, $bytes, $func, $($arg)*),
+            (24, 512) => merkle_roll_depth_size_apply_fn!(24, 512, $bytes, $func, $($arg)*),
+            (24, 1024) => merkle_roll_depth_size_apply_fn!(24, 1024, $bytes, $func, $($arg)*),
+            (24, 2448) => merkle_roll_depth_size_apply_fn!(24, 2448, $bytes, $func, $($arg)*),
             _ => {
                 msg!("Failed to apply {} on merkle roll with max depth {} and max buffer size {}", stringify!($func), $header.max_depth, $header.max_buffer_size);
                 None
@@ -40,21 +56,6 @@ macro_rules! merkle_roll_apply_fn {
         }
     };
 }
-
-/// Max number of concurrent changes to tree supported before having to regenerate proofs
-// #[constant]
-// pub const MAX_SIZE: usize = 512;
-
-/// Max depth of the Merkle tree
-// #[constant]
-// pub const MAX_DEPTH: usize = 20;
-
-// #[constant]
-// pub const PADDING: usize = 32 - MAX_DEPTH;
-
-/// Used for node parity when hashing
-// #[constant]
-// pub const MASK: usize = MAX_SIZE - 1;
 
 pub const EMPTY: Node = Node {
     inner: [0 as u8; 32],
@@ -103,28 +104,13 @@ fn set_header<'a>(mut header_bytes: &'a mut [u8], max_depth: u32, max_buffer_siz
     Ok(header)
 }
 
-fn get_merkle_account_size(
-    max_depth: u32,
-    max_buffer_size: u32
-) -> usize {
-    let header_size: u64 = 4 + 4 + 32;
-    let change_log_size = (max_depth as u64 * 32 + 32 + 4 + 4) * max_buffer_size as u64;
-    let rightmost_path_size = max_depth as u64 * 32 + 32 + 4 + 4;
-    let merkle_roll_size = 8 + 8 + change_log_size + rightmost_path_size;
-    merkle_roll_size as usize + header_size as usize
-}
-
 fn load_header<'a>(header_bytes: &'a [u8]) -> Result<MerkleRollHeader> {
     let header = MerkleRollHeader::try_from_slice(header_bytes)?;
     Ok(header)
 }
 
-fn load_and_check_header(header_bytes: &[u8], authority: Pubkey, account_len: usize) -> Result<MerkleRollHeader> {
+fn load_and_check_header(header_bytes: &[u8], authority: Pubkey) -> Result<MerkleRollHeader> {
     let header = load_header(header_bytes)?;
-    assert_eq!(
-        account_len,
-        get_merkle_account_size(header.max_depth, header.max_buffer_size)
-    );
     assert_eq!(
         header.authority,
         authority
@@ -141,18 +127,12 @@ pub mod gummyroll {
         max_depth: u32,
         max_buffer_size: u32,
     ) -> ProgramResult {
-        let account_len = ctx.accounts.merkle_roll.data_len();
         let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
 
         let (header_bytes, roll_bytes) =
             merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
         let header = set_header(header_bytes, max_depth, max_buffer_size, &ctx.accounts.authority.key())?;
-        assert_eq!(
-            account_len,
-            get_merkle_account_size(header.max_depth, header.max_buffer_size)
-        );
-
         match merkle_roll_apply_fn!(header, roll_bytes, initialize,) {
             Some(new_root) => {
                 msg!("New Root: {:?}", new_root);
@@ -171,18 +151,12 @@ pub mod gummyroll {
         proof: Vec<Node>,
         index: u32,
     ) -> ProgramResult {
-        let account_len = ctx.accounts.merkle_roll.data_len();
         let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
 
         let (header_bytes, roll_bytes) =
             merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
         let header = set_header(header_bytes, max_depth, max_buffer_size, &ctx.accounts.authority.key())?;
-        assert_eq!(
-            account_len,
-            get_merkle_account_size(header.max_depth, header.max_buffer_size),
-        );
-
         
         match merkle_roll_apply_fn!(header, roll_bytes, initialize_with_root, root, leaf, proof, index) {
             Some(new_root) => {
@@ -201,13 +175,11 @@ pub mod gummyroll {
         proof: Vec<Node>,
         index: u32,
     ) -> ProgramResult {
-        let account_len = ctx.accounts.merkle_roll.data_len();
-
         let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
         let (header_bytes, roll_bytes) =
             merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
-        let header = load_and_check_header(header_bytes, ctx.accounts.authority.key(), account_len)?;
+        let header = load_and_check_header(header_bytes, ctx.accounts.authority.key())?;
 
         match merkle_roll_apply_fn!(header, roll_bytes, set_leaf, root, previous_leaf, new_leaf, proof, index) {
             Some(new_root) => {
@@ -216,63 +188,46 @@ pub mod gummyroll {
             }
             None => Err(ProgramError::InvalidInstructionData),
         }
-        
-        // let mut merkle_roll = ctx.accounts.merkle_roll.load_mut()?;
-        // match merkle_roll.set_leaf(root, previous_leaf, new_leaf, proof, index) {
-        // }
     }
 
-    // pub fn append(ctx: Context<Modify>, leaf: Node) -> ProgramResult {
-    //     let mut merkle_roll = ctx.accounts.merkle_roll.load_mut()?;
-    //     match merkle_roll.append(leaf) {
-    //         Some(new_root) => {
-    //             msg!("New Root: {:?}", new_root);
-    //             emit!(merkle_roll.get_change_log().to_event());
-    //         }
-    //         None => return Err(ProgramError::InvalidInstructionData),
-    //     }
-    //     Ok(())
-    // }
+    pub fn append(ctx: Context<Modify>, leaf: Node) -> ProgramResult {
+        let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
+        let (header_bytes, roll_bytes) =
+            merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
-    // pub fn insert_or_append(
-    //     ctx: Context<Modify>,
-    //     root: Node,
-    //     leaf: Node,
-    //     proof: Vec<Node>,
-    //     index: u32,
-    // ) -> ProgramResult {
-    //     let mut merkle_roll = ctx.accounts.merkle_roll.load_mut()?;
-    //     match merkle_roll.fill_empty_or_append(root, leaf, proof, index) {
-    //         Some(new_root) => {
-    //             let change_log = merkle_roll.get_change_log();
-    //             msg!("New Root: {:?}", new_root);
-    //             msg!("Inserted Index - {:?}", change_log.index);
-    //             emit!(change_log.to_event());
-    //         }
-    //         None => return Err(ProgramError::InvalidInstructionData),
-    //     }
-    //     Ok(())
-    // }
+        let header = load_and_check_header(header_bytes, ctx.accounts.authority.key())?;
+
+        match merkle_roll_apply_fn!(header, roll_bytes, append, leaf) {
+            Some(new_root) => {
+                msg!("New Root: {:?}", new_root);
+                Ok(())
+            }
+            None => Err(ProgramError::InvalidInstructionData),
+        }
+    }
+
+    pub fn insert_or_append(
+        ctx: Context<Modify>,
+        root: Node,
+        leaf: Node,
+        proof: Vec<Node>,
+        index: u32,
+    ) -> ProgramResult {
+        let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
+        let (header_bytes, roll_bytes) =
+            merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
+
+        let header = load_and_check_header(header_bytes, ctx.accounts.authority.key())?;
+
+        match merkle_roll_apply_fn!(header, roll_bytes, fill_empty_or_append, root, leaf, proof, index) {
+            Some(new_root) => {
+                msg!("New Root: {:?}", new_root);
+            }
+            None => return Err(ProgramError::InvalidInstructionData),
+        }
+        Ok(())
+    }
 }
-
-// f(roll_bytes) -> Option<T>
-// macro(header, roll_bytes, f, T)
-/// Use macro to perform action by matching
-/// Check account size matches calculation
-// let result: Program<Err>;
-
-// = match (header.max_buffer_size, header.max_depth) {
-//     (30, 64) => {
-//         loaded
-//         Some(Mer)
-//     }
-//     _ => {
-//         msg!("Unsupported max depth {} and buffer size {}", header.max_depth, header.max_buffer_size);
-//         None
-//     }
-// };
-// fn f(..) -> ProgramResult
-// let result: Option<Node> = match_shape!(header, roll_bytes, f, Node);
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct MerkleRollHeader {
@@ -580,9 +535,11 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         &mut self,
         current_root: Node,
         leaf: Node,
-        proof: [Node; MAX_DEPTH],
+        proof_vec: Vec<Node>,
         index: u32,
     ) -> Option<Node> {
+        let mut proof: [Node; MAX_DEPTH] = [Node::default(); MAX_DEPTH];
+        proof.copy_from_slice(&proof_vec[..]);
         sol_log_compute_units();
         let root = self.find_and_update_leaf(current_root, EMPTY, leaf, proof, index, true);
         sol_log_compute_units();
@@ -609,7 +566,6 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         } else {
             let mut proof: [Node; MAX_DEPTH] = [Node::default(); MAX_DEPTH];
             proof.copy_from_slice(&proof_vec[..]);
-
             sol_log_compute_units();
             let root = self.find_and_update_leaf(current_root, previous_leaf, new_leaf, proof, index, false);
             sol_log_compute_units();
