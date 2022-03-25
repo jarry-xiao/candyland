@@ -23,7 +23,7 @@ macro_rules! merkle_roll_depth_size_apply_fn {
             Ok(merkle_roll) => merkle_roll.$func($($arg)*),
             Err(e) => {
                 msg!("Error zero copying merkle roll {}", e);
-                Err(ProgramError::InvalidInstructionData)
+                None
             }
         }
     }
@@ -35,7 +35,7 @@ macro_rules! merkle_roll_apply_fn {
             (20, 64) => merkle_roll_depth_size_apply_fn!(20, 64, $bytes, $func, $($arg)*),
             _ => {
                 msg!("Failed to apply {} on merkle roll with max depth {} and max buffer size {}", stringify!($func), $header.max_depth, $header.max_buffer_size);
-                Err(ProgramError::InvalidInstructionData)
+                None
             }
         }
     };
@@ -114,6 +114,24 @@ fn get_merkle_account_size(
     merkle_roll_size as usize + header_size as usize
 }
 
+fn load_header<'a>(header_bytes: &'a [u8]) -> Result<MerkleRollHeader> {
+    let header = MerkleRollHeader::try_from_slice(header_bytes)?;
+    Ok(header)
+}
+
+fn load_and_check_header(header_bytes: &[u8], authority: Pubkey, account_len: usize) -> Result<MerkleRollHeader> {
+    let header = load_header(header_bytes)?;
+    assert_eq!(
+        account_len,
+        get_merkle_account_size(header.max_depth, header.max_buffer_size)
+    );
+    assert_eq!(
+        header.authority,
+        authority
+    );
+    Ok(header)
+}
+
 #[program]
 pub mod gummyroll {
     use super::*;
@@ -135,9 +153,13 @@ pub mod gummyroll {
             get_merkle_account_size(header.max_depth, header.max_buffer_size)
         );
 
-        merkle_roll_apply_fn!(header, roll_bytes, initialize,)?;
-
-        Ok(())
+        match merkle_roll_apply_fn!(header, roll_bytes, initialize,) {
+            Some(new_root) => {
+                msg!("New Root: {:?}", new_root);
+                Ok(())
+            }
+            None => Err(ProgramError::InvalidInstructionData),
+        }
     }
 
     pub fn init_gummyroll_with_root(
@@ -161,29 +183,44 @@ pub mod gummyroll {
             get_merkle_account_size(header.max_depth, header.max_buffer_size),
         );
 
-        merkle_roll_apply_fn!(header, roll_bytes, initialize_with_root, root, leaf, proof, index)?;
-
-        Ok(())
+        
+        match merkle_roll_apply_fn!(header, roll_bytes, initialize_with_root, root, leaf, proof, index) {
+            Some(new_root) => {
+                msg!("New Root: {:?}", new_root);
+                Ok(())
+            }
+            None => Err(ProgramError::InvalidInstructionData),
+        }
     }
 
-    // pub fn replace_leaf(
-    //     ctx: Context<Modify>,
-    //     root: Node,
-    //     previous_leaf: Node,
-    //     new_leaf: Node,
-    //     proof: Vec<Node>,
-    //     index: u32,
-    // ) -> ProgramResult {
-    //     let mut merkle_roll = ctx.accounts.merkle_roll.load_mut()?;
-    //     match merkle_roll.set_leaf(root, previous_leaf, new_leaf, proof, index) {
-    //         Some(new_root) => {
-    //             msg!("New Root: {:?}", new_root);
-    //             emit!(merkle_roll.get_change_log().to_event());
-    //         }
-    //         None => return Err(ProgramError::InvalidInstructionData),
-    //     }
-    //     Ok(())
-    // }
+    pub fn replace_leaf(
+        ctx: Context<Modify>,
+        root: Node,
+        previous_leaf: Node,
+        new_leaf: Node,
+        proof: Vec<Node>,
+        index: u32,
+    ) -> ProgramResult {
+        let account_len = ctx.accounts.merkle_roll.data_len();
+
+        let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
+        let (header_bytes, roll_bytes) =
+            merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
+
+        let header = load_and_check_header(header_bytes, ctx.accounts.authority.key(), account_len)?;
+
+        match merkle_roll_apply_fn!(header, roll_bytes, set_leaf, root, previous_leaf, new_leaf, proof, index) {
+            Some(new_root) => {
+                msg!("New Root: {:?}", new_root);
+                Ok(())
+            }
+            None => Err(ProgramError::InvalidInstructionData),
+        }
+        
+        // let mut merkle_roll = ctx.accounts.merkle_roll.load_mut()?;
+        // match merkle_roll.set_leaf(root, previous_leaf, new_leaf, proof, index) {
+        // }
+    }
 
     // pub fn append(ctx: Context<Modify>, leaf: Node) -> ProgramResult {
     //     let mut merkle_roll = ctx.accounts.merkle_roll.load_mut()?;
@@ -297,25 +334,13 @@ impl From<[u8; 32]> for Node {
     }
 }
 
-// macro_rules! impl_event_for_depth {
-//     ($depth: ident) => {
-//        #[event]
-//        struct ChangeLogEvent<$depth> {
-//            /// Nodes of off-chain merkle tree
-//            path: [Node; $depth],
-//            /// Bitmap of node parity (used when hashing)
-//            index: u32
-//        }
-//     };
-// }
-
-// #[event]
-// pub struct ChangeLogEvent {
-//     /// Nodes of off-chain merkle tree
-//     path: Vec<Node>,
-//     /// Bitmap of node parity (used when hashing)
-//     index: u32,
-// }
+#[event]
+pub struct ChangeLogEvent {
+    /// Nodes of off-chain merkle tree
+    path: Vec<Node>,
+    /// Bitmap of node parity (used when hashing)
+    index: u32,
+}
 
 #[derive(Copy, Clone, PartialEq)]
 /// Stores proof for a given Merkle root update
@@ -330,12 +355,12 @@ pub struct ChangeLog<const MAX_DEPTH: usize> {
 }
 
 impl<const MAX_DEPTH: usize> ChangeLog<MAX_DEPTH> {
-    // pub fn to_event(&self) -> ChangeLogEvent {
-    //     ChangeLogEvent {
-    //         path: self.path.to_vec(),
-    //         index: self.index,
-    //     }
-    // }
+    pub fn to_event(&self) -> ChangeLogEvent {
+        ChangeLogEvent {
+            path: self.path.to_vec(),
+            index: self.index,
+        }
+    }
 
     pub fn get_leaf(&self) -> Node {
         self.path[0]
@@ -432,7 +457,7 @@ pub trait ZeroCopy: Pod {
 }
 
 impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH, MAX_BUFFER_SIZE> {
-    pub fn initialize(&mut self) -> ProgramResult {
+    pub fn initialize(&mut self) -> Option<Node> {
         let mut rightmost_proof = Path::default();
         for (i, node) in rightmost_proof.proof.iter_mut().enumerate() {
             *node = empty_node(i as u32);
@@ -441,7 +466,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         self.active_index = 0;
         self.buffer_size = 1;
         self.rightmost_proof = rightmost_proof;
-        Ok(())
+        Some(self.change_logs[0].root)
     }
 
     pub fn initialize_with_root(
@@ -450,7 +475,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         rightmost_leaf: Node,
         proof_vec: Vec<Node>, 
         index: u32,
-    ) -> ProgramResult {
+    ) -> Option<Node> {
         let mut proof: [Node; MAX_DEPTH] = [Node::default(); MAX_DEPTH];
         proof.copy_from_slice(&proof_vec[..]);
         let rightmost_proof = Path {
@@ -464,7 +489,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         self.active_index = 0;
         self.buffer_size = 1;
         self.rightmost_proof = rightmost_proof;
-        Ok(())
+        Some(root)
     }
 
     pub fn get_change_log(&self) -> ChangeLog<MAX_DEPTH> {
@@ -542,6 +567,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             index: self.rightmost_proof.index,
             _padding: 0,
         };
+        emit!(self.change_logs[self.active_index as usize].to_event());
         self.rightmost_proof.index = self.rightmost_proof.index + 1;
         self.rightmost_proof.leaf = leaf;
         Some(node)
@@ -568,9 +594,9 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
     pub fn set_leaf(
         &mut self,
         current_root: Node,
-        leaf: Node,
+        previous_leaf: Node,
         new_leaf: Node,
-        proof: [Node; MAX_DEPTH],
+        proof_vec: Vec<Node>,
         index: u32,
     ) -> Option<Node> {
         if index > self.rightmost_proof.index {
@@ -581,8 +607,11 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             );
             None
         } else {
+            let mut proof: [Node; MAX_DEPTH] = [Node::default(); MAX_DEPTH];
+            proof.copy_from_slice(&proof_vec[..]);
+
             sol_log_compute_units();
-            let root = self.find_and_update_leaf(current_root, leaf, new_leaf, proof, index, false);
+            let root = self.find_and_update_leaf(current_root, previous_leaf, new_leaf, proof, index, false);
             sol_log_compute_units();
             root
         }
@@ -695,6 +724,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         // Also updates change_log's current root
         let root = change_log.recompute_path(start, proof);
 
+        emit!(change_log.to_event());
         if index < self.rightmost_proof.index as u32 {
             if index != self.rightmost_proof.index - 1 {
                 let common_path_len = ((index ^ (self.rightmost_proof.index - 1) as u32) << padding)

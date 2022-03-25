@@ -173,13 +173,13 @@ describe("gummyroll", () => {
       "Updated on chain root matches root of updated off chain tree"
     );
   });
-  it.skip("Replace single leaf", async () => {
+  it("Replace single leaf", async () => {
     const previousLeaf = Buffer.alloc(32);
     const newLeaf = hash(
       payer.publicKey.toBuffer(),
       payer.publicKey.toBuffer()
     );
-    const index = 2;
+    const index = 1;
     const proof = getProofOfLeaf(tree, index);
 
     const nodeProof = proof.map((treeNode) => {
@@ -209,7 +209,7 @@ describe("gummyroll", () => {
 
     updateTree(tree, newLeaf, index);
 
-    const merkleRoll = await program.account.merkleRoll.fetch(
+    const merkleRoll = await program.provider.connection.getAccountInfo(
       merkleRollKeypair.publicKey
     );
     const onChainRoot =
