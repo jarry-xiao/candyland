@@ -43,14 +43,14 @@ describe("gummyroll", () => {
   const program = anchor.workspace.Gummyroll as Program<Gummyroll>;
 
   const payer = Keypair.generate();
-  const MAX_SIZE = 64; //parseInt(program.idl.constants[0].value);
-  const MAX_DEPTH = 20;//parseInt(program.idl.constants[1].value);
+  const MAX_SIZE = 64;
+  const MAX_DEPTH = 21;
 
   const merkleRollKeypair = Keypair.generate();
   console.log("Payer key:", payer.publicKey);
 
   const requiredSpace = getMerkleRollAccountSize(MAX_DEPTH, MAX_SIZE);
-  const leaves = Array(2 ** 20).fill(Buffer.alloc(32));
+  const leaves = Array(2 ** MAX_DEPTH).fill(Buffer.alloc(32));
   leaves[0] = Keypair.generate().publicKey.toBuffer();
   let tree = buildTree(leaves);
   console.log("Created root using leaf pubkey: ", Uint8Array.from(leaves[0]));
