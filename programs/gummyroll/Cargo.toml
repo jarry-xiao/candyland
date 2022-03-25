@@ -17,3 +17,4 @@ default = []
 
 [dependencies]
 anchor-lang = "0.22.1"
+bytemuck = "1.8.0"

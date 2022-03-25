@@ -39,8 +39,8 @@ describe("gummyroll", () => {
 
   const program = anchor.workspace.Gummyroll as Program<Gummyroll>;
   const payer = Keypair.generate();
-  const MAX_SIZE = parseInt(program.idl.constants[0].value);
-  const MAX_DEPTH = parseInt(program.idl.constants[1].value);
+  const MAX_SIZE = 64; //parseInt(program.idl.constants[0].value);
+  const MAX_DEPTH = 20;//parseInt(program.idl.constants[1].value);
 
   const merkleRollKeypair = Keypair.generate();
   console.log("Payer key:", payer.publicKey);

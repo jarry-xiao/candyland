@@ -1,6 +1,6 @@
 [programs.localnet]
-merkle_wallet = "DjivbZKBMvk3SDywtFryHoFQsSWXd9gSBwvfoLk5TUcR"
-gummyroll = "DhpK18H3tzRBNWV6X4J4Cb9Z3Hm8MBxMAXVKJkc5aDj6"
+merkle_wallet = "4KgH7kNwAzaR26MiwXcdWstZogQCYNryPL1s7herTkov"
+gummyroll = "2yq1qDXchNuzhTtJBzYgpE7LvmR4mgZBk87wwKjdeqKp"
 
 [[test.genesis]]
 address = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
