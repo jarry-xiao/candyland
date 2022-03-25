@@ -17,7 +17,7 @@ pub mod state;
 
 const MERKLE_PREFIX: &str = "MERKLE";
 
-declare_id!("DjivbZKBMvk3SDywtFryHoFQsSWXd9gSBwvfoLk5TUcR");
+declare_id!("4KgH7kNwAzaR26MiwXcdWstZogQCYNryPL1s7herTkov");
 
 #[inline(always)]
 pub fn assert_with_msg(v: bool, err: ProgramError, msg: &str) -> ProgramResult {
