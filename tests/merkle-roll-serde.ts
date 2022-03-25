@@ -12,7 +12,7 @@ import * as borsh from 'borsh';
 /**
  * Manually create a model for MerkleRoll in order to deserialize correctly
  */
-type OnChainMerkleRoll = {
+export type OnChainMerkleRoll = {
     header: MerkleRollHeader,
     roll: MerkleRoll
 }

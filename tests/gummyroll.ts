@@ -11,7 +11,7 @@ import * as borsh from 'borsh';
 import { assert } from "chai";
 
 import { buildTree, hash, getProofOfLeaf, updateTree } from "./merkle-tree";
-import { decodeMerkleRoll, getMerkleRollAccountSize } from "./merkle-roll-serde";
+import { decodeMerkleRoll, getMerkleRollAccountSize, OnChainMerkleRoll } from "./merkle-roll-serde";
 
 const logTx = async (provider, tx) => {
   await provider.connection.confirmTransaction(tx, "confirmed");
@@ -34,7 +34,6 @@ async function checkTxStatus(
   });
   return metaTx.meta.err === null;
 }
-
 
 describe("gummyroll", () => {
   // Configure the client to use the local cluster.
@@ -125,13 +124,12 @@ describe("gummyroll", () => {
       "Failed to write auth pubkey"
     );
 
-    console.log("onChain root vs offTree root", onChainMerkle.roll.changeLogs[0].root.toBuffer(), tree.root);
     assert(
       onChainMerkle.roll.changeLogs[0].root.equals(new PublicKey(tree.root)),
       "On chain root does not match root passed in instruction"
     );
   });
-  it.skip("Append single leaf", async () => {
+  it("Append single leaf", async () => {
     const newLeaf = hash(
       payer.publicKey.toBuffer(),
       payer.publicKey.toBuffer()
@@ -156,11 +154,12 @@ describe("gummyroll", () => {
 
     updateTree(tree, newLeaf, 1);
 
-    const merkleRoll = await program.account.merkleRoll.fetch(
+    const merkleRollAccount = await program.provider.connection.getAccountInfo(
       merkleRollKeypair.publicKey
     );
+    const merkleRoll = decodeMerkleRoll(merkleRollAccount.data);
     const onChainRoot =
-      merkleRoll.roots[merkleRoll.activeIndex.toNumber()].inner;
+      merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
 
     assert(
       Buffer.from(onChainRoot).equals(tree.root),
@@ -215,7 +214,7 @@ describe("gummyroll", () => {
       "Updated on chain root matches root of updated off chain tree"
     );
   });
-  it.skip(`Replace leaf - max block ${MAX_SIZE}`, async () => {
+  it(`Replace leaf - max block ${MAX_SIZE}`, async () => {
     /// Replace 64 leaves before syncing off-chain tree with on-chain tree
 
     let changeArray = [];
@@ -263,18 +262,23 @@ describe("gummyroll", () => {
       );
     }
     await Promise.all(txList);
-    const merkleRoll = await program.account.merkleRoll.fetch(
+
+    
+
+    // Compare on-chain & off-chain roots
+    const merkleRoll = decodeMerkleRoll((await program.provider.connection.getAccountInfo(
       merkleRollKeypair.publicKey
-    );
+    )).data);
     const onChainRoot =
-      merkleRoll.roots[merkleRoll.activeIndex.toNumber()].inner;
+      merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
+
     assert(
       Buffer.from(onChainRoot).equals(tree.root),
-      "Updated on chain root matches root of updated off chain tree"
+      "Updated on chain root does not match root of updated off chain tree"
     );
 
     try {
-      const replaceLeafIx = await program.instruction.replaceLeaf(
+      await program.rpc.replaceLeaf(
         failedRoot,
         failedLeaf,
         Buffer.alloc(32),
@@ -293,5 +297,8 @@ describe("gummyroll", () => {
     } catch (e) {
       console.log("Expected failure");
     }
+  });
+  it("Kill listeners", async () => {
+    await program.removeEventListener(listener);
   });
 });
