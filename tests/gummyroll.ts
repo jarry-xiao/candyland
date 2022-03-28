@@ -28,8 +28,7 @@ async function checkTxStatus(
   return metaTx.meta.err === null;
 }
 
-/*
-describe.skip("gummyroll", () => {
+describe("gummyroll", () => {
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.Provider.env());
 
@@ -290,5 +289,3 @@ describe.skip("gummyroll", () => {
     await program.removeEventListener(listener);
   });
 });
-
-*/

@@ -23,24 +23,19 @@ const MAX_SIZE = 1024;
 const MAX_DEPTH = 21;
 
 describe("gummyroll-continuous", () => {
-const connection = new Connection(
-    "http://localhost:8899",
-    {
-        commitment: 'singleGossip'
-    }
-);
-const payer = Keypair.generate();
-const wallet = new NodeWallet(payer)
-anchor.setProvider(new Provider(connection, wallet, {commitment: connection.commitment, skipPreflight: true} ));
-// program.provider = anchor.getProvider();
-
-//   // Configure the client to use the local cluster.
-//   anchor.setProvider(anchor.Provider.env());
-
+  const connection = new Connection(
+      "http://localhost:8899",
+      {
+          commitment: 'singleGossip'
+      }
+  );
+  const payer = Keypair.generate();
+  const wallet = new NodeWallet(payer)
+  anchor.setProvider(new Provider(connection, wallet, {commitment: connection.commitment, skipPreflight: true} ));
+  
   /// @ts-ignore
   const program = anchor.workspace.Gummyroll as Program<Gummyroll>;
 
-//   const payer = Keypair.generate();
 
   const merkleRollKeypair = Keypair.generate();
   console.log("Payer key:", payer.publicKey);
