@@ -14,7 +14,7 @@ use std::mem::size_of;
 use std::ops::Deref;
 use std::ops::DerefMut;
 
-declare_id!("2yq1qDXchNuzhTtJBzYgpE7LvmR4mgZBk87wwKjdeqKp");
+declare_id!("GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD");
 
 macro_rules! merkle_roll_depth_size_apply_fn {
     ($max_depth:literal, $max_size:literal, $bytes:ident, $func:ident, $($arg:tt)*) => {

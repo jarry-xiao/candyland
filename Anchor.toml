@@ -1,6 +1,6 @@
 [programs.localnet]
 merkle_wallet = "4KgH7kNwAzaR26MiwXcdWstZogQCYNryPL1s7herTkov"
-gummyroll = "2yq1qDXchNuzhTtJBzYgpE7LvmR4mgZBk87wwKjdeqKp"
+gummyroll = "GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD"
 
 [[test.genesis]]
 address = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
