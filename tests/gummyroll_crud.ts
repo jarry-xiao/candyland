@@ -38,7 +38,6 @@ describe("Gummyroll CRUD program", () => {
       merkleRoll.roll.activeIndex
     ].root.toBuffer();
   }
-
   async function appendMessage(message: string) {
     const addIx = GummyrollCrud.instruction.add(Buffer.from(message), {
       accounts: {
@@ -65,7 +64,11 @@ describe("Gummyroll CRUD program", () => {
     updateTree(tree, newLeaf, index);
     return tree.root;
   }
-
+  function recomputeRootByRemovingLeafFromTreeAtIndex(index: number) {
+    const newLeaf = Buffer.alloc(32, 0);
+    updateTree(tree, newLeaf, index);
+    return tree.root;
+  }
   let feePayerKeypair: Keypair;
   let merkleRollKeypair: Keypair;
   beforeEach(async () => {
@@ -271,12 +274,15 @@ describe("Gummyroll CRUD program", () => {
       index: number,
       config: { overrides?: { message?: string; signer?: Keypair } } = {}
     ) {
-      const proofNodes = getProofOfLeaf(tree, index).map(({ node }) => node);
+      const proofPubkeys = getProofOfLeaf(tree, index).map(({ node }) => ({
+        pubkey: new PublicKey(node),
+        isSigner: false,
+        isWritable: false,
+      }));
       const signer = config.overrides?.signer ?? feePayerKeypair;
       const transferIx = GummyrollCrud.instruction.remove(
         Buffer.from(tree.root, 0, 32),
         Buffer.from(config.overrides?.message ?? message),
-        proofNodes,
         0,
         {
           accounts: {
@@ -285,6 +291,7 @@ describe("Gummyroll CRUD program", () => {
             owner: feePayerKeypair.publicKey,
           },
           signers: [signer],
+          remainingAccounts: proofPubkeys,
         }
       );
       const tx = new Transaction().add(transferIx);
@@ -295,8 +302,65 @@ describe("Gummyroll CRUD program", () => {
     beforeEach(async () => {
       await appendMessage(message);
     });
-    it("sanity check", async () => {
+    it("removes the message", async () => {
+      recomputeRootByAddingLeafToTreeWithMessageAtIndex(
+        feePayerKeypair.publicKey,
+        message,
+        0
+      );
       await removeMessage(0);
+      recomputeRootByRemovingLeafFromTreeAtIndex(0);
+      const actualRoot = await getActualRoot();
+      const expectedRoot = tree.root;
+      expect(expectedRoot.compare(actualRoot)).to.equal(
+        0,
+        "On-chain root hash does not equal expected hash"
+      );
+    });
+    it("fails if the message is incorrect", async () => {
+      recomputeRootByAddingLeafToTreeWithMessageAtIndex(
+        feePayerKeypair.publicKey,
+        message,
+        0
+      );
+      try {
+        await removeMessage(0, { overrides: { message: "iNcOrReCt mEsSaGe" } });
+        assert(
+          false,
+          "Transaction should have failed since the message was wrong"
+        );
+      } catch (e) {}
+      const actualRoot = await getActualRoot();
+      const expectedRoot = tree.root;
+      expect(expectedRoot.compare(actualRoot)).to.equal(
+        0,
+        "The transaction should have failed because the message was " +
+          "wrong, but never the less, the on-chain root hash changed."
+      );
+    });
+    it("fails if someone other than the owner tries to remove a leaf", async () => {
+      recomputeRootByAddingLeafToTreeWithMessageAtIndex(
+        feePayerKeypair.publicKey,
+        message,
+        0
+      );
+      const attackerKeypair = Keypair.generate();
+      await Gummyroll.provider.connection.confirmTransaction(
+        await Gummyroll.provider.connection.requestAirdrop(
+          attackerKeypair.publicKey,
+          2e9
+        ),
+        "confirmed"
+      );
+      try {
+        await removeMessage(0, { overrides: { signer: attackerKeypair } });
+        assert(
+          false,
+          "Transaction should have failed since the signer was not the owner"
+        );
+      } catch (e) {
+        assert(true);
+      }
     });
   });
 });
