@@ -1,0 +1,34 @@
+[package]
+authors = ["Solana Maintainers <maintainers@solana.foundation>"]
+edition = "2021"
+name = "plerkle"
+description = "The Solana Geyser plugin interface."
+version = "1.10.3"
+repository = "https://github.com/solana-labs/solana"
+license = "AGPL3"
+homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-geyser-plugin-interface"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+redis = {version = "0.21.5", features = ["aio", "tokio-comp"]}
+log = "0.4.11"
+async-trait = "0.1.53"
+solana-sdk = { version = "=1.9.13" }
+solana-transaction-status = { version = "=1.9.13" }
+thiserror = "1.0.30"
+solana-geyser-plugin-interface  = { version = "=1.9.13" }
+solana-logger = { version = "=1.9.13" }
+solana-measure = { version = "=1.9.13" }
+solana-metrics = { version = "=1.9.13" }
+solana-runtime = { version = "=1.9.13" }
+bs58 = "0.4.0"
+bytemuck = "1.7.2"
+serde = "1.0.133"
+serde_derive = "1.0.103"
+serde_json = "1.0.74"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

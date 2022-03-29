@@ -1,12 +1,12 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::pubkey::Pubkey;
+
 use mpl_token_metadata::{
     state::{MAX_MASTER_EDITION_LEN, MAX_METADATA_LEN},
     utils::try_from_slice_checked,
 };
+
 use std::ops::Deref;
-use mpl_token_metadata::state::DataV2;
-use solana_program::borsh::try_from_slice_unchecked;
 
 #[derive(Clone, AnchorDeserialize, AnchorSerialize)]
 pub struct MasterEdition(mpl_token_metadata::state::MasterEditionV2);
@@ -14,10 +14,11 @@ pub struct MasterEdition(mpl_token_metadata::state::MasterEditionV2);
 impl anchor_lang::AccountDeserialize for MasterEdition {
     fn try_deserialize_unchecked(buf: &mut &[u8]) -> Result<Self> {
         try_from_slice_checked(
-            &buf,
+            buf,
             mpl_token_metadata::state::Key::MasterEditionV2,
             MAX_MASTER_EDITION_LEN,
-        ).map_err(Into::into)
+        )
+        .map_err(Into::into)
     }
 }
 
@@ -46,7 +47,8 @@ impl anchor_lang::AccountDeserialize for TokenMetadata {
             buf,
             mpl_token_metadata::state::Key::MetadataV1,
             MAX_METADATA_LEN,
-        ).map_err(Into::into)
+        )
+        .map_err(Into::into)
     }
 }
 

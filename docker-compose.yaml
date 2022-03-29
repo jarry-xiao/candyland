@@ -1,0 +1,17 @@
+version: "3.9"
+services:
+  redis:
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
+  solana:
+    build:
+      context: docker
+      dockerfile: Dockerfile
+    environment:
+      RUST_LOG: warn
+    ports:
+      - "8900:8900"
+      - "8001:8001"
+      - "8899:8899"
+      - "9900:9900"
