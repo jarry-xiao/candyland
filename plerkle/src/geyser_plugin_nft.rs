@@ -117,14 +117,17 @@ impl GeyserPlugin for Plerkle {
         self.accounts_selector = Some(Self::create_accounts_selector_from_config(&result));
         self.transaction_selector = Some(Self::create_transaction_selector_from_config(&result));
 
-        let client = redis::Client::open("redis://127.0.0.1/").unwrap();
+        let client = redis::Client::open("redis://redis/").unwrap();
         self.redis_connection = client
             .get_connection()
-            .map_err(|e| GeyserPluginError::Custom(
-                Box::new(PlerkleError::ConfigurationError { msg: e.to_string() })
-            ))
+            .map_err(|e| {
+                error!("{}", e.to_string());
+                GeyserPluginError::Custom(
+                    Box::new(PlerkleError::ConfigurationError { msg: e.to_string() })
+                )
+            })
             .ok();
-
+        info!("Plugin connected to redis");
         Ok(())
     }
 
@@ -139,7 +142,6 @@ impl GeyserPlugin for Plerkle {
         _is_startup: bool,
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
         let ReplicaAccountInfoVersions::V0_0_1(accountv1) = account;
-        info!("Updating account: {:?} {:?}", accountv1, slot);
         Ok(())
     }
 
@@ -181,13 +183,17 @@ impl GeyserPlugin for Plerkle {
                     return Ok(());
                 }
                 let txid = format!("txn.{}", transactionv1.signature.to_string());
-                let con  = self.redis_connection.as_mut().unwrap();
+                info!("{:?}",  self.redis_connection.is_some());
+                let mut con  = self.redis_connection.as_mut().unwrap();
                 redis::cmd("SET")
                     .arg(&[txid, slot.to_string()])
                     .query(con)
-                    .map_err(|e| GeyserPluginError::Custom(
-                        Box::new(PlerkleError::ConfigurationError { msg: e.to_string() })
-                    ))?;
+                    .map_err(|e| {
+                        error!("{}", e.to_string());
+                        GeyserPluginError::Custom(
+                            Box::new(PlerkleError::ConfigurationError { msg: e.to_string() })
+                        )
+                    })?;
             }
         }
         Ok(())

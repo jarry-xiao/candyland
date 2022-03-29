@@ -8,6 +8,9 @@ services:
     build:
       context: docker
       dockerfile: Dockerfile
+    volumes:
+    - ./ledger:/config:rw
+    - ./docker-vol:/so:rw
     environment:
       RUST_LOG: warn
     ports:
