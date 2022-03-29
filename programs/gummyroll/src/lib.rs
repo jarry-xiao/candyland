@@ -36,72 +36,26 @@ macro_rules! merkle_roll_depth_size_apply_fn {
 macro_rules! merkle_roll_apply_fn {
     ($header:ident, $bytes:ident, $func:ident, $($arg:tt)*) => {
         match ($header.max_depth, $header.max_buffer_size) {
-            // (14, 64) => merkle_roll_depth_size_apply_fn!(14, 64, $bytes, $func, $($arg)*),
-            // (14, 128) => merkle_roll_depth_size_apply_fn!(14, 128, $bytes, $func, $($arg)*),
-            // (14, 256) => merkle_roll_depth_size_apply_fn!(14, 256, $bytes, $func, $($arg)*),
-            // (14, 512) => merkle_roll_depth_size_apply_fn!(14, 512, $bytes, $func, $($arg)*),
-            // (14, 1024) => merkle_roll_depth_size_apply_fn!(14, 1024, $bytes, $func, $($arg)*),
-            // (14, 2448) => merkle_roll_depth_size_apply_fn!(14, 2448, $bytes, $func, $($arg)*),
-            // (15, 64) => merkle_roll_depth_size_apply_fn!(15, 64, $bytes, $func, $($arg)*),
-            // (15, 128) => merkle_roll_depth_size_apply_fn!(15, 128, $bytes, $func, $($arg)*),
-            // (15, 256) => merkle_roll_depth_size_apply_fn!(15, 256, $bytes, $func, $($arg)*),
-            // (15, 512) => merkle_roll_depth_size_apply_fn!(15, 512, $bytes, $func, $($arg)*),
-            // (15, 1024) => merkle_roll_depth_size_apply_fn!(15, 1024, $bytes, $func, $($arg)*),
-            // (15, 2448) => merkle_roll_depth_size_apply_fn!(15, 2448, $bytes, $func, $($arg)*),
-            // (16, 64) => merkle_roll_depth_size_apply_fn!(16, 64, $bytes, $func, $($arg)*),
-            // (16, 128) => merkle_roll_depth_size_apply_fn!(16, 128, $bytes, $func, $($arg)*),
-            // (16, 256) => merkle_roll_depth_size_apply_fn!(16, 256, $bytes, $func, $($arg)*),
-            // (16, 512) => merkle_roll_depth_size_apply_fn!(16, 512, $bytes, $func, $($arg)*),
-            // (16, 1024) => merkle_roll_depth_size_apply_fn!(16, 1024, $bytes, $func, $($arg)*),
-            // (16, 2448) => merkle_roll_depth_size_apply_fn!(16, 2448, $bytes, $func, $($arg)*),
-            // (17, 64) => merkle_roll_depth_size_apply_fn!(17, 64, $bytes, $func, $($arg)*),
-            // (17, 128) => merkle_roll_depth_size_apply_fn!(17, 128, $bytes, $func, $($arg)*),
-            // (17, 256) => merkle_roll_depth_size_apply_fn!(17, 256, $bytes, $func, $($arg)*),
-            // (17, 512) => merkle_roll_depth_size_apply_fn!(17, 512, $bytes, $func, $($arg)*),
-            // (17, 1024) => merkle_roll_depth_size_apply_fn!(17, 1024, $bytes, $func, $($arg)*),
-            // (17, 2448) => merkle_roll_depth_size_apply_fn!(17, 2448, $bytes, $func, $($arg)*),
-            // (18, 64) => merkle_roll_depth_size_apply_fn!(18, 64, $bytes, $func, $($arg)*),
-            // (18, 128) => merkle_roll_depth_size_apply_fn!(18, 128, $bytes, $func, $($arg)*),
-            // (18, 256) => merkle_roll_depth_size_apply_fn!(18, 256, $bytes, $func, $($arg)*),
-            // (18, 512) => merkle_roll_depth_size_apply_fn!(18, 512, $bytes, $func, $($arg)*),
-            // (18, 1024) => merkle_roll_depth_size_apply_fn!(18, 1024, $bytes, $func, $($arg)*),
-            // (18, 2448) => merkle_roll_depth_size_apply_fn!(18, 2448, $bytes, $func, $($arg)*),
-            // (19, 64) => merkle_roll_depth_size_apply_fn!(19, 64, $bytes, $func, $($arg)*),
-            // (19, 128) => merkle_roll_depth_size_apply_fn!(19, 128, $bytes, $func, $($arg)*),
-            // (19, 256) => merkle_roll_depth_size_apply_fn!(19, 256, $bytes, $func, $($arg)*),
-            // (19, 512) => merkle_roll_depth_size_apply_fn!(19, 512, $bytes, $func, $($arg)*),
-            // (19, 1024) => merkle_roll_depth_size_apply_fn!(19, 1024, $bytes, $func, $($arg)*),
-            // (19, 2448) => merkle_roll_depth_size_apply_fn!(19, 2448, $bytes, $func, $($arg)*),
+            (14, 64) => merkle_roll_depth_size_apply_fn!(14, 64, $bytes, $func, $($arg)*),
+            (14, 256) => merkle_roll_depth_size_apply_fn!(14, 256, $bytes, $func, $($arg)*),
+            (14, 1024) => merkle_roll_depth_size_apply_fn!(14, 1024, $bytes, $func, $($arg)*),
+            (14, 2448) => merkle_roll_depth_size_apply_fn!(14, 2448, $bytes, $func, $($arg)*),
+            (16, 64) => merkle_roll_depth_size_apply_fn!(16, 64, $bytes, $func, $($arg)*),
+            (16, 256) => merkle_roll_depth_size_apply_fn!(16, 256, $bytes, $func, $($arg)*),
+            (16, 1024) => merkle_roll_depth_size_apply_fn!(16, 1024, $bytes, $func, $($arg)*),
+            (16, 2448) => merkle_roll_depth_size_apply_fn!(16, 2448, $bytes, $func, $($arg)*),
+            (18, 64) => merkle_roll_depth_size_apply_fn!(18, 64, $bytes, $func, $($arg)*),
+            (18, 256) => merkle_roll_depth_size_apply_fn!(18, 256, $bytes, $func, $($arg)*),
+            (18, 1024) => merkle_roll_depth_size_apply_fn!(18, 1024, $bytes, $func, $($arg)*),
+            (18, 2448) => merkle_roll_depth_size_apply_fn!(18, 2448, $bytes, $func, $($arg)*),
             (20, 64) => merkle_roll_depth_size_apply_fn!(20, 64, $bytes, $func, $($arg)*),
-            (20, 128) => merkle_roll_depth_size_apply_fn!(20, 128, $bytes, $func, $($arg)*),
             (20, 256) => merkle_roll_depth_size_apply_fn!(20, 256, $bytes, $func, $($arg)*),
-            (20, 512) => merkle_roll_depth_size_apply_fn!(20, 512, $bytes, $func, $($arg)*),
             (20, 1024) => merkle_roll_depth_size_apply_fn!(20, 1024, $bytes, $func, $($arg)*),
             (20, 2448) => merkle_roll_depth_size_apply_fn!(20, 2448, $bytes, $func, $($arg)*),
-            // (21, 64) => merkle_roll_depth_size_apply_fn!(21, 64, $bytes, $func, $($arg)*),
-            // (21, 128) => merkle_roll_depth_size_apply_fn!(21, 128, $bytes, $func, $($arg)*),
-            // (21, 256) => merkle_roll_depth_size_apply_fn!(21, 256, $bytes, $func, $($arg)*),
-            // (21, 512) => merkle_roll_depth_size_apply_fn!(21, 512, $bytes, $func, $($arg)*),
-            // (21, 1024) => merkle_roll_depth_size_apply_fn!(21, 1024, $bytes, $func, $($arg)*),
-            // (21, 2448) => merkle_roll_depth_size_apply_fn!(21, 2448, $bytes, $func, $($arg)*),
-            // (22, 64) => merkle_roll_depth_size_apply_fn!(22, 64, $bytes, $func, $($arg)*),
-            // (22, 128) => merkle_roll_depth_size_apply_fn!(22, 128, $bytes, $func, $($arg)*),
-            // (22, 256) => merkle_roll_depth_size_apply_fn!(22, 256, $bytes, $func, $($arg)*),
-            // (22, 512) => merkle_roll_depth_size_apply_fn!(22, 512, $bytes, $func, $($arg)*),
-            // (22, 1024) => merkle_roll_depth_size_apply_fn!(22, 1024, $bytes, $func, $($arg)*),
-            // (22, 2448) => merkle_roll_depth_size_apply_fn!(22, 2448, $bytes, $func, $($arg)*),
-            // (23, 64) => merkle_roll_depth_size_apply_fn!(23, 64, $bytes, $func, $($arg)*),
-            // (23, 128) => merkle_roll_depth_size_apply_fn!(23, 128, $bytes, $func, $($arg)*),
-            // (23, 256) => merkle_roll_depth_size_apply_fn!(23, 256, $bytes, $func, $($arg)*),
-            // (23, 512) => merkle_roll_depth_size_apply_fn!(23, 512, $bytes, $func, $($arg)*),
-            // (23, 1024) => merkle_roll_depth_size_apply_fn!(23, 1024, $bytes, $func, $($arg)*),
-            // (23, 2448) => merkle_roll_depth_size_apply_fn!(23, 2448, $bytes, $func, $($arg)*),
-            // (24, 64) => merkle_roll_depth_size_apply_fn!(24, 64, $bytes, $func, $($arg)*),
-            // (24, 128) => merkle_roll_depth_size_apply_fn!(24, 128, $bytes, $func, $($arg)*),
-            // (24, 256) => merkle_roll_depth_size_apply_fn!(24, 256, $bytes, $func, $($arg)*),
-            // (24, 512) => merkle_roll_depth_size_apply_fn!(24, 512, $bytes, $func, $($arg)*),
-            // (24, 1024) => merkle_roll_depth_size_apply_fn!(24, 1024, $bytes, $func, $($arg)*),
-            // (24, 2448) => merkle_roll_depth_size_apply_fn!(24, 2448, $bytes, $func, $($arg)*),
+            (22, 64) => merkle_roll_depth_size_apply_fn!(22, 64, $bytes, $func, $($arg)*),
+            (22, 256) => merkle_roll_depth_size_apply_fn!(22, 256, $bytes, $func, $($arg)*),
+            (22, 1024) => merkle_roll_depth_size_apply_fn!(22, 1024, $bytes, $func, $($arg)*),
+            (22, 2448) => merkle_roll_depth_size_apply_fn!(22, 2448, $bytes, $func, $($arg)*),
             _ => {
                 msg!("Failed to apply {} on merkle roll with max depth {} and max buffer size {}", stringify!($func), $header.max_depth, $header.max_buffer_size);
                 None
@@ -206,7 +160,6 @@ pub mod gummyroll {
         max_buffer_size: u32,
         root: Node,
         leaf: Node,
-        proof: Vec<Node>,
         index: u32,
     ) -> ProgramResult {
         let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
@@ -220,6 +173,14 @@ pub mod gummyroll {
             max_buffer_size,
             &ctx.accounts.authority.key(),
         )?;
+
+        let mut proof = vec![];
+        for node in ctx.remaining_accounts.iter() {
+            proof.push(Node {
+                inner: node.key().to_bytes(),
+            });
+        }
+        assert_eq!(proof.len(), max_depth as usize);
 
         match merkle_roll_apply_fn!(
             header,
@@ -243,7 +204,6 @@ pub mod gummyroll {
         root: Node,
         previous_leaf: Node,
         new_leaf: Node,
-        proof: Vec<Node>,
         index: u32,
     ) -> ProgramResult {
         let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
@@ -251,6 +211,14 @@ pub mod gummyroll {
             merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
         let header = load_and_check_header(header_bytes, ctx.accounts.authority.key())?;
+
+        let mut proof = vec![];
+        for node in ctx.remaining_accounts.iter() {
+            proof.push(Node {
+                inner: node.key().to_bytes(),
+            });
+        }
+        assert_eq!(proof.len(), header.max_depth as usize);
 
         match merkle_roll_apply_fn!(
             header,
@@ -290,7 +258,6 @@ pub mod gummyroll {
         ctx: Context<Modify>,
         root: Node,
         leaf: Node,
-        proof: Vec<Node>,
         index: u32,
     ) -> ProgramResult {
         let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
@@ -298,6 +265,14 @@ pub mod gummyroll {
             merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
         let header = load_and_check_header(header_bytes, ctx.accounts.authority.key())?;
+
+        let mut proof = vec![];
+        for node in ctx.remaining_accounts.iter() {
+            proof.push(Node {
+                inner: node.key().to_bytes(),
+            });
+        }
+        assert_eq!(proof.len(), header.max_depth as usize);
 
         match merkle_roll_apply_fn!(
             header,
