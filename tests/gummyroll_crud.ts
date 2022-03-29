@@ -165,12 +165,15 @@ describe("Gummyroll CRUD program", () => {
       index: number,
       config: { overrides?: { message?: string; signer?: Keypair } } = {}
     ) {
-      const proofNodes = getProofOfLeaf(tree, index).map(({ node }) => node);
+      const proofPubkeys = getProofOfLeaf(tree, index).map(({ node }) => ({
+        pubkey: new PublicKey(node),
+        isSigner: false,
+        isWritable: false,
+      }));
       const signer = config.overrides?.signer;
       const transferIx = GummyrollCrud.instruction.transfer(
         Buffer.from(tree.root, 0, 32),
         Buffer.from(config.overrides?.message ?? message),
-        proofNodes,
         0,
         {
           accounts: {
@@ -180,6 +183,7 @@ describe("Gummyroll CRUD program", () => {
             owner: feePayerKeypair.publicKey,
           },
           signers: [signer ?? feePayerKeypair],
+          remainingAccounts: proofPubkeys,
         }
       );
       const tx = new Transaction().add(transferIx);
@@ -190,9 +194,75 @@ describe("Gummyroll CRUD program", () => {
     beforeEach(async () => {
       await appendMessage(message);
     });
-    it("sanity check", async () => {
-      const newOwnerKeypair = Keypair.generate();
-      await transferMessage(newOwnerKeypair.publicKey, 0);
+    it("changes the owner on the payload", async () => {
+      recomputeRootByAddingLeafToTreeWithMessageAtIndex(
+        feePayerKeypair.publicKey,
+        message,
+        0
+      );
+      const newOwnerPubkey = Keypair.generate().publicKey;
+      await transferMessage(newOwnerPubkey, 0);
+      recomputeRootByAddingLeafToTreeWithMessageAtIndex(
+        newOwnerPubkey,
+        message,
+        0
+      );
+      const actualRoot = await getActualRoot();
+      const expectedRoot = tree.root;
+      expect(expectedRoot.compare(actualRoot)).to.equal(
+        0,
+        "On-chain root hash does not equal expected hash"
+      );
+    });
+    it("fails if the message is modified", async () => {
+      recomputeRootByAddingLeafToTreeWithMessageAtIndex(
+        feePayerKeypair.publicKey,
+        message,
+        0
+      );
+      const newOwnerPubkey = Keypair.generate().publicKey;
+      try {
+        await transferMessage(newOwnerPubkey, 0, {
+          overrides: { message: "mOdIfIeD mEsSaGe" },
+        });
+        assert(
+          false,
+          "Transaction should have failed since the message was modified"
+        );
+      } catch (e) {}
+      const actualRoot = await getActualRoot();
+      const expectedRoot = tree.root;
+      expect(expectedRoot.compare(actualRoot)).to.equal(
+        0,
+        "The transaction should have failed because the message was " +
+          "modified, but never the less, the on-chain root hash changed."
+      );
+    });
+    it("fails if someone other than the owner tries to modify a leaf", async () => {
+      recomputeRootByAddingLeafToTreeWithMessageAtIndex(
+        feePayerKeypair.publicKey,
+        message,
+        0
+      );
+      const thiefKeypair = Keypair.generate();
+      await Gummyroll.provider.connection.confirmTransaction(
+        await Gummyroll.provider.connection.requestAirdrop(
+          thiefKeypair.publicKey,
+          2e9
+        ),
+        "confirmed"
+      );
+      try {
+        await transferMessage(thiefKeypair.publicKey, 0, {
+          overrides: { signer: thiefKeypair },
+        });
+        assert(
+          false,
+          "Transaction should have failed since the signer was not the owner"
+        );
+      } catch (e) {
+        assert(true);
+      }
     });
   });
   describe("`Remove` instruction", () => {

@@ -52,14 +52,30 @@ pub mod gummyroll_crud {
         gummyroll::cpi::append(cpi_ctx, leaf)
     }
 
-    pub fn transfer(
-        _ctx: Context<Transfer>,
-        _root: [u8; 32],
-        _message: Vec<u8>,
-        _proof: Vec<[u8; 32]>,
-        _index: u32,
+    pub fn transfer<'info>(
+        ctx: Context<'_, '_, '_, 'info, Transfer<'info>>,
+        root: [u8; 32],
+        message: Vec<u8>,
+        index: u32,
     ) -> Result<()> {
-        Ok(())
+        let gummyroll_program = ctx.accounts.gummyroll_program.to_account_info();
+        let merkle_roll = ctx.accounts.merkle_roll.to_account_info();
+        let owner = ctx.accounts.owner.to_account_info();
+        let new_owner = ctx.accounts.new_owner.to_account_info();
+        let cpi_ctx = CpiContext::new(
+            gummyroll_program,
+            gummyroll::cpi::accounts::Modify {
+                authority: owner.clone(),
+                merkle_roll,
+            },
+        )
+        .with_remaining_accounts(ctx.remaining_accounts.to_vec());
+        // It's important to synthesize the previous leaf ourselves, rather than to
+        // accept it as an arg, so that we can ensure the message hasn't been modified.
+        let previous_leaf_node = Node::new(get_message_hash(&owner, &message).to_bytes());
+        let leaf_node = Node::new(get_message_hash(&new_owner, &message).to_bytes());
+        let root_node = Node::new(root);
+        gummyroll::cpi::replace_leaf(cpi_ctx, root_node, previous_leaf_node, leaf_node, index)
     }
 
     pub fn remove(
