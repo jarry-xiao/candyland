@@ -5,12 +5,15 @@ import {
   SystemProgram,
   PublicKey,
 } from "@solana/web3.js";
-import { assert } from "chai";
+import { assert, expect } from "chai";
 import { Gummyroll } from "../target/types/gummyroll";
 import { GummyrollCrud } from "../target/types/gummyroll_crud";
 import { Program } from "@project-serum/anchor";
-import { getMerkleRollAccountSize } from "./merkle-roll-serde";
-import { buildTree, getProofOfLeaf } from "./merkle-tree";
+import {
+  decodeMerkleRoll,
+  getMerkleRollAccountSize,
+} from "./merkle-roll-serde";
+import { buildTree, getProofOfLeaf, hash, updateTree } from "./merkle-tree";
 
 // @ts-ignore
 const Gummyroll = anchor.workspace.Gummyroll as Program<Gummyroll>;
@@ -24,6 +27,17 @@ describe("Gummyroll CRUD program", () => {
   const requiredSpace = getMerkleRollAccountSize(MAX_DEPTH, MAX_SIZE);
 
   let tree: ReturnType<typeof buildTree>;
+
+  async function getActualRoot() {
+    const merkleRollAccount =
+      await Gummyroll.provider.connection.getAccountInfo(
+        merkleRollKeypair.publicKey
+      );
+    const merkleRoll = decodeMerkleRoll(merkleRollAccount.data);
+    return merkleRoll.roll.changeLogs[
+      merkleRoll.roll.activeIndex
+    ].root.toBuffer();
+  }
 
   async function appendMessage(message: string) {
     const addIx = GummyrollCrud.instruction.add(Buffer.from(message), {
@@ -42,6 +56,16 @@ describe("Gummyroll CRUD program", () => {
       }
     );
   }
+  function recomputeRootByAddingLeafToTreeWithMessageAtIndex(
+    owner: PublicKey,
+    message: string,
+    index: number
+  ) {
+    const newLeaf = hash(owner.toBuffer(), Buffer.from(message));
+    updateTree(tree, newLeaf, index);
+    return tree.root;
+  }
+
   let feePayerKeypair: Keypair;
   let merkleRollKeypair: Keypair;
   beforeEach(async () => {
@@ -91,9 +115,47 @@ describe("Gummyroll CRUD program", () => {
     assert(initGummyRollTxId, "Failed to initialize an empty Gummyroll");
   });
   describe("`Add` instruction", () => {
-    it("sanity check", async () => {
+    describe("having appended the first item", () => {
       const firstTestMessage = "First test message";
-      await appendMessage(firstTestMessage);
+      beforeEach(async () => {
+        await appendMessage(firstTestMessage);
+      });
+      it("updates the root hash correctly", async () => {
+        const actualRoot = await getActualRoot();
+        const expectedRoot = recomputeRootByAddingLeafToTreeWithMessageAtIndex(
+          feePayerKeypair.publicKey,
+          firstTestMessage,
+          0
+        );
+        expect(expectedRoot.compare(actualRoot)).to.equal(
+          0,
+          "On-chain root hash does not equal expected hash"
+        );
+      });
+      describe("having appended the second item", () => {
+        const secondTestMessage = "Second test message";
+        beforeEach(async () => {
+          await appendMessage(secondTestMessage);
+        });
+        it("updates the root hash correctly", async () => {
+          const actualRoot = await getActualRoot();
+          recomputeRootByAddingLeafToTreeWithMessageAtIndex(
+            feePayerKeypair.publicKey,
+            firstTestMessage,
+            0
+          );
+          const expectedRoot =
+            recomputeRootByAddingLeafToTreeWithMessageAtIndex(
+              feePayerKeypair.publicKey,
+              secondTestMessage,
+              1
+            );
+          expect(expectedRoot.compare(actualRoot)).to.equal(
+            0,
+            "On-chain root hash does not equal expected hash"
+          );
+        });
+      });
     });
   });
   describe("`Transfer` instruction", () => {
