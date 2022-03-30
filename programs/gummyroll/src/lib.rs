@@ -546,7 +546,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
     fn initialize_tree(&mut self, leaf: Node, mut proof: [Node; MAX_DEPTH]) -> Option<Node> {
         let old_root = recompute(EMPTY, &proof, 0);
         if old_root == empty_node(MAX_DEPTH as u32) {
-            self.update_and_apply_proof(EMPTY, leaf, &mut proof, 0, 0, false)
+            self.update_and_apply_proof(EMPTY, leaf, &mut proof, 0, 0, false, false)
         } else {
             None
         }
@@ -683,6 +683,8 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         msg!("Rightmost Index: {}", self.rightmost_proof.index);
         msg!("Buffer Size: {}", self.buffer_size);
         msg!("Leaf Index: {}", index);
+        msg!("Old Leaf: {:?}", leaf.inner);
+        msg!("New Leaf: {:?}", new_leaf.inner);
         let mask: usize = MAX_BUFFER_SIZE - 1;
 
         for i in 0..self.buffer_size {
@@ -690,26 +692,26 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             if self.change_logs[j as usize].root != current_root {
                 continue;
             }
-            let old_root = recompute(leaf, &proof, index);
-            if old_root == current_root && index > self.rightmost_proof.index && append_on_conflict
-            {
-                return self.append(new_leaf);
-            } else if old_root == current_root {
-                return self.update_and_apply_proof(
-                    leaf,
-                    new_leaf,
-                    &mut proof,
-                    index,
-                    j,
-                    append_on_conflict,
-                );
-            } else {
-                msg!("Invalid proof");
-                return None;
-            }
+            return self.update_and_apply_proof(
+                leaf,
+                new_leaf,
+                &mut proof,
+                index,
+                j,
+                append_on_conflict,
+                false,
+            );
         }
-        msg!("Failed to find root");
-        None
+        msg!("Failed to find root, attempting to replay change log");
+        self.update_and_apply_proof(
+            leaf,
+            new_leaf,
+            &mut proof,
+            index,
+            self.active_index.wrapping_sub(self.buffer_size) & mask as u64,
+            append_on_conflict,
+            true,
+        )
     }
 
     /// Fast-forwards submitted proof to be valid for the root at `self.current_index`
@@ -725,14 +727,19 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         index: u32,
         mut j: u64,
         append_on_conflict: bool,
+        use_full_buffer: bool,
     ) -> Option<Node> {
         let mut updated_leaf = leaf;
-        msg!("Fast-forwarding proof");
+        msg!("Fast-forwarding proof, starting index {}", j);
         let mask: usize = MAX_BUFFER_SIZE - 1;
         let padding: usize = 32 - MAX_DEPTH;
         sol_log_compute_units();
-        while j != self.active_index {
-            // Implement circular index addition
+        // Implement circular index addition
+        loop {
+            if !use_full_buffer && j == self.active_index {
+                msg!("Use partial buffer");
+                break;
+            }
             j += 1;
             j &= mask as u64;
             if index != self.change_logs[j as usize].index {
@@ -742,19 +749,30 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
                 proof[critbit_index] = self.change_logs[j as usize].path[critbit_index];
             } else {
                 updated_leaf = self.change_logs[j as usize].get_leaf();
+                msg!("Buffer index {}, Updated leaf {}: {:?}", j, index, updated_leaf.inner);
+            }
+            if use_full_buffer && j == self.active_index {
+                msg!("Use full buffer");
+                msg!("{:?}", self.change_logs[j as usize].get_leaf());
+                break;
             }
         }
         sol_log_compute_units();
-        if updated_leaf != leaf {
-            if leaf == EMPTY && append_on_conflict {
+        let valid_root = recompute(updated_leaf, proof, index) == self.get_change_log().root;
+        if updated_leaf != leaf || index > self.rightmost_proof.index {
+            if !use_full_buffer && valid_root && leaf == EMPTY && append_on_conflict {
                 return self.append(new_leaf);
             } else {
                 msg!("Leaf already updated");
                 return None;
             }
         }
-        self.increment_active_index();
-        Some(self.apply_changes(new_leaf, proof, index))
+        if valid_root {
+            self.increment_active_index();
+            Some(self.apply_changes(new_leaf, proof, index))
+        } else {
+            None
+        }
     }
 
     fn increment_active_index(&mut self) {
@@ -776,12 +794,12 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         // Also updates change_log's current root
         let root = change_log.recompute_path(start, proof);
 
-
         // Update rightmost path if possible
         if self.rightmost_proof.index < (1 << MAX_DEPTH) {
             if index < self.rightmost_proof.index as u32 {
                 if index != self.rightmost_proof.index - 1 {
-                    let common_path_len = ((index ^ (self.rightmost_proof.index - 1) as u32) << padding)
+                    let common_path_len = ((index ^ (self.rightmost_proof.index - 1) as u32)
+                        << padding)
                         .leading_zeros() as usize;
                     msg!("Common path len {}", common_path_len);
                     let critbit_index = (MAX_DEPTH - 1) - common_path_len;
