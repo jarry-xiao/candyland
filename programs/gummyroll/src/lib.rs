@@ -754,6 +754,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         sol_log_compute_units();
         let valid_root = recompute(updated_leaf, proof, index) == self.get_change_log().root;
         if updated_leaf != leaf || index > self.rightmost_proof.index {
+            // If the supplied root was not found in the queue, the instruction should fail if the leaf index changes
             if !use_full_buffer && valid_root && leaf == EMPTY && append_on_conflict {
                 return self.append(new_leaf);
             } else {
