@@ -5,7 +5,7 @@ import * as Collections from 'typescript-collections';
 const MAX_DEPTH = 20;
 let CACHE_EMPTY_NODE = new Map<number, Buffer>();
 
-type Tree = {
+export type Tree = {
     leaves: TreeNode[]
     root: Buffer,
 }
