@@ -17,7 +17,7 @@ use std::ops::DerefMut;
 declare_id!("GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD");
 
 macro_rules! merkle_roll_depth_size_apply_fn {
-    ($max_depth:literal, $max_size:literal, $id:ident, $bytes:ident, $func:ident, $($arg:tt)*) => {
+    ($max_depth:literal, $max_size:literal, $emit_msg:ident, $id:ident, $bytes:ident, $func:ident, $($arg:tt)*) => {
         if size_of::<MerkleRoll::<$max_depth, $max_size>>() != $bytes.len() {
             msg!("Received account of invalid length");
             None
@@ -26,7 +26,9 @@ macro_rules! merkle_roll_depth_size_apply_fn {
                 Ok(merkle_roll) => {
                     match merkle_roll.$func($($arg)*) {
                         Some(x) => {
-                            emit!(merkle_roll.get_change_log().to_event($id));
+                            if $emit_msg {
+                                emit!(merkle_roll.get_change_log().to_event($id));
+                            }
                             Some(x)
                         }
                         None => None,
@@ -42,28 +44,28 @@ macro_rules! merkle_roll_depth_size_apply_fn {
 }
 
 macro_rules! merkle_roll_apply_fn {
-    ($header:ident, $id:ident, $bytes:ident, $func:ident, $($arg:tt)*) => {
+    ($header:ident, $emit_msg:ident, $id:ident, $bytes:ident, $func:ident, $($arg:tt)*) => {
         match ($header.max_depth, $header.max_buffer_size) {
-            (14, 64) => merkle_roll_depth_size_apply_fn!(14, 64, $id, $bytes, $func, $($arg)*),
-            (14, 256) => merkle_roll_depth_size_apply_fn!(14, 256, $id, $bytes, $func, $($arg)*),
-            (14, 1024) => merkle_roll_depth_size_apply_fn!(14, 1024, $id, $bytes, $func, $($arg)*),
-            (14, 2448) => merkle_roll_depth_size_apply_fn!(14, 2448, $id, $bytes, $func, $($arg)*),
-            (16, 64) => merkle_roll_depth_size_apply_fn!(16, 64, $id, $bytes, $func, $($arg)*),
-            (16, 256) => merkle_roll_depth_size_apply_fn!(16, 256, $id, $bytes, $func, $($arg)*),
-            (16, 1024) => merkle_roll_depth_size_apply_fn!(16, 1024, $id, $bytes, $func, $($arg)*),
-            (16, 2448) => merkle_roll_depth_size_apply_fn!(16, 2448, $id, $bytes, $func, $($arg)*),
-            (18, 64) => merkle_roll_depth_size_apply_fn!(18, 64, $id, $bytes, $func, $($arg)*),
-            (18, 256) => merkle_roll_depth_size_apply_fn!(18, 256, $id, $bytes, $func, $($arg)*),
-            (18, 1024) => merkle_roll_depth_size_apply_fn!(18, 1024, $id, $bytes, $func, $($arg)*),
-            (18, 2448) => merkle_roll_depth_size_apply_fn!(18, 2448, $id, $bytes, $func, $($arg)*),
-            (20, 64) => merkle_roll_depth_size_apply_fn!(20, 64, $id, $bytes, $func, $($arg)*),
-            (20, 256) => merkle_roll_depth_size_apply_fn!(20, 256, $id, $bytes, $func, $($arg)*),
-            (20, 1024) => merkle_roll_depth_size_apply_fn!(20, 1024, $id, $bytes, $func, $($arg)*),
-            (20, 2448) => merkle_roll_depth_size_apply_fn!(20, 2448, $id, $bytes, $func, $($arg)*),
-            (22, 64) => merkle_roll_depth_size_apply_fn!(22, 64, $id, $bytes, $func, $($arg)*),
-            (22, 256) => merkle_roll_depth_size_apply_fn!(22, 256, $id, $bytes, $func, $($arg)*),
-            (22, 1024) => merkle_roll_depth_size_apply_fn!(22, 1024, $id, $bytes, $func, $($arg)*),
-            (22, 2448) => merkle_roll_depth_size_apply_fn!(22, 2448, $id, $bytes, $func, $($arg)*),
+            (14, 64) => merkle_roll_depth_size_apply_fn!(14, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (14, 256) => merkle_roll_depth_size_apply_fn!(14, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (14, 1024) => merkle_roll_depth_size_apply_fn!(14, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (14, 2448) => merkle_roll_depth_size_apply_fn!(14, 2448, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (16, 64) => merkle_roll_depth_size_apply_fn!(16, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (16, 256) => merkle_roll_depth_size_apply_fn!(16, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (16, 1024) => merkle_roll_depth_size_apply_fn!(16, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (16, 2448) => merkle_roll_depth_size_apply_fn!(16, 2448, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (18, 64) => merkle_roll_depth_size_apply_fn!(18, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (18, 256) => merkle_roll_depth_size_apply_fn!(18, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (18, 1024) => merkle_roll_depth_size_apply_fn!(18, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (18, 2448) => merkle_roll_depth_size_apply_fn!(18, 2448, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (20, 64) => merkle_roll_depth_size_apply_fn!(20, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (20, 256) => merkle_roll_depth_size_apply_fn!(20, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (20, 1024) => merkle_roll_depth_size_apply_fn!(20, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (20, 2448) => merkle_roll_depth_size_apply_fn!(20, 2448, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (22, 64) => merkle_roll_depth_size_apply_fn!(22, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (22, 256) => merkle_roll_depth_size_apply_fn!(22, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (22, 1024) => merkle_roll_depth_size_apply_fn!(22, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (22, 2448) => merkle_roll_depth_size_apply_fn!(22, 2448, $emit_msg, $id, $bytes, $func, $($arg)*),
             _ => {
                 msg!("Failed to apply {} on merkle roll with max depth {} and max buffer size {}", stringify!($func), $header.max_depth, $header.max_buffer_size);
                 None
@@ -154,7 +156,7 @@ pub mod gummyroll {
             &ctx.accounts.authority.key(),
         )?;
         let id = ctx.accounts.merkle_roll.key();
-        match merkle_roll_apply_fn!(header, id, roll_bytes, initialize,) {
+        match merkle_roll_apply_fn!(header, false, id, roll_bytes, initialize,) {
             Some(new_root) => {
                 msg!("New Root: {:?}", new_root);
                 Ok(())
@@ -194,6 +196,7 @@ pub mod gummyroll {
         let id = ctx.accounts.merkle_roll.key();
         match merkle_roll_apply_fn!(
             header,
+            false,
             id,
             roll_bytes,
             initialize_with_root,
@@ -234,6 +237,7 @@ pub mod gummyroll {
         let id = ctx.accounts.merkle_roll.key();
         match merkle_roll_apply_fn!(
             header,
+            true,
             id,
             roll_bytes,
             set_leaf,
@@ -259,7 +263,7 @@ pub mod gummyroll {
         let header = load_and_check_header(header_bytes, ctx.accounts.authority.key())?;
 
         let id = ctx.accounts.merkle_roll.key();
-        match merkle_roll_apply_fn!(header, id, roll_bytes, append, leaf) {
+        match merkle_roll_apply_fn!(header, true, id, roll_bytes, append, leaf) {
             Some(new_root) => {
                 msg!("New Root: {:?}", new_root);
                 Ok(())
@@ -291,6 +295,7 @@ pub mod gummyroll {
         let id = ctx.accounts.merkle_roll.key();
         match merkle_roll_apply_fn!(
             header,
+            true,
             id,
             roll_bytes,
             fill_empty_or_append,
