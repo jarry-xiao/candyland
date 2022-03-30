@@ -683,8 +683,6 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         msg!("Rightmost Index: {}", self.rightmost_proof.index);
         msg!("Buffer Size: {}", self.buffer_size);
         msg!("Leaf Index: {}", index);
-        msg!("Old Leaf: {:?}", leaf.inner);
-        msg!("New Leaf: {:?}", new_leaf.inner);
         let mask: usize = MAX_BUFFER_SIZE - 1;
 
         for i in 0..self.buffer_size {
@@ -737,7 +735,6 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         // Implement circular index addition
         loop {
             if !use_full_buffer && j == self.active_index {
-                msg!("Use partial buffer");
                 break;
             }
             j += 1;
@@ -749,11 +746,8 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
                 proof[critbit_index] = self.change_logs[j as usize].path[critbit_index];
             } else {
                 updated_leaf = self.change_logs[j as usize].get_leaf();
-                msg!("Buffer index {}, Updated leaf {}: {:?}", j, index, updated_leaf.inner);
             }
             if use_full_buffer && j == self.active_index {
-                msg!("Use full buffer");
-                msg!("{:?}", self.change_logs[j as usize].get_leaf());
                 break;
             }
         }
