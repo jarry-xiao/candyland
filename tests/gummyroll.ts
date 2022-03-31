@@ -51,7 +51,7 @@ describe("gummyroll", () => {
   const program = anchor.workspace.Gummyroll as Program<Gummyroll>;
 
   const MAX_SIZE = 64;
-  const MAX_DEPTH = 21;
+  const MAX_DEPTH = 22;
 
   const merkleRollKeypair = Keypair.generate();
   console.log("Payer key:", payer.publicKey);
@@ -92,14 +92,13 @@ describe("gummyroll", () => {
     const root = { inner: Array.from(tree.root) };
     const leaf = { inner: Array.from(leaves[0]) };
     const proof = getProofOfLeaf(tree, 0).map((node) => {
-      return { inner: Array.from(node.node) };
+      return { pubkey: new PublicKey(node.node), isSigner: false, isWritable: false };
     });
     const initGummyrollIx = await program.instruction.initGummyrollWithRoot(
       MAX_DEPTH,
       MAX_SIZE,
       root,
       leaf,
-      proof,
       0,
       {
         accounts: {
@@ -107,6 +106,7 @@ describe("gummyroll", () => {
           authority: payer.publicKey,
         },
         signers: [payer],
+        remainingAccounts: proof
       }
     );
 
@@ -182,14 +182,13 @@ describe("gummyroll", () => {
     const proof = getProofOfLeaf(tree, index);
 
     const nodeProof = proof.map((treeNode) => {
-      return { inner: treeNode.node };
+      return { pubkey: new PublicKey(treeNode.node), isSigner: false, isWritable: false };
     });
 
     const replaceLeafIx = program.instruction.replaceLeaf(
       { inner: Array.from(tree.root) },
       { inner: Array.from(previousLeaf) },
       { inner: Array.from(newLeaf) },
-      nodeProof,
       index,
       {
         accounts: {
@@ -197,6 +196,7 @@ describe("gummyroll", () => {
           authority: payer.publicKey,
         },
         signers: [payer],
+        remainingAccounts: nodeProof
       }
     );
 
@@ -228,7 +228,11 @@ describe("gummyroll", () => {
 
     const failedRoot = { inner: Array.from(tree.root) };
     const failedLeaf = { inner: Array.from(tree.leaves[2].node) };
-    const failedProof = getProofOfLeaf(tree, 2);
+    const failedProof = getProofOfLeaf(tree, 2).map(
+        (treeNode) => {
+            return { pubkey: new PublicKey(treeNode.node), isSigner: false, isWritable: false };
+        }
+    )
 
     for (let i = 0; i < MAX_SIZE; i++) {
       const index = 3 + i;
@@ -242,13 +246,12 @@ describe("gummyroll", () => {
       changeArray.push({ newLeaf, index });
 
       const nodeProof = proof.map((treeNode) => {
-        return { inner: treeNode.node };
+        return { pubkey: new PublicKey(treeNode.node), isSigner: false, isWritable: false };
       });
 
       const insertOrAppendIx = await program.instruction.insertOrAppend(
         { inner: Array.from(tree.root) },
         { inner: Array.from(newLeaf) },
-        nodeProof,
         index,
         {
           accounts: {
@@ -256,6 +259,7 @@ describe("gummyroll", () => {
             authority: payer.publicKey,
           },
           signers: [payer],
+          remainingAccounts: nodeProof,
         }
       );
 
@@ -288,7 +292,6 @@ describe("gummyroll", () => {
         failedRoot,
         failedLeaf,
         Buffer.alloc(32),
-        failedProof,
         2,
         {
           accounts: {
@@ -296,6 +299,7 @@ describe("gummyroll", () => {
             authority: payer.publicKey,
           },
           signers: [payer],
+          remainingAccounts: failedProof,
         }
       );
       console.log("Unexpected success");

@@ -3,13 +3,19 @@ use hyper::{Body, Request, Response, Server, StatusCode};
 use futures_util::future::join;
 use merk::Merk;
 use redis::streams::{StreamId, StreamKey, StreamReadOptions, StreamReadReply};
-use redis::{AsyncCommands, Value};
+use redis::{Commands, Value};
 use routerify::prelude::*;
 use routerify::{Middleware, RequestInfo, Router, RouterService};
 use routerify_json_response::{json_failed_resp_with_message, json_success_resp};
 use std::sync::Mutex;
 use std::{convert::Infallible, net::SocketAddr};
+use std::borrow::Borrow;
+use std::ops::Deref;
+use std::process::id;
+use gummyroll::ChangeLogEvent;
 use crate::events::handle_event;
+use tokio_postgres::{NoTls, Error};
+use crate::error::ApiError;
 
 mod api;
 mod models;
@@ -54,6 +60,16 @@ fn router(merkle_db: Merk) -> Router<Body, routerify_json_response::Error> {
 #[tokio::main]
 async fn main() {
     let merk = Merk::open("./merk.db").unwrap();
+    let (mut psclient,connection) = tokio_postgres::connect("host=db user=solana password=solana", NoTls).await.unwrap();
+
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            eprintln!("connection error: {}", e);
+        }
+    });
+
+    let set_clsql= psclient.prepare("INSERT INTO cl_meta (tree, leaf_idx, seq) VALUES ($1,$2,$3)").await.unwrap();
+    let set_clsql_item= psclient.prepare("INSERT INTO cl_items (tree, seq, level, hash) VALUES ($1,$2,$3,$4)").await.unwrap();
     let client = redis::Client::open("redis://redis/").unwrap();
     let router = router(merk);
     // Create a Service from the router above to handle incoming requests.
@@ -65,31 +81,74 @@ async fn main() {
 
     println!("App is running on: {}", addr);
     let data_service = tokio::spawn(async move {
-        let mut conn = client.clone().get_async_connection().await.unwrap();
+        let conn_res = client.get_connection();
+        let mut conn = conn_res.unwrap();
+        println!("service");
         // TODO -> save last id in persistent for restart
         // TODO -> dedup buffer
-        let opts = StreamReadOptions::default();
-        let srr: StreamReadReply = conn.xread_options(&["GM_CL"], &["$"], &opts).await.unwrap();
-        for StreamKey { key, ids } in srr.keys {
-            println!("Stream {}", key);
-            for StreamId { id, map } in ids {
-                println!("\tID {}", id);
-                for (n, s) in map {
-                    if let Value::Data(bytes) = s {
-                        let raw_str = String::from_utf8(bytes);
-                        match raw_str {
-                            Ok(data) => {
-                                println!("{}", &data);
+        // TODO -> This code is SO bad all MVP
+        let opts = StreamReadOptions::default().block(0).count(1000);
+        let mut last_id: String = "$".to_string();
+        loop {
+            let srr: StreamReadReply = conn.xread_options(&["GM_CL"], &[&last_id], &opts).unwrap();
+            for StreamKey { key, ids } in srr.keys {
+                println!("Stream {}", key);
+                for StreamId { id, map } in ids {
+                    println!("\tID {}", id);
+                    let pid = id.replace("-", "").parse::<i64>().unwrap();
+                    for (n, s) in map {
+                        if let Value::Data(bytes) = s {
+                            let raw_str = String::from_utf8(bytes);
+                            match raw_str {
+                                Ok(data) => {
+                                    let clr: Result<ChangeLogEvent, ApiError> = handle_event(data);
+                                    match clr {
+                                        Ok(cl) => {
+                                            let txnb = psclient.transaction().await;
+                                            match txnb {
+                                                Ok(txn) => {
+                                                    txn.execute(&set_clsql,
+                                                        &[&cl.id.as_ref(), &i64::from(cl.index), &pid]
+                                                    ).await.unwrap();
+                                                    let mut i: i64 = 0;
+                                                    for el in cl.path.into_iter() {
+                                                        txn.execute(&set_clsql_item,
+                                                                            &[&cl.id.as_ref(),
+                                                                                &pid,
+                                                                                &i,
+                                                                                &el.inner.as_ref()]
+                                                        ).await.unwrap();
+                                                       i+=1;
+                                                    }
+                                                    match txn.commit().await {
+                                                        Ok(r) => {
+                                                            println!("Saved CL");
+                                                        },
+                                                        Err(e) => {
+                                                            eprintln!("{}", e.to_string())
+                                                        }
+                                                    }
+
+                                                },
+                                                Err(e) => {
+                                                    eprintln!("{}", e.to_string())
+                                                }
+                                            }
+                                        },
+                                        Err(e) => {
+                                            eprintln!("{}", e.to_string())
+                                        }
+                                    }
+                                }
+                                _ => {
+                                    eprintln!("Base64 error")
+                                }
                             }
-                            _ =>{
-                                eprintln!("Base64 error")
-                            }
+                        } else {
+                            panic!("Weird data")
                         }
-
-
-                    } else {
-                        panic!("Weird data")
                     }
+                    last_id = id.to_owned();
                 }
             }
         }

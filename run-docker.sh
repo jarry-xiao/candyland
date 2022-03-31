@@ -1,9 +1,7 @@
 anchor build
-pushd plerkle
-  cross build --target x86_64-unknown-linux-gnu
-popd
+cross build --target x86_64-unknown-linux-gnu --package plerkle
 cp deps/accountsdb-postgres/target/x86_64-unknown-linux-gnu/debug/libsolana_accountsdb_plugin_postgres.so docker-vol/psl.so
-cp plerkle/target/x86_64-unknown-linux-gnu/debug/libplerkle.so docker-vol/plugin.so
+cp target/x86_64-unknown-linux-gnu/debug/libplerkle.so docker-vol/plugin.so
 cp target/deploy/merkle_wallet.so docker-vol/merkle.so
 cp target/deploy/gummyroll.so docker-vol/gummyroll.so
 cp target/deploy/gummyroll_crud.so docker-vol/gummyroll_crud.so

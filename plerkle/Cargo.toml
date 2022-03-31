@@ -20,7 +20,6 @@ solana-sdk = { version = "=1.10.3" }
 solana-transaction-status = { version = "=1.10.3" }
 thiserror = "1.0.30"
 regex = "1.5.5"
-itertools = "0.1"
 base64 = "0.13.0"
 lazy_static = "1.4.0"
 solana-geyser-plugin-interface  = { version = "=1.10.3" }
@@ -29,7 +28,7 @@ solana-measure = { version = "=1.10.3" }
 solana-metrics = { version = "=1.10.3" }
 solana-runtime = { version = "=1.10.3" }
 anchor-client = "0.22.1"
-gummyroll={path= "../programs/gummyroll"}
+gummyroll={path= "../programs/gummyroll", features = ["no-entrypoint"]}
 bs58 = "0.4.0"
 bytemuck = "1.7.2"
 serde = "1.0.133"

@@ -7,7 +7,6 @@ extern crate redis;
 use crate::accounts_selector::AccountsSelector;
 use crate::error::PlerkleError;
 use crate::transaction_selector::TransactionSelector;
-use itertools::Itertools;
 use anchor_lang::Event;
 use redis::streams::StreamMaxlen;
 use redis::Commands;
@@ -190,7 +189,10 @@ impl GeyserPlugin for Plerkle {
                             let mut keys = account_keys.iter();
                             //TODO -> change this to enums from config
                             let gummy_roll = self.programs.get("GR").unwrap();
-                            if keys.contains(gummy_roll) {
+                            let match_g = keys.find(|k| {
+                                *k == gummy_roll
+                            });
+                            if match_g.is_some() {
                                 let maxlen = StreamMaxlen::Approx(55000);
                                 let change_log_event = handle_change_log_event(transaction_info);
                                 if change_log_event.is_ok() {

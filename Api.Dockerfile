@@ -1,7 +1,8 @@
 FROM rust:1.59 as builder
 RUN USER=root cargo new --bin nft_api
+COPY ./programs programs
 WORKDIR ./nft_api
-COPY ./Cargo.toml ./Cargo.toml
+COPY ./nft_api/Cargo.toml ./Cargo.toml
 RUN apt-get update -y && \
     apt-get install -y build-essential make git libgflags-dev libsnappy-dev cmake libclang-dev libtbb-dev zlib1g-dev libbz2-dev libjemalloc-dev
 RUN rustup component add  rustfmt && \
@@ -9,7 +10,7 @@ RUN rustup component add  rustfmt && \
     rustup default nightly
 RUN cargo build --release
 RUN rm src/*.rs
-ADD . ./
+COPY nft_api .
 RUN rm ./target/release/deps/nft_api*
 RUN cargo build --release
 

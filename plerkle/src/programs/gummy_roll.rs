@@ -6,6 +6,7 @@ use solana_geyser_plugin_interface::geyser_plugin_interface::{
 };
 
 
+
 pub fn handle_change_log_event(
     transaction: &ReplicaTransactionInfo,
 ) -> Result<Vec<String>, GeyserPluginError> {
@@ -23,7 +24,7 @@ pub fn handle_change_log_event(
         Some(lines) => {
             for line in lines {
                 let captures = CLRE.captures(line);
-                let b64raw = captures.and_then(|c| c.get(0)).map(|c| c.as_str());
+                let b64raw = captures.and_then(|c| c.get(1)).map(|c| c.as_str());
                 b64raw.inspect(|raw| events.push((**raw).parse().unwrap()));
             }
             if events.is_empty() {

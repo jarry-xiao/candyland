@@ -24,7 +24,7 @@ cat << EOL > accountsdb-plugin-config.json
     }
 }
 EOL
-export RUST_LOG=debug # if RUST_LOG is unset, default to info
+export RUST_LOG=info # if RUST_LOG is unset, default to info
 export RUST_BACKTRACE=1
 dataDir=$PWD/config/"$(basename "$0" .sh)"
 ledgerDir=$PWD/config/ledger

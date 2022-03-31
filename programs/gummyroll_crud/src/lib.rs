@@ -69,7 +69,7 @@ pub mod gummyroll_crud {
                 merkle_roll,
             },
         )
-            .with_remaining_accounts(ctx.remaining_accounts.to_vec());
+        .with_remaining_accounts(ctx.remaining_accounts.to_vec());
         // It's important to synthesize the previous leaf ourselves, rather than to
         // accept it as an arg, so that we can ensure the message hasn't been modified.
         let previous_leaf_node = Node::new(get_message_hash(&owner, &message).to_bytes());
@@ -94,7 +94,7 @@ pub mod gummyroll_crud {
                 merkle_roll,
             },
         )
-            .with_remaining_accounts(ctx.remaining_accounts.to_vec());
+        .with_remaining_accounts(ctx.remaining_accounts.to_vec());
         // It's important to synthesize the previous leaf ourselves, rather than to
         // accept it as an arg, so that we can ensure the message is correct.
         let previous_leaf_node = Node::new(get_message_hash(&owner, &message).to_bytes());

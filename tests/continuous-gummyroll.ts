@@ -19,7 +19,7 @@ import { sleep } from "../deps/metaplex-program-library/metaplex/js/test/utils";
 
 
 const MAX_SIZE = 1024;
-const MAX_DEPTH = 21;
+const MAX_DEPTH = 22;
 
 describe("gummyroll-continuous", () => {
   const connection = new Connection(
@@ -75,23 +75,23 @@ describe("gummyroll-continuous", () => {
     const root = { inner: Array.from(tree.root) };
     const leaf = { inner: Array.from(leaves[0]) };
     const proof = getProofOfLeaf(tree, 0).map((node) => {
-      return { inner: Array.from(node.node) };
+      return { pubkey: new PublicKey(node.node), isSigner: false, isWritable: false };
     });
 
-    const initGummyrollIx = await program.instruction.initGummyrollWithRoot(
-      MAX_DEPTH,
-      MAX_SIZE,
-      root,
-      leaf,
-      proof,
-      tree.leaves.length,
-      {
-        accounts: {
-          merkleRoll: merkleRollKeypair.publicKey,
-          authority: payer.publicKey,
-        },
-        signers: [payer],
-      }
+    const initGummyrollIx = program.instruction.initGummyrollWithRoot(
+        MAX_DEPTH,
+        MAX_SIZE,
+        root,
+        leaf,
+        tree.leaves.length,
+        {
+            accounts: {
+                merkleRoll: merkleRollKeypair.publicKey,
+                authority: payer.publicKey,
+            },
+            signers: [payer],
+            remainingAccounts: proof,
+        }
     );
 
     const tx = new Transaction().add(allocAccountIx).add(initGummyrollIx);
@@ -125,14 +125,13 @@ describe("gummyroll-continuous", () => {
 
   it("Continuous updating and syncing", async () => {
     let txs = [];
-    for (let i = 0; i < 1000; i++) {
+    for (let i = 0; i < 1000000; i++) {
         let newLeaf = Buffer.alloc(32, Buffer.from(Uint8Array.from([i])));
-        let nodeProof = getProofOfLeaf(tree, i).map((node) => { return { inner: node.node } });
+        let nodeProof = getProofOfLeaf(tree, i).map((node) => { return { pubkey: new PublicKey(node.node), isSigner: false, isWritable: false } });
         const replaceLeaf = program.instruction.replaceLeaf(
             { inner: Array.from(tree.root) },
             { inner: Array.from(tree.leaves[i].node) },
             { inner: Array.from(newLeaf) },
-            nodeProof,
             i,
             {
                 accounts: {
@@ -140,6 +139,7 @@ describe("gummyroll-continuous", () => {
                     authority: payer.publicKey,
                 },
                 signers: [payer],
+                remainingAccounts: nodeProof,
             }
         );
         if (i % 100 == 0) { console.log("Sent ith tx:", i); }
@@ -164,7 +164,7 @@ describe("gummyroll-continuous", () => {
         );
 
         //await sleep(100);
-        //await sleep(100);
+        await sleep(10);
     }
     let transactions = await Promise.all(txs);
     console.log("Txs:", transactions)

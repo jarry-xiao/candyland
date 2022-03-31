@@ -3,9 +3,6 @@ name = "nft_api"
 version = "0.1.0"
 edition = "2021"
 
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 routerify = "3"
 routerify-json-response = "3"
@@ -17,3 +14,5 @@ base64 = "0.13.0"
 thiserror = "1.0.30"
 merk = { git= "https://github.com/nomic-io/merk", ref="develop"}
 tokio = { version = "1.17.0", features = ["full"] }
+gummyroll={path= "../programs/gummyroll", features = ["no-entrypoint"]}
+tokio-postgres = "0.7.5"
