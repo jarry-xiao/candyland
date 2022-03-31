@@ -5,5 +5,14 @@ type Props = Readonly<Omit<{ data: string } & ImageProps, "layout" | "src">>;
 
 export default function HashImage({ alt, data, ...rest }: Props) {
   const dataURL = useHashImage(data);
-  return <Image {...rest} alt={alt} layout="fill" src={dataURL} />;
+  return (
+    <Image
+      {...rest}
+      alt={alt}
+      height="100%"
+      layout="responsive"
+      src={dataURL}
+      width="100%"
+    />
+  );
 }
