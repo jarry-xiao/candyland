@@ -187,9 +187,7 @@ pub mod gummyroll {
 
         let mut proof = vec![];
         for node in ctx.remaining_accounts.iter() {
-            proof.push(Node {
-                inner: node.key().to_bytes(),
-            });
+            proof.push(Node::new(node.key().to_bytes()));
         }
         assert_eq!(proof.len(), max_depth as usize);
 
@@ -228,9 +226,7 @@ pub mod gummyroll {
 
         let mut proof = vec![];
         for node in ctx.remaining_accounts.iter() {
-            proof.push(Node {
-                inner: node.key().to_bytes(),
-            });
+            proof.push(Node::new(node.key().to_bytes()));
         }
         assert_eq!(proof.len(), header.max_depth as usize);
 
@@ -286,9 +282,7 @@ pub mod gummyroll {
 
         let mut proof = vec![];
         for node in ctx.remaining_accounts.iter() {
-            proof.push(Node {
-                inner: node.key().to_bytes(),
-            });
+            proof.push(Node::new(node.key().to_bytes()));
         }
         assert_eq!(proof.len(), header.max_depth as usize);
 
