@@ -1,5 +1,11 @@
 version: "3.9"
 services:
+  api:
+    build:
+      context: nft_api
+      dockerfile: Dockerfile
+    ports:
+      - "9090:9090"
   redis:
     image: "redis:alpine"
     ports:

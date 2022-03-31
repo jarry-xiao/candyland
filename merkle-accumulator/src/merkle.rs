@@ -111,7 +111,7 @@ impl MerkleTree {
     fn update_root_from_leaf(&mut self, leaf_idx: usize) {
         let mut node = self.leaf_nodes[leaf_idx].clone();
         loop {
-            let ref_node = node.clone(); 
+            let ref_node = node.clone();
             if ref_node.borrow().parent.is_none() {
                 self.root = ref_node.borrow().node;
                 break;

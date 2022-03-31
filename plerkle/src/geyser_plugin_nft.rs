@@ -1,25 +1,41 @@
-
+use anchor_client::anchor_lang;
+use std::borrow::{Borrow, BorrowMut};
+use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
+
 extern crate redis;
-use redis::{Client, Connection};
-use redis::Commands;
 use crate::accounts_selector::AccountsSelector;
+use crate::error::PlerkleError;
 use crate::transaction_selector::TransactionSelector;
-use solana_geyser_plugin_interface::geyser_plugin_interface::{GeyserPluginError, ReplicaAccountInfoVersions, ReplicaBlockInfoVersions, ReplicaTransactionInfoVersions, Result, SlotStatus};
+use itertools::Itertools;
+use anchor_lang::Event;
+use redis::streams::StreamMaxlen;
+use redis::Commands;
+use redis::{Client, Connection, RedisResult};
+use regex::Regex;
+use solana_geyser_plugin_interface::geyser_plugin_interface::{
+    GeyserPluginError, ReplicaAccountInfoVersions, ReplicaBlockInfoVersions,
+    ReplicaTransactionInfoVersions, Result, SlotStatus,
+};
+use std::str::FromStr;
+use solana_sdk::pubkey::Pubkey;
 use {
     log::*,
     solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPlugin,
     std::{fs::File, io::Read},
     thiserror::Error,
 };
+use crate::programs::gummy_roll::handle_change_log_event;
+
+
 
 #[derive(Default)]
 pub struct Plerkle {
     accounts_selector: Option<AccountsSelector>,
     transaction_selector: Option<TransactionSelector>,
     redis_connection: Option<Connection>,
+    programs: HashMap<String, Pubkey>
 }
-
 impl Plerkle {
     pub fn new() -> Self {
         Self::default()
@@ -79,21 +95,9 @@ impl Plerkle {
     }
 }
 
-#[derive(Error, Debug)]
-pub enum PlerkleError {
-    #[error("Error connecting to the backend data store. Error message: ({msg})")]
-    DataStoreConnectionError { msg: String },
-
-    #[error("Error preparing data store schema. Error message: ({msg})")]
-    DataSchemaError { msg: String },
-
-    #[error("Error preparing data store schema. Error message: ({msg})")]
-    ConfigurationError { msg: String },
-}
-
 impl Debug for Plerkle {
     fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!()
+        Ok(())
     }
 }
 
@@ -116,18 +120,22 @@ impl GeyserPlugin for Plerkle {
         let result: serde_json::Value = serde_json::from_str(&contents).unwrap();
         self.accounts_selector = Some(Self::create_accounts_selector_from_config(&result));
         self.transaction_selector = Some(Self::create_transaction_selector_from_config(&result));
-
         let client = redis::Client::open("redis://redis/").unwrap();
         self.redis_connection = client
             .get_connection()
             .map_err(|e| {
                 error!("{}", e.to_string());
-                GeyserPluginError::Custom(
-                    Box::new(PlerkleError::ConfigurationError { msg: e.to_string() })
-                )
+                GeyserPluginError::Custom(Box::new(PlerkleError::ConfigurationError {
+                    msg: e.to_string(),
+                }))
             })
             .ok();
         info!("Plugin connected to redis");
+        self.programs = [
+            (String::from("GR"), Pubkey::from_str("GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD").unwrap()),
+            (String::from("GRC"), Pubkey::from_str("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS").unwrap()),
+            (String::from("TM"), Pubkey::from_str("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s").unwrap())
+        ].into();
         Ok(())
     }
 
@@ -166,37 +174,48 @@ impl GeyserPlugin for Plerkle {
         slot: u64,
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
         match transaction {
-            ReplicaTransactionInfoVersions::V0_0_1(transactionv1) => {
-                info!("Updating txn: {:?} {:?}", transactionv1, slot);
-                let transaction_info = transactionv1;
-                if let Some(transaction_selector) = &self.transaction_selector {
-                    if !transaction_selector.is_transaction_selected(
+            ReplicaTransactionInfoVersions::V0_0_1(transaction_info) => {
+                let account_keys = transaction_info.transaction.message().account_keys();
+
+                if transaction_info.transaction_status_meta.status.is_err() {
+                    return Ok(());
+                }
+                return match &self.transaction_selector {
+                    Some(transaction_selector)
+                    if transaction_selector.is_transaction_selected(
                         transaction_info.is_vote,
-                        transaction_info.transaction.message().account_keys_iter(),
-                    ) {
-                        return Ok(());
+                        Box::new(account_keys.iter()),
+                    ) =>
+                        {
+                            let mut keys = account_keys.iter();
+                            //TODO -> change this to enums from config
+                            let gummy_roll = self.programs.get("GR").unwrap();
+                            if keys.contains(gummy_roll) {
+                                let maxlen = StreamMaxlen::Approx(55000);
+                                let change_log_event = handle_change_log_event(transaction_info);
+                                if change_log_event.is_ok() {
+                                    change_log_event.unwrap().iter().for_each(|ev| {
+                                        let res: RedisResult<()> = self
+                                            .redis_connection
+                                            .as_mut()
+                                            .unwrap()
+                                            .xadd_maxlen("GM_CL", maxlen, "*", &[("data", ev)]);
+                                        if res.is_err() {
+                                            error!("{}", res.err().unwrap());
+                                        } else {
+                                            info!("Data Sent")
+                                        }
+                                    });
+                                }
+                            }
+                            Ok(())
+                        }
+                    _ => {
+                        Ok(())
                     }
-                } else {
-                    return Ok(());
                 }
-                if transactionv1.transaction_status_meta.status.is_err() {
-                    return Ok(());
-                }
-                let txid = format!("txn.{}", transactionv1.signature.to_string());
-                info!("{:?}",  self.redis_connection.is_some());
-                let mut con  = self.redis_connection.as_mut().unwrap();
-                redis::cmd("SET")
-                    .arg(&[txid, slot.to_string()])
-                    .query(con)
-                    .map_err(|e| {
-                        error!("{}", e.to_string());
-                        GeyserPluginError::Custom(
-                            Box::new(PlerkleError::ConfigurationError { msg: e.to_string() })
-                        )
-                    })?;
             }
         }
-        Ok(())
     }
 
     fn notify_block_metadata(

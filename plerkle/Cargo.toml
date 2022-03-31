@@ -13,17 +13,23 @@ documentation = "https://docs.rs/solana-geyser-plugin-interface"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-redis = {version = "0.21.5", features = ["aio", "tokio-comp"]}
+redis = {version = "0.21.5", features = ["streams"]}
 log = "0.4.11"
 async-trait = "0.1.53"
-solana-sdk = { version = "=1.9.13" }
-solana-transaction-status = { version = "=1.9.13" }
+solana-sdk = { version = "=1.10.3" }
+solana-transaction-status = { version = "=1.10.3" }
 thiserror = "1.0.30"
-solana-geyser-plugin-interface  = { version = "=1.9.13" }
-solana-logger = { version = "=1.9.13" }
-solana-measure = { version = "=1.9.13" }
-solana-metrics = { version = "=1.9.13" }
-solana-runtime = { version = "=1.9.13" }
+regex = "1.5.5"
+itertools = "0.1"
+base64 = "0.13.0"
+lazy_static = "1.4.0"
+solana-geyser-plugin-interface  = { version = "=1.10.3" }
+solana-logger = { version = "=1.10.3" }
+solana-measure = { version = "=1.10.3" }
+solana-metrics = { version = "=1.10.3" }
+solana-runtime = { version = "=1.10.3" }
+anchor-client = "0.22.1"
+gummyroll={path= "../programs/gummyroll"}
 bs58 = "0.4.0"
 bytemuck = "1.7.2"
 serde = "1.0.133"

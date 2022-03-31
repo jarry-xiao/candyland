@@ -82,7 +82,7 @@ macro_rules! merkle_roll_apply_fn {
             // (21, 128) => merkle_roll_depth_size_apply_fn!(21, 128, $bytes, $func, $($arg)*),
             // (21, 256) => merkle_roll_depth_size_apply_fn!(21, 256, $bytes, $func, $($arg)*),
             // (21, 512) => merkle_roll_depth_size_apply_fn!(21, 512, $bytes, $func, $($arg)*),
-            // (21, 1024) => merkle_roll_depth_size_apply_fn!(21, 1024, $bytes, $func, $($arg)*),
+            (21, 1024) => merkle_roll_depth_size_apply_fn!(21, 1024, $bytes, $func, $($arg)*),
             // (21, 2448) => merkle_roll_depth_size_apply_fn!(21, 2448, $bytes, $func, $($arg)*),
             // (22, 64) => merkle_roll_depth_size_apply_fn!(22, 64, $bytes, $func, $($arg)*),
             // (22, 128) => merkle_roll_depth_size_apply_fn!(22, 128, $bytes, $func, $($arg)*),
@@ -381,9 +381,9 @@ impl From<[u8; 32]> for Node {
 #[event]
 pub struct ChangeLogEvent {
     /// Nodes of off-chain merkle tree
-    path: Vec<Node>,
+    pub path: Vec<Node>,
     /// Bitmap of node parity (used when hashing)
-    index: u32,
+    pub index: u32,
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -613,6 +613,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             index: self.rightmost_proof.index,
             _padding: 0,
         };
+        // TODO -> move this to post serialization to ensure nothing fails.
         emit!(self.change_logs[self.active_index as usize].to_event());
         self.rightmost_proof.index = self.rightmost_proof.index + 1;
         self.rightmost_proof.leaf = leaf;
@@ -784,7 +785,8 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         if self.rightmost_proof.index < (1 << MAX_DEPTH) {
             if index < self.rightmost_proof.index as u32 {
                 if index != self.rightmost_proof.index - 1 {
-                    let common_path_len = ((index ^ (self.rightmost_proof.index - 1) as u32) << padding)
+                    let common_path_len = ((index ^ (self.rightmost_proof.index - 1) as u32)
+                        << padding)
                         .leading_zeros() as usize;
                     msg!("Common path len {}", common_path_len);
                     let critbit_index = (MAX_DEPTH - 1) - common_path_len;

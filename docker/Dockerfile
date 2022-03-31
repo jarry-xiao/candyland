@@ -1,4 +1,4 @@
-FROM solanalabs/solana:v1.10.2
+FROM solanalabs/solana:v1.10.3
 RUN apt-get update; apt-get -y install curl
 COPY . .
 RUN chmod +x ./*.sh

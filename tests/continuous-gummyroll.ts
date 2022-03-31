@@ -10,7 +10,6 @@ import {
   SystemProgram,
   Transaction,
 } from "@solana/web3.js";
-import * as borsh from 'borsh';
 import { assert } from "chai";
 
 import { buildTree, hash, getProofOfLeaf, updateTree } from "./merkle-tree";
@@ -26,9 +25,10 @@ describe("gummyroll-continuous", () => {
   const connection = new Connection(
       "http://localhost:8899",
       {
-          commitment: 'singleGossip'
+          commitment: 'confirmed'
       }
   );
+  console.log(connection);
   const payer = Keypair.generate();
   const wallet = new NodeWallet(payer)
   anchor.setProvider(new Provider(connection, wallet, {commitment: connection.commitment, skipPreflight: true} ));
@@ -120,6 +120,9 @@ describe("gummyroll-continuous", () => {
     );
   });
 
+
+
+
   it("Continuous updating and syncing", async () => {
     let txs = [];
     for (let i = 0; i < 1000; i++) {
@@ -145,7 +148,7 @@ describe("gummyroll-continuous", () => {
 
         tx.feePayer = payer.publicKey;
         tx.recentBlockhash = (
-            await connection.getLatestBlockhash('singleGossip')
+            await connection.getLatestBlockhash('confirmed')
         ).blockhash;
 
         await wallet.signTransaction(tx);
@@ -160,7 +163,8 @@ describe("gummyroll-continuous", () => {
                 })
         );
 
-        await sleep(100);
+        //await sleep(100);
+        //await sleep(100);
     }
     let transactions = await Promise.all(txs);
     console.log("Txs:", transactions)
