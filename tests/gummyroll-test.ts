@@ -7,19 +7,12 @@ import {
   SystemProgram,
   Transaction, Connection,
 } from "@solana/web3.js";
-import * as borsh from 'borsh';
+import * as borsh from "borsh";
 import { assert } from "chai";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 import { buildTree, hash, getProofOfLeaf, updateTree } from "./merkle-tree";
 import { decodeMerkleRoll, getMerkleRollAccountSize, OnChainMerkleRoll } from "./merkle-roll-serde";
-
-const logTx = async (provider, tx) => {
-  await provider.connection.confirmTransaction(tx, "confirmed");
-  console.log(
-    (await provider.connection.getConfirmedTransaction(tx, "confirmed")).meta
-      .logMessages
-  );
-};
+import { logTx } from "./utils";
 
 async function checkTxStatus(
   provider: anchor.Provider,
@@ -63,6 +56,8 @@ describe("gummyroll", () => {
   console.log("Created root using leaf pubkey: ", Uint8Array.from(leaves[0]));
   console.log("program id:", program.programId.toString());
   let listener = program.addEventListener("ChangeLogEvent", (event) => {
+
+  let listener = program.addEventListener("ChangeLogEvent", (event) => {
     updateTree(tree, Buffer.from(event.path[0].inner), event.index);
   });
 
@@ -92,7 +87,11 @@ describe("gummyroll", () => {
     const root = { inner: Array.from(tree.root) };
     const leaf = { inner: Array.from(leaves[0]) };
     const proof = getProofOfLeaf(tree, 0).map((node) => {
-      return { pubkey: new PublicKey(node.node), isSigner: false, isWritable: false };
+      return {
+        pubkey: new PublicKey(node.node),
+        isSigner: false,
+        isWritable: false,
+      };
     });
     const initGummyrollIx = await program.instruction.initGummyrollWithRoot(
       MAX_DEPTH,
@@ -106,7 +105,7 @@ describe("gummyroll", () => {
           authority: payer.publicKey,
         },
         signers: [payer],
-        remainingAccounts: proof
+        remainingAccounts: proof,
       }
     );
 
@@ -120,10 +119,16 @@ describe("gummyroll", () => {
     );
 
     let onChainMerkle = decodeMerkleRoll(merkleRoll.data);
-    
+
     // Check header bytes are set correctly
-    assert(onChainMerkle.header.maxDepth === MAX_DEPTH, `Max depth does not match ${onChainMerkle.header.maxDepth}, expected ${MAX_DEPTH}`);
-    assert(onChainMerkle.header.maxBufferSize === MAX_SIZE, `Max buffer size does not match ${onChainMerkle.header.maxBufferSize}, expected ${MAX_SIZE}`);
+    assert(
+      onChainMerkle.header.maxDepth === MAX_DEPTH,
+      `Max depth does not match ${onChainMerkle.header.maxDepth}, expected ${MAX_DEPTH}`
+    );
+    assert(
+      onChainMerkle.header.maxBufferSize === MAX_SIZE,
+      `Max buffer size does not match ${onChainMerkle.header.maxBufferSize}, expected ${MAX_SIZE}`
+    );
 
     assert(
       onChainMerkle.header.authority.equals(payer.publicKey),
@@ -182,7 +187,11 @@ describe("gummyroll", () => {
     const proof = getProofOfLeaf(tree, index);
 
     const nodeProof = proof.map((treeNode) => {
-      return { pubkey: new PublicKey(treeNode.node), isSigner: false, isWritable: false };
+      return {
+        pubkey: new PublicKey(treeNode.node),
+        isSigner: false,
+        isWritable: false,
+      };
     });
 
     const replaceLeafIx = program.instruction.replaceLeaf(
@@ -196,7 +205,7 @@ describe("gummyroll", () => {
           authority: payer.publicKey,
         },
         signers: [payer],
-        remainingAccounts: nodeProof
+        remainingAccounts: nodeProof,
       }
     );
 
@@ -227,12 +236,14 @@ describe("gummyroll", () => {
     let txList = [];
 
     const failedRoot = { inner: Array.from(tree.root) };
-    const failedLeaf = { inner: Array.from(tree.leaves[2].node) };
-    const failedProof = getProofOfLeaf(tree, 2).map(
-        (treeNode) => {
-            return { pubkey: new PublicKey(treeNode.node), isSigner: false, isWritable: false };
-        }
-    )
+    const failedLeaf = { inner: Array.from(tree.leaves[3 + MAX_SIZE].node) };
+    const failedProof = getProofOfLeaf(tree, 3 + MAX_SIZE).map((treeNode) => {
+      return {
+        pubkey: new PublicKey(treeNode.node),
+        isSigner: false,
+        isWritable: false,
+      };
+    });
 
     for (let i = 0; i < MAX_SIZE; i++) {
       const index = 3 + i;
@@ -246,7 +257,11 @@ describe("gummyroll", () => {
       changeArray.push({ newLeaf, index });
 
       const nodeProof = proof.map((treeNode) => {
-        return { pubkey: new PublicKey(treeNode.node), isSigner: false, isWritable: false };
+        return {
+          pubkey: new PublicKey(treeNode.node),
+          isSigner: false,
+          isWritable: false,
+        };
       });
 
       const insertOrAppendIx = await program.instruction.insertOrAppend(
@@ -273,12 +288,16 @@ describe("gummyroll", () => {
     }
     await Promise.all(txList);
 
-    
+
 
     // Compare on-chain & off-chain roots
-    const merkleRoll = decodeMerkleRoll((await program.provider.connection.getAccountInfo(
-      merkleRollKeypair.publicKey
-    )).data);
+    const merkleRoll = decodeMerkleRoll(
+      (
+        await program.provider.connection.getAccountInfo(
+          merkleRollKeypair.publicKey
+        )
+      ).data
+    );
     const onChainRoot =
       merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
 
@@ -287,12 +306,32 @@ describe("gummyroll", () => {
       "Updated on chain root does not match root of updated off chain tree"
     );
 
+    console.log("Sending a valid update despite the root being out of date");
+    const newLeaf = payer.publicKey.toBuffer();
+    let missingRootTx = await program.rpc.replaceLeaf(
+      failedRoot,
+      failedLeaf,
+      { inner: Array.from(newLeaf) },
+      3 + MAX_SIZE,
+      {
+        accounts: {
+          merkleRoll: merkleRollKeypair.publicKey,
+          authority: payer.publicKey,
+        },
+        signers: [payer],
+        remainingAccounts: failedProof,
+      }
+    );
+    await logTx(program.provider, missingRootTx);
+
+    console.log("Update should fail if repeated even if root is not in buffer");
+    let result;
     try {
-      await program.rpc.replaceLeaf(
+      let failedTx = await program.rpc.replaceLeaf(
         failedRoot,
         failedLeaf,
-        Buffer.alloc(32),
-        2,
+        { inner: Array.from(newLeaf) },
+        3 + MAX_SIZE,
         {
           accounts: {
             merkleRoll: merkleRollKeypair.publicKey,
@@ -302,11 +341,13 @@ describe("gummyroll", () => {
           remainingAccounts: failedProof,
         }
       );
-      console.log("Unexpected success");
-      assert(false);
+      await logTx(program.provider, failedTx);
+      result = false;
     } catch (e) {
-      console.log("Expected failure");
+      console.log("Instruction failed as expected");
+      result = true;
     }
+    assert(result);
   });
 
   it("Kill listeners", async () => {
