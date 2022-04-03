@@ -2,6 +2,7 @@ import { NextPage } from "next";
 import { useRouter } from "next/router";
 import React, { FormEvent } from "react";
 import Button from "../../../components/Button";
+import addItem from "../../../lib/mutations/addItem";
 
 const OwnerAddItem: NextPage = () => {
   const router = useRouter();
@@ -9,6 +10,7 @@ const OwnerAddItem: NextPage = () => {
   const treeIdRef = React.createRef<HTMLInputElement>();
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    addItem(treeIdRef.current?.value!, dataRef.current?.value!);
   }
   return (
     <>

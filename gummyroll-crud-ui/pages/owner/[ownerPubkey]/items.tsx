@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import OwnerItem from "../../../components/OwnerItem";
 import getItemsForOwner from "../../../lib/loaders/getItemsForOwner";
+import Button from "../../../components/Button";
 
 const OwnerItemsList: NextPage<
   InferNextPropsType<typeof getServerSideProps>
@@ -28,7 +29,7 @@ const OwnerItemsList: NextPage<
         href={{ pathname: "/owner/[ownerPubkey]/add", query: { ownerPubkey } }}
         passHref
       >
-        <button>Add</button>
+        <Button>Add</Button>
       </Link>
     </>
   );
