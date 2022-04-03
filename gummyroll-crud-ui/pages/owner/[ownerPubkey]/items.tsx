@@ -6,11 +6,13 @@ import { useRouter } from "next/router";
 import OwnerItem from "../../../components/OwnerItem";
 import getItemsForOwner from "../../../lib/loaders/getItemsForOwner";
 import Button from "../../../components/Button";
+import { useWallet } from "@solana/wallet-adapter-react";
 
 const OwnerItemsList: NextPage<
   InferNextPropsType<typeof getServerSideProps>
 > = ({ items }) => {
   const router = useRouter();
+  const { publicKey } = useWallet();
   if (items.length === 0) {
     return <h1>No items</h1>;
   }
@@ -25,12 +27,17 @@ const OwnerItemsList: NextPage<
           </ImageListItem>
         ))}
       </ImageList>
-      <Link
-        href={{ pathname: "/owner/[ownerPubkey]/add", query: { ownerPubkey } }}
-        passHref
-      >
-        <Button>Add</Button>
-      </Link>
+      {publicKey ? (
+        <Link
+          href={{
+            pathname: "/owner/[ownerPubkey]/add",
+            query: { ownerPubkey },
+          }}
+          passHref
+        >
+          <Button>Add</Button>
+        </Link>
+      ) : null}
     </>
   );
 };

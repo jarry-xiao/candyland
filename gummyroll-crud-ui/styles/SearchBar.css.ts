@@ -1,14 +1,18 @@
 import { style } from "@vanilla-extract/css";
 
+export const accountControls = style({
+  display: "flex",
+  gap: 4,
+});
+
 export const header = style({
-  backgroundColor: "white",
-  boxSizing: "border-box",
-  left: 0,
+  display: "flex",
+  gap: 12,
   padding: 16,
-  position: "fixed",
-  right: 0,
-  top: 0,
-  zIndex: 1,
+});
+
+export const inputRoot = style({
+  height: "100%",
 });
 
 export const input = style({
@@ -20,13 +24,15 @@ export const input = style({
   boxSizing: "border-box",
   height: "100%",
   padding: 12,
+  fontSize: ".8rem",
   width: "100%",
-  fontSize: "1rem",
 });
 
 export const inputHint = style({
   color: "darkgray",
   fontSize: "0.8rem",
   paddingLeft: 12,
-  margin: "6px 0 0 0",
+  margin: "0 0 0 16px",
 });
+
+export const searchForm = style({ flexGrow: 1 });
