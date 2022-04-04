@@ -17,13 +17,23 @@ use std::ops::DerefMut;
 declare_id!("GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD");
 
 macro_rules! merkle_roll_depth_size_apply_fn {
-    ($max_depth:literal, $max_size:literal, $bytes:ident, $func:ident, $($arg:tt)*) => {
+    ($max_depth:literal, $max_size:literal, $emit_msg:ident, $id:ident, $bytes:ident, $func:ident, $($arg:tt)*) => {
         if size_of::<MerkleRoll::<$max_depth, $max_size>>() != $bytes.len() {
             msg!("Received account of invalid length");
             None
         } else {
             match MerkleRoll::<$max_depth, $max_size>::load_mut_bytes($bytes) {
-                Ok(merkle_roll) => merkle_roll.$func($($arg)*),
+                Ok(merkle_roll) => {
+                    match merkle_roll.$func($($arg)*) {
+                        Some(x) => {
+                            if $emit_msg {
+                                emit!(merkle_roll.get_change_log().to_event($id));
+                            }
+                            Some(x)
+                        }
+                        None => None,
+                    }
+                }
                 Err(e) => {
                     msg!("Error zero copying merkle roll {}", e);
                     None
@@ -34,28 +44,28 @@ macro_rules! merkle_roll_depth_size_apply_fn {
 }
 
 macro_rules! merkle_roll_apply_fn {
-    ($header:ident, $bytes:ident, $func:ident, $($arg:tt)*) => {
+    ($header:ident, $emit_msg:ident, $id:ident, $bytes:ident, $func:ident, $($arg:tt)*) => {
         match ($header.max_depth, $header.max_buffer_size) {
-            (14, 64) => merkle_roll_depth_size_apply_fn!(14, 64, $bytes, $func, $($arg)*),
-            (14, 256) => merkle_roll_depth_size_apply_fn!(14, 256, $bytes, $func, $($arg)*),
-            (14, 1024) => merkle_roll_depth_size_apply_fn!(14, 1024, $bytes, $func, $($arg)*),
-            (14, 2448) => merkle_roll_depth_size_apply_fn!(14, 2448, $bytes, $func, $($arg)*),
-            (16, 64) => merkle_roll_depth_size_apply_fn!(16, 64, $bytes, $func, $($arg)*),
-            (16, 256) => merkle_roll_depth_size_apply_fn!(16, 256, $bytes, $func, $($arg)*),
-            (16, 1024) => merkle_roll_depth_size_apply_fn!(16, 1024, $bytes, $func, $($arg)*),
-            (16, 2448) => merkle_roll_depth_size_apply_fn!(16, 2448, $bytes, $func, $($arg)*),
-            (18, 64) => merkle_roll_depth_size_apply_fn!(18, 64, $bytes, $func, $($arg)*),
-            (18, 256) => merkle_roll_depth_size_apply_fn!(18, 256, $bytes, $func, $($arg)*),
-            (18, 1024) => merkle_roll_depth_size_apply_fn!(18, 1024, $bytes, $func, $($arg)*),
-            (18, 2448) => merkle_roll_depth_size_apply_fn!(18, 2448, $bytes, $func, $($arg)*),
-            (20, 64) => merkle_roll_depth_size_apply_fn!(20, 64, $bytes, $func, $($arg)*),
-            (20, 256) => merkle_roll_depth_size_apply_fn!(20, 256, $bytes, $func, $($arg)*),
-            (20, 1024) => merkle_roll_depth_size_apply_fn!(20, 1024, $bytes, $func, $($arg)*),
-            (20, 2448) => merkle_roll_depth_size_apply_fn!(20, 2448, $bytes, $func, $($arg)*),
-            (22, 64) => merkle_roll_depth_size_apply_fn!(22, 64, $bytes, $func, $($arg)*),
-            (22, 256) => merkle_roll_depth_size_apply_fn!(22, 256, $bytes, $func, $($arg)*),
-            (22, 1024) => merkle_roll_depth_size_apply_fn!(22, 1024, $bytes, $func, $($arg)*),
-            (22, 2448) => merkle_roll_depth_size_apply_fn!(22, 2448, $bytes, $func, $($arg)*),
+            (14, 64) => merkle_roll_depth_size_apply_fn!(14, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (14, 256) => merkle_roll_depth_size_apply_fn!(14, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (14, 1024) => merkle_roll_depth_size_apply_fn!(14, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (14, 2448) => merkle_roll_depth_size_apply_fn!(14, 2448, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (16, 64) => merkle_roll_depth_size_apply_fn!(16, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (16, 256) => merkle_roll_depth_size_apply_fn!(16, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (16, 1024) => merkle_roll_depth_size_apply_fn!(16, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (16, 2448) => merkle_roll_depth_size_apply_fn!(16, 2448, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (18, 64) => merkle_roll_depth_size_apply_fn!(18, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (18, 256) => merkle_roll_depth_size_apply_fn!(18, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (18, 1024) => merkle_roll_depth_size_apply_fn!(18, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (18, 2448) => merkle_roll_depth_size_apply_fn!(18, 2448, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (20, 64) => merkle_roll_depth_size_apply_fn!(20, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (20, 256) => merkle_roll_depth_size_apply_fn!(20, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (20, 1024) => merkle_roll_depth_size_apply_fn!(20, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (20, 2448) => merkle_roll_depth_size_apply_fn!(20, 2448, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (22, 64) => merkle_roll_depth_size_apply_fn!(22, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (22, 256) => merkle_roll_depth_size_apply_fn!(22, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (22, 1024) => merkle_roll_depth_size_apply_fn!(22, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (22, 2448) => merkle_roll_depth_size_apply_fn!(22, 2448, $emit_msg, $id, $bytes, $func, $($arg)*),
             _ => {
                 msg!("Failed to apply {} on merkle roll with max depth {} and max buffer size {}", stringify!($func), $header.max_depth, $header.max_buffer_size);
                 None
@@ -145,7 +155,8 @@ pub mod gummyroll {
             max_buffer_size,
             &ctx.accounts.authority.key(),
         )?;
-        match merkle_roll_apply_fn!(header, roll_bytes, initialize,) {
+        let id = ctx.accounts.merkle_roll.key();
+        match merkle_roll_apply_fn!(header, false, id, roll_bytes, initialize,) {
             Some(new_root) => {
                 msg!("New Root: {:?}", new_root);
                 Ok(())
@@ -176,14 +187,15 @@ pub mod gummyroll {
 
         let mut proof = vec![];
         for node in ctx.remaining_accounts.iter() {
-            proof.push(Node {
-                inner: node.key().to_bytes(),
-            });
+            proof.push(Node::new(node.key().to_bytes()));
         }
         assert_eq!(proof.len(), max_depth as usize);
 
+        let id = ctx.accounts.merkle_roll.key();
         match merkle_roll_apply_fn!(
             header,
+            false,
+            id,
             roll_bytes,
             initialize_with_root,
             root,
@@ -214,14 +226,15 @@ pub mod gummyroll {
 
         let mut proof = vec![];
         for node in ctx.remaining_accounts.iter() {
-            proof.push(Node {
-                inner: node.key().to_bytes(),
-            });
+            proof.push(Node::new(node.key().to_bytes()));
         }
         assert_eq!(proof.len(), header.max_depth as usize);
 
+        let id = ctx.accounts.merkle_roll.key();
         match merkle_roll_apply_fn!(
             header,
+            true,
+            id,
             roll_bytes,
             set_leaf,
             root,
@@ -245,7 +258,8 @@ pub mod gummyroll {
 
         let header = load_and_check_header(header_bytes, ctx.accounts.authority.key())?;
 
-        match merkle_roll_apply_fn!(header, roll_bytes, append, leaf) {
+        let id = ctx.accounts.merkle_roll.key();
+        match merkle_roll_apply_fn!(header, true, id, roll_bytes, append, leaf) {
             Some(new_root) => {
                 msg!("New Root: {:?}", new_root);
                 Ok(())
@@ -268,14 +282,15 @@ pub mod gummyroll {
 
         let mut proof = vec![];
         for node in ctx.remaining_accounts.iter() {
-            proof.push(Node {
-                inner: node.key().to_bytes(),
-            });
+            proof.push(Node::new(node.key().to_bytes()));
         }
         assert_eq!(proof.len(), header.max_depth as usize);
 
+        let id = ctx.accounts.merkle_roll.key();
         match merkle_roll_apply_fn!(
             header,
+            true,
+            id,
             roll_bytes,
             fill_empty_or_append,
             root,
@@ -355,6 +370,8 @@ impl From<[u8; 32]> for Node {
 
 #[event]
 pub struct ChangeLogEvent {
+    /// Public key of the Merkle Roll
+    id: Pubkey,
     /// Nodes of off-chain merkle tree
     path: Vec<Node>,
     /// Bitmap of node parity (used when hashing)
@@ -375,8 +392,9 @@ pub struct ChangeLog<const MAX_DEPTH: usize> {
 }
 
 impl<const MAX_DEPTH: usize> ChangeLog<MAX_DEPTH> {
-    pub fn to_event(&self) -> ChangeLogEvent {
+    pub fn to_event(&self, id: Pubkey) -> ChangeLogEvent {
         ChangeLogEvent {
+            id,
             path: self.path.to_vec(),
             index: self.index,
         }
@@ -522,7 +540,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
     fn initialize_tree(&mut self, leaf: Node, mut proof: [Node; MAX_DEPTH]) -> Option<Node> {
         let old_root = recompute(EMPTY, &proof, 0);
         if old_root == empty_node(MAX_DEPTH as u32) {
-            self.update_and_apply_proof(EMPTY, leaf, &mut proof, 0, 0, false)
+            self.update_and_apply_proof(EMPTY, leaf, &mut proof, 0, 0, false, false)
         } else {
             None
         }
@@ -588,7 +606,6 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             index: self.rightmost_proof.index,
             _padding: 0,
         };
-        emit!(self.change_logs[self.active_index as usize].to_event());
         self.rightmost_proof.index = self.rightmost_proof.index + 1;
         self.rightmost_proof.leaf = leaf;
         Some(node)
@@ -667,26 +684,26 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             if self.change_logs[j as usize].root != current_root {
                 continue;
             }
-            let old_root = recompute(leaf, &proof, index);
-            if old_root == current_root && index > self.rightmost_proof.index && append_on_conflict
-            {
-                return self.append(new_leaf);
-            } else if old_root == current_root {
-                return self.update_and_apply_proof(
-                    leaf,
-                    new_leaf,
-                    &mut proof,
-                    index,
-                    j,
-                    append_on_conflict,
-                );
-            } else {
-                msg!("Invalid proof");
-                return None;
-            }
+            return self.update_and_apply_proof(
+                leaf,
+                new_leaf,
+                &mut proof,
+                index,
+                j,
+                append_on_conflict,
+                false,
+            );
         }
-        msg!("Failed to find root");
-        None
+        msg!("Failed to find root, attempting to replay change log");
+        self.update_and_apply_proof(
+            leaf,
+            new_leaf,
+            &mut proof,
+            index,
+            self.active_index.wrapping_sub(self.buffer_size) & mask as u64,
+            append_on_conflict,
+            true,
+        )
     }
 
     /// Fast-forwards submitted proof to be valid for the root at `self.current_index`
@@ -702,14 +719,18 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         index: u32,
         mut j: u64,
         append_on_conflict: bool,
+        use_full_buffer: bool,
     ) -> Option<Node> {
         let mut updated_leaf = leaf;
-        msg!("Fast-forwarding proof");
+        msg!("Fast-forwarding proof, starting index {}", j);
         let mask: usize = MAX_BUFFER_SIZE - 1;
         let padding: usize = 32 - MAX_DEPTH;
         sol_log_compute_units();
-        while j != self.active_index {
-            // Implement circular index addition
+        // Implement circular index addition
+        loop {
+            if !use_full_buffer && j == self.active_index {
+                break;
+            }
             j += 1;
             j &= mask as u64;
             if index != self.change_logs[j as usize].index {
@@ -720,18 +741,27 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             } else {
                 updated_leaf = self.change_logs[j as usize].get_leaf();
             }
+            if use_full_buffer && j == self.active_index {
+                break;
+            }
         }
         sol_log_compute_units();
-        if updated_leaf != leaf {
-            if leaf == EMPTY && append_on_conflict {
+        let valid_root = recompute(updated_leaf, proof, index) == self.get_change_log().root;
+        if updated_leaf != leaf || index > self.rightmost_proof.index {
+            // If the supplied root was not found in the queue, the instruction should fail if the leaf index changes
+            if !use_full_buffer && valid_root && leaf == EMPTY && append_on_conflict {
                 return self.append(new_leaf);
             } else {
                 msg!("Leaf already updated");
                 return None;
             }
         }
-        self.increment_active_index();
-        Some(self.apply_changes(new_leaf, proof, index))
+        if valid_root {
+            self.increment_active_index();
+            Some(self.apply_changes(new_leaf, proof, index))
+        } else {
+            None
+        }
     }
 
     fn increment_active_index(&mut self) {
@@ -753,13 +783,12 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         // Also updates change_log's current root
         let root = change_log.recompute_path(start, proof);
 
-        emit!(change_log.to_event());
-
         // Update rightmost path if possible
         if self.rightmost_proof.index < (1 << MAX_DEPTH) {
             if index < self.rightmost_proof.index as u32 {
                 if index != self.rightmost_proof.index - 1 {
-                    let common_path_len = ((index ^ (self.rightmost_proof.index - 1) as u32) << padding)
+                    let common_path_len = ((index ^ (self.rightmost_proof.index - 1) as u32)
+                        << padding)
                         .leading_zeros() as usize;
                     msg!("Common path len {}", common_path_len);
                     let critbit_index = (MAX_DEPTH - 1) - common_path_len;
