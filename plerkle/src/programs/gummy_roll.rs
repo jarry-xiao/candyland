@@ -5,8 +5,6 @@ use solana_geyser_plugin_interface::geyser_plugin_interface::{
     GeyserPluginError, ReplicaTransactionInfo,
 };
 
-
-
 pub fn handle_change_log_event(
     transaction: &ReplicaTransactionInfo,
 ) -> Result<Vec<String>, GeyserPluginError> {

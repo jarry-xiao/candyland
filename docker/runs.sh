@@ -24,7 +24,6 @@ cat << EOL > accountsdb-plugin-config.json
     }
 }
 EOL
-export RUST_LOG=info # if RUST_LOG is unset, default to info
 export RUST_BACKTRACE=1
 dataDir=$PWD/config/"$(basename "$0" .sh)"
 ledgerDir=$PWD/config/ledger
@@ -37,10 +36,6 @@ args=(
   --reset
   --rpc-port 8899
   --bpf-program metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s /so/mpl_token_metadata.so
-  --bpf-program Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS /so/gummyroll_crud.so
-  --bpf-program GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD /so/gummyroll.so
-  --bpf-program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb /so/spl_token_2022.so
-  --bpf-program ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL /so/spl_associated_token_account.so
   --geyser-plugin-config accountsdb-plugin-config.json
 )
 # shellcheck disable=SC2086

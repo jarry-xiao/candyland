@@ -1,4 +1,5 @@
 use anchor_lang::{prelude::*, solana_program::keccak};
+use anchor_lang::solana_program::instruction::Instruction;
 use gummyroll::{program::Gummyroll, Node};
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
@@ -30,6 +31,26 @@ pub struct Transfer<'info> {
     /// CHECK: This is safe because we don't read from or write to this account.
     pub new_owner: UncheckedAccount<'info>,
     pub gummyroll_program: Program<'info, Gummyroll>,
+}
+
+pub enum InstructionName {
+    Unknown,
+    Add,
+    Transfer,
+    Remove
+}
+pub fn get_instruction_type(full_bytes: &Vec<u8>) -> InstructionName {
+    let disc: [u8; 8] = {
+        let mut disc = [0; 8];
+        disc.copy_from_slice(&full_bytes[..8]);
+        disc
+    };
+    match disc {
+        [163, 52, 200, 231, 140, 3, 69, 186] => InstructionName::Transfer,
+        [199, 186, 9, 79, 96, 129, 24, 106] => InstructionName::Remove,
+        [41, 249, 249, 146, 197, 111, 56, 181] => InstructionName::Add,
+        _ => InstructionName::Unknown
+    }
 }
 
 #[program]

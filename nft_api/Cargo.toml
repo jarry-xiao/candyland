@@ -12,7 +12,8 @@ hyper = "0.14"
 anchor-client="0.22.1"
 base64 = "0.13.0"
 thiserror = "1.0.30"
-merk = { git= "https://github.com/nomic-io/merk", ref="develop"}
 tokio = { version = "1.17.0", features = ["full"] }
 gummyroll={path= "../programs/gummyroll", features = ["no-entrypoint"]}
+sqlx = "0.5.11"
+sea-orm = { version = "^0", features = [ "sqlx-postgres", "runtime-tokio-rustls", "macros" ], default-features = false }
 tokio-postgres = "0.7.5"
