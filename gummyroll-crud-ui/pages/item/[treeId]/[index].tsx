@@ -1,17 +1,33 @@
-import InferNextPropsType from "infer-next-props-type";
+import { useRouter } from "next/router";
 import { NextPage, NextPageContext } from "next/types";
+import useSWR, { unstable_serialize } from "swr";
 import ItemImage from "../../../components/ItemImage";
 import getItem from "../../../lib/loaders/getItem";
+import { ItemPayload } from "../../../lib/loaders/ItemTypes";
 
-const ItemDetail: NextPage<InferNextPropsType<typeof getServerSideProps>> = ({
-  item: { data, index, treeId },
-}) => {
+const ItemDetail: NextPage = () => {
+  const router = useRouter();
+  const index = router.query.index as NonNullable<
+    typeof router.query.treeId
+  >[number];
+  const treeId = router.query.treeId as NonNullable<
+    typeof router.query.treeId
+  >[number];
+  const { data } = useSWR<Awaited<ReturnType<typeof getItem>>>([
+    "item",
+    treeId,
+    index,
+  ]);
+  if (!data) {
+    return null;
+  }
+  const { data: itemData, owner } = data!;
   return (
     <>
       <h1>
-        Item {treeId}/{index}
+        Item {treeId}/{index} belonging to {owner}
       </h1>
-      <ItemImage data={data} treeId={treeId} />
+      <ItemImage data={itemData} treeId={treeId} />
     </>
   );
 };
@@ -23,8 +39,11 @@ export async function getServerSideProps({ query }: NextPageContext) {
   if (!item) {
     return { notFound: true };
   }
+  const serverData = {
+    [unstable_serialize(["item", treeId, index])]: item as ItemPayload,
+  };
   return {
-    props: { item },
+    props: { serverData },
   };
 }
 
