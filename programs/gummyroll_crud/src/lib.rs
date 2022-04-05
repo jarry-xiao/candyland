@@ -21,7 +21,6 @@ pub struct CreateTree<'info> {
     #[account(mut)]
     /// CHECK: unsafe
     pub merkle_roll: UncheckedAccount<'info>,
-    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]

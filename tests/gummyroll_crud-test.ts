@@ -81,7 +81,6 @@ describe("Gummyroll CRUD program", () => {
           authorityPda: treeAuthorityPDA,
           gummyrollProgram: Gummyroll.programId,
           merkleRoll: treeKeypair.publicKey,
-          systemProgram: anchor.web3.SystemProgram.programId,
         },
         signers: [treeAdminKeypair],
       }
