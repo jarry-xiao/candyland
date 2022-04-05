@@ -41,7 +41,7 @@ describe("gummyroll", () => {
 
   const payer = Keypair.generate();
   const MAX_SIZE = 64;
-  const MAX_DEPTH = 22;
+  const MAX_DEPTH = 20;
 
   const merkleRollKeypair = Keypair.generate();
   console.log("Payer key:", payer.publicKey);

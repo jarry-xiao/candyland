@@ -9,6 +9,7 @@ use anchor_lang::{
 use borsh::{BorshDeserialize, BorshSerialize};
 use bytemuck::{Pod, PodCastError, Zeroable};
 use std::any::type_name;
+use std::cmp::Ordering;
 use std::convert::AsRef;
 use std::mem::size_of;
 use std::ops::Deref;
@@ -562,39 +563,38 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         let mut change_list = [EMPTY; MAX_DEPTH];
         let mut intersection_node = self.rightmost_proof.leaf;
 
-        // Compute proof to the appended node from empty nodes
-        for i in 0..intersection {
+        // Compute append proof 
+        for i in 0..MAX_DEPTH {
             change_list[i] = node;
-            let hash = hashv(&[node.as_ref(), empty_node(i as u32).as_ref()]);
-            node.copy_from_slice(hash.as_ref());
-            let rightmost_hash = if ((self.rightmost_proof.index - 1) >> i) & 1 == 1 {
-                hashv(&[
-                    self.rightmost_proof.proof[i].as_ref(),
-                    intersection_node.as_ref(),
-                ])
-            } else {
-                hashv(&[
-                    intersection_node.as_ref(),
-                    self.rightmost_proof.proof[i].as_ref(),
-                ])
-            };
-            intersection_node.copy_from_slice(rightmost_hash.as_ref());
-            self.rightmost_proof.proof[i] = empty_node(i as u32);
-        }
-
-        // Compute the where the new node intersects the main tree
-        change_list[intersection] = node;
-        let hash = hashv(&[intersection_node.as_ref(), node.as_ref()]);
-        node.copy_from_slice(hash.as_ref());
-        self.rightmost_proof.proof[intersection] = intersection_node;
-
-        // Update the change list path up to the root
-        for i in intersection + 1..MAX_DEPTH {
-            change_list[i] = node;
-            let hash = if (self.rightmost_proof.index >> i) & 1 == 1 {
-                hashv(&[self.rightmost_proof.proof[i].as_ref(), node.as_ref()])
-            } else {
-                hashv(&[node.as_ref(), self.rightmost_proof.proof[i].as_ref()])
+            let hash = match i.partial_cmp(&intersection) {
+                Some(Ordering::Less) => {
+                    let rightmost_hash = if ((self.rightmost_proof.index - 1) >> i) & 1 == 1 {
+                        hashv(&[
+                            self.rightmost_proof.proof[i].as_ref(),
+                            intersection_node.as_ref(),
+                        ])
+                    } else {
+                        hashv(&[
+                            intersection_node.as_ref(),
+                            self.rightmost_proof.proof[i].as_ref(),
+                        ])
+                    };
+                    intersection_node.copy_from_slice(rightmost_hash.as_ref());
+                    self.rightmost_proof.proof[i] = empty_node(i as u32);
+                    hashv(&[node.as_ref(), empty_node(i as u32).as_ref()])
+                }
+                Some(Ordering::Equal) => {
+                    self.rightmost_proof.proof[i] = intersection_node;
+                    hashv(&[intersection_node.as_ref(), node.as_ref()])
+                }
+                Some(Ordering::Greater) => {
+                    if (self.rightmost_proof.index >> i) & 1 == 1 {
+                        hashv(&[self.rightmost_proof.proof[i].as_ref(), node.as_ref()])
+                    } else {
+                        hashv(&[node.as_ref(), self.rightmost_proof.proof[i].as_ref()])
+                    }
+                }
+                None => return None
             };
             node.copy_from_slice(hash.as_ref());
         }
