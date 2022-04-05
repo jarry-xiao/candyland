@@ -9,15 +9,12 @@ pub struct CreateTree<'info> {
     #[account(mut)]
     pub authority: Signer<'info>,
     #[account(
-        init,
         seeds = [
             b"gummyroll-crud-authority-pda",
             merkle_roll.key().as_ref(),
             authority.key().as_ref(),
         ],
         bump,
-        payer = authority,
-        space = 0
     )]
     /// CHECK: This account is neither written to nor read from.
     pub authority_pda: UncheckedAccount<'info>,
