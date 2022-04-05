@@ -6,7 +6,6 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 #[derive(Accounts)]
 #[instruction(max_depth: u32, max_buffer_size: u32)]
 pub struct CreateTree<'info> {
-    #[account(mut)]
     pub authority: Signer<'info>,
     #[account(
         seeds = [
@@ -27,7 +26,6 @@ pub struct CreateTree<'info> {
 
 #[derive(Accounts)]
 pub struct Add<'info> {
-    #[account(mut)]
     pub authority: Signer<'info>,
     #[account(
         seeds = [
@@ -47,7 +45,6 @@ pub struct Add<'info> {
 
 #[derive(Accounts)]
 pub struct Remove<'info> {
-    #[account(mut)]
     pub authority: Signer<'info>,
     #[account(
         seeds = [
@@ -83,7 +80,6 @@ pub struct Transfer<'info> {
     #[account(mut)]
     /// CHECK: unsafe
     pub merkle_roll: UncheckedAccount<'info>,
-    #[account(mut)]
     pub owner: Signer<'info>,
     /// CHECK: This account is neither written to nor read from.
     pub new_owner: UncheckedAccount<'info>,
