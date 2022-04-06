@@ -8,14 +8,14 @@ import { ItemPayload } from "../../../lib/loaders/ItemTypes";
 const ItemDetail: NextPage = () => {
   const router = useRouter();
   const index = router.query.index as NonNullable<
-    typeof router.query.treeId
+    typeof router.query.treeAccount
   >[number];
-  const treeId = router.query.treeId as NonNullable<
-    typeof router.query.treeId
+  const treeAccount = router.query.treeAccount as NonNullable<
+    typeof router.query.treeAccount
   >[number];
   const { data } = useSWR<Awaited<ReturnType<typeof getItem>>>([
     "item",
-    treeId,
+    treeAccount,
     index,
   ]);
   if (!data) {
@@ -25,22 +25,24 @@ const ItemDetail: NextPage = () => {
   return (
     <>
       <h1>
-        Item {treeId}/{index} belonging to {owner}
+        Item {treeAccount}/{index} belonging to {owner}
       </h1>
-      <ItemImage data={itemData} treeId={treeId} />
+      <ItemImage data={itemData} treeAccount={treeAccount} />
     </>
   );
 };
 
 export async function getServerSideProps({ query }: NextPageContext) {
   const index = query.index as NonNullable<typeof query.index>[number];
-  const treeId = query.treeId as NonNullable<typeof query.treeId>[number];
-  const item = await getItem(treeId, parseInt(index, 10));
+  const treeAccount = query.treeAccount as NonNullable<
+    typeof query.treeAccount
+  >[number];
+  const item = await getItem(treeAccount, parseInt(index, 10));
   if (!item) {
     return { notFound: true };
   }
   const serverData = {
-    [unstable_serialize(["item", treeId, index])]: item as ItemPayload,
+    [unstable_serialize(["item", treeAccount, index])]: item as ItemPayload,
   };
   return {
     props: { serverData },

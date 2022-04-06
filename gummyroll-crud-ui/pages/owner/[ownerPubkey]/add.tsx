@@ -1,3 +1,4 @@
+import * as anchor from "@project-serum/anchor";
 import { NextPage } from "next";
 import { useRouter } from "next/router";
 import React, { FormEvent } from "react";
@@ -8,22 +9,25 @@ import { useWallet } from "@solana/wallet-adapter-react";
 const OwnerAddItem: NextPage = () => {
   const router = useRouter();
   const dataRef = React.createRef<HTMLTextAreaElement>();
-  const treeIdRef = React.createRef<HTMLInputElement>();
+  const treeAccountRef = React.createRef<HTMLInputElement>();
   const { publicKey } = useWallet();
   if (!publicKey) {
     throw new Error("You must be logged in to create a new asset.");
   }
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    addItem(treeIdRef.current?.value!, dataRef.current?.value!);
+    const treeAccount = new anchor.web3.PublicKey(
+      treeAccountRef.current?.value!
+    );
+    addItem(treeAccount, dataRef.current?.value!);
   }
   return (
     <>
       <h1>Add item for {router.query.ownerPubkey}</h1>
       <form onSubmit={handleSubmit}>
-        <label htmlFor="treeId">
+        <label htmlFor="treeAccount">
           <p>Tree id</p>
-          <input name="treeId" ref={treeIdRef} type="text" />
+          <input name="treeAccount" ref={treeAccountRef} type="text" />
         </label>
         <label htmlFor="data">
           <p>Data</p>

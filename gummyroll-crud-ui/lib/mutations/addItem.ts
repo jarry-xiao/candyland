@@ -27,7 +27,10 @@ anchor.setProvider(
 );
 anchor.getProvider().connection.requestAirdrop(feePayer.publicKey, 2e9);
 
-export default async function addItem(treeId: string, data: string) {
+export default async function addItem(
+  treeAccount: anchor.web3.PublicKey,
+  data: string
+) {
   if (program == null) {
     // @ts-ignore
     program = new Program<typeof GummyrollCrudIdl>(
@@ -38,7 +41,7 @@ export default async function addItem(treeId: string, data: string) {
   const txid = await program.methods
     .add(Buffer.from(data))
     .accounts({
-      merkleRoll: new anchor.web3.PublicKey(treeId),
+      merkleRoll: treeAccount,
       owner: feePayer.publicKey,
       gummyrollProgram: process.env.NEXT_PUBLIC_GUMMYROLL_PROGRAM_ID!,
     })

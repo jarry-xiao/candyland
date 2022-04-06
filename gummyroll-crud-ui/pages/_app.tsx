@@ -24,8 +24,8 @@ import "@solana/wallet-adapter-react-ui/styles.css"; // Side-effectful import to
  */
 async function localFetcher(...pathParts: string[]) {
   if (pathParts[0] === "item") {
-    const [_, treeId, index] = pathParts;
-    return await getItem(treeId, parseInt(index, 10));
+    const [_, treeAccount, index] = pathParts;
+    return await getItem(treeAccount, parseInt(index, 10));
   }
   if (pathParts[0] === "owner") {
     if (pathParts[2] === "items") {

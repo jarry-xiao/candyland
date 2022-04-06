@@ -26,7 +26,7 @@ const OwnerItemsList: NextPage = () => {
       <h1>{ownerPubkey}&apos;s items</h1>
       <ImageList cols={4} gap={16}>
         {items.map((item) => (
-          <ImageListItem key={`${item.treeId}:${item.index}`}>
+          <ImageListItem key={`${item.treeAccount}:${item.index}`}>
             <OwnerItem {...item} />
           </ImageListItem>
         ))}

@@ -5,16 +5,19 @@ import ItemImage from "./ItemImage";
 type Props = Readonly<{
   data: string;
   index: number;
-  treeId: string;
+  treeAccount: string;
 }>;
 
-export default function OwnerItem({ data, index, treeId }: Props) {
+export default function OwnerItem({ data, index, treeAccount }: Props) {
   return (
     <Link
-      href={{ pathname: "/item/[treeId]/[index]", query: { index, treeId } }}
+      href={{
+        pathname: "/item/[treeAccount]/[index]",
+        query: { index, treeAccount },
+      }}
     >
       <a>
-        <ItemImage data={data} treeId={treeId} />
+        <ItemImage data={data} treeAccount={treeAccount} />
       </a>
     </Link>
   );
