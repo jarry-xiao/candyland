@@ -1,3 +1,5 @@
+import GummyrollIdl from "../../target/idl/gummyroll.json";
+import * as anchor from "@project-serum/anchor";
 import {
   ConnectionProvider,
   WalletProvider,
@@ -32,6 +34,14 @@ async function localFetcher(...pathParts: string[]) {
     if (pathParts[2] === "items") {
       const ownerPubkey = pathParts[1];
       return await getItemsForOwner(ownerPubkey);
+    } else if (pathParts[2] === "trees") {
+      const result = await anchor
+        .getProvider()
+        .connection.getParsedProgramAccounts(
+          new anchor.web3.PublicKey(GummyrollIdl.metadata.address),
+          "confirmed"
+        );
+      return result.map((result) => result.pubkey);
     }
   }
 }
