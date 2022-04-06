@@ -14,6 +14,7 @@ import SearchBar from "../components/SearchBar";
 import { SWRConfig } from "swr";
 import getItemsForOwner from "../lib/loaders/getItemsForOwner";
 import getItem from "../lib/loaders/getItem";
+import AnchorConfigurator from "../components/AnchorConfigurator";
 
 import * as styles from "../styles/app.css"; // Side-effectful import that adds global styles.
 import "@solana/wallet-adapter-react-ui/styles.css"; // Side-effectful import to add styles for wallet modal.
@@ -60,10 +61,12 @@ export default function MyApp({
       <ConnectionProvider endpoint="https://localhost:8899">
         <WalletProvider wallets={wallets} autoConnect>
           <WalletModalProvider>
-            <div className={styles.shell}>
-              <SearchBar />
-              <Component {...pageProps} />
-            </div>
+            <AnchorConfigurator>
+              <div className={styles.shell}>
+                <SearchBar />
+                <Component {...pageProps} />
+              </div>
+            </AnchorConfigurator>
           </WalletModalProvider>
         </WalletProvider>
       </ConnectionProvider>
