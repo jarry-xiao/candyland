@@ -49,7 +49,6 @@ export default function MyApp({
       value={{
         ...(serverData ? { fallback: serverData } : null),
         fetcher: localFetcher,
-        revalidateOnMount: false,
       }}
     >
       <Head>

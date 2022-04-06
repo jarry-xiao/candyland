@@ -1,6 +1,7 @@
 import { useRouter } from "next/router";
 import { NextPage, NextPageContext } from "next/types";
-import useSWR, { unstable_serialize } from "swr";
+import useSWRImmutable from "swr/immutable";
+import { unstable_serialize } from "swr";
 import ItemImage from "../../../components/ItemImage";
 import getItem from "../../../lib/loaders/getItem";
 import { ItemPayload } from "../../../lib/loaders/ItemTypes";
@@ -13,7 +14,7 @@ const ItemDetail: NextPage = () => {
   const treeAccount = router.query.treeAccount as NonNullable<
     typeof router.query.treeAccount
   >[number];
-  const { data } = useSWR<Awaited<ReturnType<typeof getItem>>>([
+  const { data } = useSWRImmutable<Awaited<ReturnType<typeof getItem>>>([
     "item",
     treeAccount,
     index,
@@ -32,7 +33,7 @@ const ItemDetail: NextPage = () => {
   );
 };
 
-export async function getServerSideProps({ query }: NextPageContext) {
+export async function getInitialProps({ query }: NextPageContext) {
   const index = query.index as NonNullable<typeof query.index>[number];
   const treeAccount = query.treeAccount as NonNullable<
     typeof query.treeAccount
