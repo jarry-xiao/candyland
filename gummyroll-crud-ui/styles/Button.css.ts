@@ -20,4 +20,8 @@ export const button = style({
   ":active": {
     backgroundColor: "black",
   },
+  ":disabled": {
+    backgroundColor: "lightgray",
+    cursor: "not-allowed",
+  },
 });
