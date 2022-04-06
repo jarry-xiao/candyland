@@ -17,3 +17,4 @@ gummyroll={path= "../programs/gummyroll", features = ["no-entrypoint"]}
 sqlx = "0.5.11"
 sea-orm = { version = "^0", features = [ "sqlx-postgres", "runtime-tokio-rustls", "macros" ], default-features = false }
 tokio-postgres = "0.7.5"
+serde = "1.0.136"

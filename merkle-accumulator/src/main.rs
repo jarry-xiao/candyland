@@ -705,7 +705,7 @@ mod test {
     #[test]
     fn test_new_with_root_remove_and_add_fails() {
         let mut rng = thread_rng();
-        let (mut merkle, mut off_chain_merkle) = setup_new_with_root(&mut rng);
+        let (mut merkle, off_chain_merkle) = setup_new_with_root(&mut rng);
 
         let mut leaf_inds: Vec<usize> = (0..1 << MAX_DEPTH).collect();
         leaf_inds.shuffle(&mut rng);

@@ -18,8 +18,8 @@ import { logTx } from './utils';
 import { sleep } from "../deps/metaplex-program-library/metaplex/js/test/utils";
 
 
-const MAX_SIZE = 1024;
-const MAX_DEPTH = 22;
+const MAX_SIZE = 64;
+const MAX_DEPTH = 14;
 
 describe("gummyroll-continuous", () => {
   const connection = new Connection(
@@ -59,6 +59,7 @@ describe("gummyroll-continuous", () => {
       await program.provider.connection.requestAirdrop(payer.publicKey, 1e10),
       "confirmed"
     );
+    sleep(10000)
   });
   it("Initialize root with prepopulated leaves", async () => {
     const allocAccountIx = SystemProgram.createAccount({
@@ -164,7 +165,7 @@ describe("gummyroll-continuous", () => {
         );
 
         //await sleep(100);
-        await sleep(10);
+
     }
     let transactions = await Promise.all(txs);
     console.log("Txs:", transactions)

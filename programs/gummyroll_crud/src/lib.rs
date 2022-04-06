@@ -1,5 +1,5 @@
 use anchor_lang::{prelude::*, solana_program::keccak};
-use anchor_lang::solana_program::instruction::Instruction;
+
 use gummyroll::{program::Gummyroll, Node};
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");

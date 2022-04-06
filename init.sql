@@ -32,7 +32,8 @@ create table app_specific
     leaf    varchar(32) not null,
     msg     text PRIMARY KEY,
     tree_id varchar(32) not null,
-    owner   varchar(32) not null
+    owner   varchar(32) not null,
+    revision bigint not null
 );
 
 CREATE INDEX app_specific_idx_owner ON app_specific (owner);

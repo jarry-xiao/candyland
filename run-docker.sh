@@ -8,4 +8,4 @@ cp target/deploy/gummyroll_crud.so docker-vol/gummyroll_crud.so
 cp deps/metaplex-program-library/target/deploy/mpl_token_metadata.so docker-vol/mpl_token_metadata.so
 cp deps/solana-program-library/target/deploy/spl_token_2022.so docker-vol/spl_token_2022.so
 cp deps/solana-program-library/target/deploy/spl_associated_token_account.so docker-vol/spl_associated_token_account.so
-docker-compose up --build
+docker-compose up --build --force-recreate

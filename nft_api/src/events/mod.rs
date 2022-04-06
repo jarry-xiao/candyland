@@ -1,8 +1,8 @@
-use std::error::Error;
+
 use anchor_client::anchor_lang;
 use base64;
 use crate::error::{ApiError};
-use anchor_lang::{Event, AnchorDeserialize};
+
 
 pub fn handle_event<T: anchor_lang::Event + anchor_lang::AnchorDeserialize>(data: String) -> Result<T, ApiError>{
     let borsh_bytes = match base64::decode(&data) {
