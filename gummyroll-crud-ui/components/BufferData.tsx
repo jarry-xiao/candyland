@@ -7,7 +7,11 @@ type Props = Readonly<{
 export default function BufferData({ buffer }: Props) {
   return (
     <pre className={styles.root}>
-      {buffer.toString("hex").match(/\d{2}/g)?.join("  ")}
+      {buffer
+        .toString("hex")
+        .match(/[a-f\d]{2}/g)
+        ?.map((hexValue) => hexValue.toUpperCase())
+        ?.join("  ")}
     </pre>
   );
 }
