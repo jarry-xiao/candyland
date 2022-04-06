@@ -47,7 +47,7 @@ export default function MyApp({
   return (
     <SWRConfig
       value={{
-        fallback: serverData,
+        ...(serverData ? { fallback: serverData } : null),
         fetcher: localFetcher,
         revalidateOnMount: false,
       }}
