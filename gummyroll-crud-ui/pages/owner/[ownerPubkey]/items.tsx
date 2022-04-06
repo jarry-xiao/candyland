@@ -7,7 +7,7 @@ import getItemsForOwner from "../../../lib/loaders/getItemsForOwner";
 import Button from "../../../components/Button";
 import { useWallet } from "@solana/wallet-adapter-react";
 import useSWRImmutable from "swr/immutable";
-import { unstable_serialize, useSWRConfig } from "swr";
+import { unstable_serialize } from "swr";
 import { ItemPayload } from "../../../lib/loaders/ItemTypes";
 
 const OwnerItemsList: NextPage = () => {
@@ -31,13 +31,7 @@ const OwnerItemsList: NextPage = () => {
         ))}
       </ImageList>
       {publicKey ? (
-        <Link
-          href={{
-            pathname: "/owner/[ownerPubkey]/add",
-            query: { ownerPubkey },
-          }}
-          passHref
-        >
+        <Link href="/item/add" passHref>
           <Button>Add</Button>
         </Link>
       ) : null}
