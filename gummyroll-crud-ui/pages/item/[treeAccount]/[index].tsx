@@ -5,6 +5,7 @@ import { unstable_serialize } from "swr";
 import ItemImage from "../../../components/ItemImage";
 import getItem from "../../../lib/loaders/getItem";
 import { ItemPayload } from "../../../lib/loaders/ItemTypes";
+import BufferData from "../../../components/BufferData";
 
 const ItemDetail: NextPage = () => {
   const router = useRouter();
@@ -29,6 +30,8 @@ const ItemDetail: NextPage = () => {
         Item {treeAccount}/{index} belonging to {owner}
       </h1>
       <ItemImage data={itemData} treeAccount={treeAccount} />
+      <p>Data</p>
+      <BufferData buffer={Buffer.from(itemData)} />
     </>
   );
 };
