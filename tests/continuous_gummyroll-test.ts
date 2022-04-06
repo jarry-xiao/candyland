@@ -46,21 +46,10 @@ describe("gummyroll-continuous", () => {
   let treeContinuous;
   let eventsProcessed = new Map<String, number>();
   eventsProcessed.set("0", 0);
-  let listenerContinuous;
 
-  it("Setup off chain tree", async () => {
-    leavesContinuous = Array(2 ** MAX_DEPTH).fill(Buffer.alloc(32));
-    leavesContinuous[0] = Keypair.generate().publicKey.toBuffer();
-    console.log(
-      "Created root using leaf pubkey: ",
-      Uint8Array.from(leavesContinuous[0])
-    );
-    console.log("program id:", program.programId.toString());
-    treeContinuous = buildTree(leavesContinuous);
-    listenerContinuous = program.addEventListener("ChangeLogEvent", (event) => {
-      updateTree(treeContinuous, Buffer.from(event.path[0].inner), event.index);
-      eventsProcessed.set("0", eventsProcessed.get("0") + 1);
-    });
+  let listener = program.addEventListener("ChangeLogEvent", (event) => {
+    updateTree(tree, Buffer.from(event.path[0][0].inner), event.index);
+    eventsProcessed.set("0", eventsProcessed.get("0") + 1);
   });
   it("Initialize keypairs with Sol", async () => {
     await program.provider.connection.confirmTransaction(

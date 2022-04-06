@@ -369,12 +369,24 @@ impl From<[u8; 32]> for Node {
     }
 }
 
+#[derive(AnchorDeserialize, AnchorSerialize, Clone, Copy)]
+pub struct PathNode {
+    node: Node,
+    index: u32,
+}
+
+impl PathNode {
+    pub fn new(node: Node, index: u32) -> Self {
+        Self { node, index }
+    }
+}
+
 #[event]
 pub struct ChangeLogEvent {
     /// Public key of the Merkle Roll
     id: Pubkey,
     /// Nodes of off-chain merkle tree
-    path: Vec<Node>,
+    path: Vec<PathNode>,
     /// Bitmap of node parity (used when hashing)
     index: u32,
 }
@@ -394,9 +406,17 @@ pub struct ChangeLog<const MAX_DEPTH: usize> {
 
 impl<const MAX_DEPTH: usize> ChangeLog<MAX_DEPTH> {
     pub fn to_event(&self, id: Pubkey) -> ChangeLogEvent {
+        let path_len = self.path.len() as u32;
+        let mut path: Vec<PathNode> = self
+            .path
+            .iter()
+            .enumerate()
+            .map(|(lvl, n)| PathNode::new(*n, (1 << (path_len - lvl as u32)) + (self.index >> lvl)))
+            .collect();
+        path.push(PathNode::new(self.root, 1));
         ChangeLogEvent {
             id,
-            path: self.path.to_vec(),
+            path,
             index: self.index,
         }
     }

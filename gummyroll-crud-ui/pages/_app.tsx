@@ -1,3 +1,5 @@
+import GummyrollIdl from "../../target/idl/gummyroll.json";
+import * as anchor from "@project-serum/anchor";
 import {
   ConnectionProvider,
   WalletProvider,
@@ -14,6 +16,7 @@ import SearchBar from "../components/SearchBar";
 import { SWRConfig } from "swr";
 import getItemsForOwner from "../lib/loaders/getItemsForOwner";
 import getItem from "../lib/loaders/getItem";
+import AnchorConfigurator from "../components/AnchorConfigurator";
 
 import * as styles from "../styles/app.css"; // Side-effectful import that adds global styles.
 import "@solana/wallet-adapter-react-ui/styles.css"; // Side-effectful import to add styles for wallet modal.
@@ -24,13 +27,21 @@ import "@solana/wallet-adapter-react-ui/styles.css"; // Side-effectful import to
  */
 async function localFetcher(...pathParts: string[]) {
   if (pathParts[0] === "item") {
-    const [_, treeId, index] = pathParts;
-    return await getItem(treeId, parseInt(index, 10));
+    const [_, treeAccount, index] = pathParts;
+    return await getItem(treeAccount, parseInt(index, 10));
   }
   if (pathParts[0] === "owner") {
     if (pathParts[2] === "items") {
       const ownerPubkey = pathParts[1];
       return await getItemsForOwner(ownerPubkey);
+    } else if (pathParts[2] === "trees") {
+      const result = await anchor
+        .getProvider()
+        .connection.getParsedProgramAccounts(
+          new anchor.web3.PublicKey(GummyrollIdl.metadata.address),
+          "confirmed"
+        );
+      return result.map((result) => result.pubkey);
     }
   }
 }
@@ -46,9 +57,8 @@ export default function MyApp({
   return (
     <SWRConfig
       value={{
-        fallback: serverData,
+        ...(serverData ? { fallback: serverData } : null),
         fetcher: localFetcher,
-        revalidateOnMount: false,
       }}
     >
       <Head>
@@ -60,10 +70,12 @@ export default function MyApp({
       <ConnectionProvider endpoint="https://localhost:8899">
         <WalletProvider wallets={wallets} autoConnect>
           <WalletModalProvider>
-            <div className={styles.shell}>
-              <SearchBar />
-              <Component {...pageProps} />
-            </div>
+            <AnchorConfigurator>
+              <div className={styles.shell}>
+                <SearchBar />
+                <Component {...pageProps} />
+              </div>
+            </AnchorConfigurator>
           </WalletModalProvider>
         </WalletProvider>
       </ConnectionProvider>
