@@ -50,7 +50,7 @@ describe("gummyroll-continuous", () => {
   eventsProcessed.set("0", 0);
 
   let listener = program.addEventListener("ChangeLogEvent", (event) => {
-    updateTree(tree, Buffer.from(event.path[0].inner), event.index);
+    updateTree(tree, Buffer.from(event.path[0][0].inner), event.index);
     eventsProcessed.set("0", eventsProcessed.get("0") + 1);
   });
 
