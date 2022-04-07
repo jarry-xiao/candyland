@@ -17,6 +17,7 @@ import {
   getMerkleRollAccountSize,
 } from "./merkle-roll-serde";
 import { logTx } from "./utils";
+import { sleep } from "../deps/metaplex-program-library/metaplex/js/test/utils";
 
 // @ts-ignore
 const Gummyroll = anchor.workspace.Gummyroll as Program<Gummyroll>;
@@ -253,12 +254,14 @@ describe("gummyroll", () => {
         };
       });
 
+      const leavesToUpdate = [];
       for (let i = 0; i < MAX_SIZE; i++) {
         const index = i;
         const newLeaf = hash(
           payer.publicKey.toBuffer(),
           Buffer.from(new BN(i).toArray())
         );
+        leavesToUpdate.push(newLeaf);
         const proof = getProofOfLeaf(offChainTree, index);
 
         const nodeProof = proof.map((offChainTreeNode) => {
@@ -297,6 +300,10 @@ describe("gummyroll", () => {
       });
       await Promise.all(txList);
 
+      leavesToUpdate.map((leaf, index) => {
+        updateTree(offChainTree, leaf, index);
+      });
+
       // Compare on-chain & off-chain roots
       const merkleRoll = decodeMerkleRoll(
         (
@@ -312,32 +319,6 @@ describe("gummyroll", () => {
         Buffer.from(onChainRoot).equals(offChainTree.root),
         "Updated on chain root does not match root of updated off chain tree"
       );
-
-
-      const newLeaf = crypto.randomBytes(32);
-      try {
-
-        let failedTx = await Gummyroll.rpc.replaceLeaf(
-          failedRoot,
-          failedLeaf,
-          { inner: Array.from(newLeaf) },
-          MAX_SIZE,
-          {
-            accounts: {
-              merkleRoll: merkleRollKeypair.publicKey,
-              authority: payer.publicKey,
-            },
-            signers: [payer],
-            remainingAccounts: failedProof,
-          }
-        );
-        await logTx(Gummyroll.provider, failedTx, false);
-      } catch (_) {
-        assert(false,`(${MAX_SIZE}+1)th should not fail, because fast-forward should still work`);
-      }
-    });
-    afterEach("Kill listeners", async () => {
-      await Gummyroll.removeEventListener(listener);
     });
   });
 });

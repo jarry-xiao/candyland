@@ -780,7 +780,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             self.increment_active_index();
             Some(self.apply_changes(new_leaf, proof, index))
         } else {
-            msg!("FAILING!");
+            msg!("Invalid root recomputed from proof, failing");
             None
         }
     }
