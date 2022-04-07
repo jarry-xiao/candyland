@@ -12,3 +12,4 @@ Cargo.lock
 yarn.lock
 node_modules
 .anchor
+.vscode
