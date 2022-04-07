@@ -4,10 +4,13 @@ import { AnchorWallet } from "@solana/wallet-adapter-react";
 import getGummyrollCrudProgram from "../anchor_programs/getGummyrollCrudProgram";
 import getGummyrollCrudAuthorityPDA from "../anchor_programs/pdas/getGummyrollCrudAuthorityPDA";
 
+type MaxDepth = 14 | 16 | 18 | 20 | 22;
+type MaxBufferSize = 64 | 128 | 256 | 1024 | 2448;
+
 export default async function createTree(
   anchorWallet: AnchorWallet,
-  maxDepth: number,
-  maxBufferSize: number
+  maxDepth: MaxDepth,
+  maxBufferSize: MaxBufferSize
 ) {
   const program = getGummyrollCrudProgram();
   const gummyrollProgramId = new anchor.web3.PublicKey(
