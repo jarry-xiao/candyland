@@ -1,96 +1,77 @@
 import * as anchor from "@project-serum/anchor";
+import { BN, TransactionNamespace, InstructionNamespace } from "@project-serum/anchor";
 import { Gummyroll } from "../target/types/gummyroll";
-import { Program, BN } from "@project-serum/anchor";
 import {
+  Connection,
   PublicKey,
   Keypair,
   SystemProgram,
   Transaction,
 } from "@solana/web3.js";
-import * as borsh from "borsh";
 import { assert } from "chai";
+import * as crypto from 'crypto';
 
-import { buildTree, hash, getProofOfLeaf, updateTree } from "./merkle-tree";
+import { buildTree, hash, getProofOfLeaf, updateTree, Tree } from "./merkle-tree";
 import {
   decodeMerkleRoll,
   getMerkleRollAccountSize,
-  OnChainMerkleRoll,
 } from "./merkle-roll-serde";
 import { logTx } from "./utils";
 
-async function checkTxStatus(
-  provider: anchor.Provider,
-  tx: string,
-  verbose = false
-): Promise<boolean> {
-  if (verbose) {
-    await logTx(provider, tx);
-  }
-  let metaTx = await provider.connection.getTransaction(tx, {
-    commitment: "confirmed",
-  });
-  return metaTx.meta.err === null;
-}
+// @ts-ignore
+const Gummyroll = anchor.workspace.Gummyroll as Program<Gummyroll>;
 
 describe("gummyroll", () => {
   // Configure the client to use the local cluster.
   anchor.setProvider(anchor.Provider.env());
+  let offChainTree: Tree;
+  let merkleRollKeypair: Keypair;
+  let payer: Keypair;
+  let listener: number;
 
-  /// @ts-ignore
-  const program = anchor.workspace.Gummyroll as Program<Gummyroll>;
-
-  const payer = Keypair.generate();
   const MAX_SIZE = 64;
-  const MAX_DEPTH = 22;
+  const MAX_DEPTH = 20;
 
-  const merkleRollKeypair = Keypair.generate();
-  console.log("Payer key:", payer.publicKey);
+  async function createTreeOnChain(
+    payer: Keypair,
+    numLeaves: number,
+  ): Promise<[Keypair, Tree]> {
+    const merkleRollKeypair = Keypair.generate();
 
-  const requiredSpace = getMerkleRollAccountSize(MAX_DEPTH, MAX_SIZE);
-  const leaves = Array(2 ** MAX_DEPTH).fill(Buffer.alloc(32));
-  leaves[0] = Keypair.generate().publicKey.toBuffer();
-  let tree = buildTree(leaves);
-  console.log("Created root using leaf pubkey: ", Uint8Array.from(leaves[0]));
-  console.log("program id:", program.programId.toString());
+    const requiredSpace = getMerkleRollAccountSize(MAX_DEPTH, MAX_SIZE);
+    const leaves = Array(2 ** MAX_DEPTH).fill(Buffer.alloc(32));
+    for (let i = 0; i < numLeaves; i++) {
+      leaves[i] = crypto.randomBytes(32);
+    }
+    const tree = buildTree(leaves);
 
-  let listener = program.addEventListener("ChangeLogEvent", (event) => {
-    updateTree(tree, Buffer.from(event.path[0][0].inner), event.index);
-  });
-
-  it("Initialize keypairs with Sol", async () => {
-    await program.provider.connection.confirmTransaction(
-      await program.provider.connection.requestAirdrop(payer.publicKey, 1e10),
-      "confirmed"
-    );
-  });
-
-  it("Initialize root with prepopulated leaves", async () => {
     const allocAccountIx = SystemProgram.createAccount({
       fromPubkey: payer.publicKey,
       newAccountPubkey: merkleRollKeypair.publicKey,
       lamports:
-        await program.provider.connection.getMinimumBalanceForRentExemption(
+        await Gummyroll.provider.connection.getMinimumBalanceForRentExemption(
           requiredSpace
         ),
       space: requiredSpace,
-      programId: program.programId,
+      programId: Gummyroll.programId,
     });
 
     const root = { inner: Array.from(tree.root) };
-    const leaf = { inner: Array.from(leaves[0]) };
-    const proof = getProofOfLeaf(tree, 0).map((node) => {
+    const leaf = { inner: Array.from(leaves[numLeaves - 1]) };
+    const proof = getProofOfLeaf(tree, numLeaves - 1).map((node) => {
       return {
         pubkey: new PublicKey(node.node),
         isSigner: false,
         isWritable: false,
       };
     });
-    const initGummyrollIx = await program.instruction.initGummyrollWithRoot(
+
+    const initGummyrollIx = Gummyroll.instruction.initGummyrollWithRoot(
       MAX_DEPTH,
       MAX_SIZE,
       root,
       leaf,
-      0,
+      numLeaves - 1,
       {
         accounts: {
           merkleRoll: merkleRollKeypair.publicKey,
@@ -102,11 +83,10 @@ describe("gummyroll", () => {
     );
 
     const tx = new Transaction().add(allocAccountIx).add(initGummyrollIx);
-    let txid = await program.provider.send(tx, [payer, merkleRollKeypair], {
+    await Gummyroll.provider.send(tx, [payer, merkleRollKeypair], {
       commitment: "confirmed",
     });
-    await logTx(program.provider, txid);
-    const merkleRoll = await program.provider.connection.getAccountInfo(
+    const merkleRoll = await Gummyroll.provider.connection.getAccountInfo(
       merkleRollKeypair.publicKey
     );
 
@@ -131,133 +111,85 @@ describe("gummyroll", () => {
       onChainMerkle.roll.changeLogs[0].root.equals(new PublicKey(tree.root)),
       "On chain root does not match root passed in instruction"
     );
-  });
-  it("Append single leaf", async () => {
-    const newLeaf = hash(
-      payer.publicKey.toBuffer(),
-      payer.publicKey.toBuffer()
-    );
 
-    const appendIx = await program.instruction.append(
-      { inner: Array.from(newLeaf) },
-      {
-        accounts: {
-          merkleRoll: merkleRollKeypair.publicKey,
-          authority: payer.publicKey,
-        },
-        signers: [payer],
-      }
-    );
+    return [merkleRollKeypair, tree]
+  }
 
-    const tx = new Transaction().add(appendIx);
-    const txid = await program.provider.send(tx, [payer], {
-      commitment: "confirmed",
-    });
-    await logTx(program.provider, txid);
+  beforeEach(async () => {
+    payer = Keypair.generate();
 
-    updateTree(tree, newLeaf, 1);
-
-    const merkleRollAccount = await program.provider.connection.getAccountInfo(
-      merkleRollKeypair.publicKey
-    );
-    const merkleRoll = decodeMerkleRoll(merkleRollAccount.data);
-    const onChainRoot =
-      merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
-
-    assert(
-      Buffer.from(onChainRoot).equals(tree.root),
-      "Updated on chain root matches root of updated off chain tree"
+    await Gummyroll.provider.connection.confirmTransaction(
+      await Gummyroll.provider.connection.requestAirdrop(payer.publicKey, 1e10),
+      "confirmed"
     );
   });
-  it("Replace single leaf", async () => {
-    const previousLeaf = Buffer.alloc(32);
-    const newLeaf = hash(
-      payer.publicKey.toBuffer(),
-      payer.publicKey.toBuffer()
-    );
-    const index = 2;
-    const proof = getProofOfLeaf(tree, index);
 
-    const nodeProof = proof.map((treeNode) => {
-      return {
-        pubkey: new PublicKey(treeNode.node),
-        isSigner: false,
-        isWritable: false,
-      };
+  describe("Having created a tree with a single leaf", () => {
+    beforeEach(async () => {
+      [merkleRollKeypair, offChainTree] = await createTreeOnChain(payer, 1);
+
+      listener = Gummyroll.addEventListener("ChangeLogEvent", (event) => {
+        updateTree(offChainTree, Buffer.from(event.path[0].inner), event.index);
+      });
     });
 
-    const replaceLeafIx = program.instruction.replaceLeaf(
-      { inner: Array.from(tree.root) },
-      { inner: Array.from(previousLeaf) },
-      { inner: Array.from(newLeaf) },
-      index,
-      {
-        accounts: {
-          merkleRoll: merkleRollKeypair.publicKey,
-          authority: payer.publicKey,
-        },
-        signers: [payer],
-        remainingAccounts: nodeProof,
-      }
-    );
-
-    const tx = new Transaction().add(replaceLeafIx);
-    const txid = await program.provider.send(tx, [payer], {
-      commitment: "confirmed",
-    });
-    await logTx(program.provider, txid);
-
-    updateTree(tree, newLeaf, index);
-
-    const merkleRollAccount = await program.provider.connection.getAccountInfo(
-      merkleRollKeypair.publicKey
-    );
-    const merkleRoll = decodeMerkleRoll(merkleRollAccount.data);
-    const onChainRoot =
-      merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
-
-    assert(
-      Buffer.from(onChainRoot).equals(tree.root),
-      "Updated on chain root matches root of updated off chain tree"
-    );
-  });
-  it(`Replace leaf - max block ${MAX_SIZE}`, async () => {
-    /// Replace 64 leaves before syncing off-chain tree with on-chain tree
-
-    let changeArray = [];
-    let txList = [];
-
-    const failedRoot = { inner: Array.from(tree.root) };
-    const failedLeaf = { inner: Array.from(tree.leaves[3 + MAX_SIZE].node) };
-    const failedProof = getProofOfLeaf(tree, 3 + MAX_SIZE).map((treeNode) => {
-      return {
-        pubkey: new PublicKey(treeNode.node),
-        isSigner: false,
-        isWritable: false,
-      };
-    });
-
-    for (let i = 0; i < MAX_SIZE; i++) {
-      const index = 3 + i;
+    it("Append single leaf", async () => {
       const newLeaf = hash(
         payer.publicKey.toBuffer(),
-        Buffer.from(new BN(i).toArray())
+        payer.publicKey.toBuffer()
       );
-      const proof = getProofOfLeaf(tree, index);
 
-      /// Use this to sync off-chain tree
-      changeArray.push({ newLeaf, index });
+      const appendIx = Gummyroll.instruction.append(
+        { inner: Array.from(newLeaf) },
+        {
+          accounts: {
+            merkleRoll: merkleRollKeypair.publicKey,
+            authority: payer.publicKey,
+          },
+          signers: [payer],
+        }
+      );
 
-      const nodeProof = proof.map((treeNode) => {
+      const tx = new Transaction().add(appendIx);
+      const txid = await Gummyroll.provider.send(tx, [payer], {
+        commitment: "confirmed",
+      });
+      await logTx(Gummyroll.provider, txid, false);
+
+      updateTree(offChainTree, newLeaf, 1);
+
+      const merkleRollAccount = await Gummyroll.provider.connection.getAccountInfo(
+        merkleRollKeypair.publicKey
+      );
+      const merkleRoll = decodeMerkleRoll(merkleRollAccount.data);
+      const onChainRoot =
+        merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
+
+      assert(
+        Buffer.from(onChainRoot).equals(offChainTree.root),
+        "Updated on chain root matches root of updated off chain tree"
+      );
+    });
+    it("Replace that leaf", async () => {
+      const previousLeaf = offChainTree.leaves[0].node;
+      const newLeaf = hash(
+        payer.publicKey.toBuffer(),
+        payer.publicKey.toBuffer()
+      );
+      const index = 0;
+      const proof = getProofOfLeaf(offChainTree, index);
+
+      const nodeProof = proof.map((offChainTreeNode) => {
         return {
-          pubkey: new PublicKey(treeNode.node),
+          pubkey: new PublicKey(offChainTreeNode.node),
           isSigner: false,
           isWritable: false,
         };
       });
 
-      const insertOrAppendIx = await program.instruction.insertOrAppend(
-        { inner: Array.from(tree.root) },
+      const replaceLeafIx = Gummyroll.instruction.replaceLeaf(
+        { inner: Array.from(offChainTree.root) },
+        { inner: Array.from(previousLeaf) },
         { inner: Array.from(newLeaf) },
         index,
         {
@@ -270,76 +202,142 @@ describe("gummyroll", () => {
         }
       );
 
-      const tx = new Transaction().add(insertOrAppendIx);
-      txList.push(
-        program.provider.send(tx, [payer], {
-          commitment: "confirmed",
-          skipPreflight: true,
-        })
+      const tx = new Transaction().add(replaceLeafIx);
+      const txid = await Gummyroll.provider.send(tx, [payer], {
+        commitment: "confirmed",
+      });
+      await logTx(Gummyroll.provider, txid, false);
+
+      updateTree(offChainTree, newLeaf, index);
+
+      const merkleRollAccount = await Gummyroll.provider.connection.getAccountInfo(
+        merkleRollKeypair.publicKey
       );
-    }
-    await Promise.all(txList);
+      const merkleRoll = decodeMerkleRoll(merkleRollAccount.data);
+      const onChainRoot =
+        merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
 
-    // Compare on-chain & off-chain roots
-    const merkleRoll = decodeMerkleRoll(
-      (
-        await program.provider.connection.getAccountInfo(
-          merkleRollKeypair.publicKey
-        )
-      ).data
-    );
-    const onChainRoot =
-      merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
-
-    assert(
-      Buffer.from(onChainRoot).equals(tree.root),
-      "Updated on chain root does not match root of updated off chain tree"
-    );
-
-    console.log("Sending a valid update despite the root being out of date");
-    const newLeaf = payer.publicKey.toBuffer();
-    let missingRootTx = await program.rpc.replaceLeaf(
-      failedRoot,
-      failedLeaf,
-      { inner: Array.from(newLeaf) },
-      3 + MAX_SIZE,
-      {
-        accounts: {
-          merkleRoll: merkleRollKeypair.publicKey,
-          authority: payer.publicKey,
-        },
-        signers: [payer],
-        remainingAccounts: failedProof,
-      }
-    );
-    await logTx(program.provider, missingRootTx);
-
-    console.log("Update should fail if repeated even if root is not in buffer");
-    let result;
-    try {
-      let failedTx = await program.rpc.replaceLeaf(
-        failedRoot,
-        failedLeaf,
-        { inner: Array.from(newLeaf) },
-        3 + MAX_SIZE,
-        {
-          accounts: {
-            merkleRoll: merkleRollKeypair.publicKey,
-            authority: payer.publicKey,
-          },
-          signers: [payer],
-          remainingAccounts: failedProof,
-        }
+      assert(
+        Buffer.from(onChainRoot).equals(offChainTree.root),
+        "Updated on chain root matches root of updated off chain tree"
       );
-      await logTx(program.provider, failedTx);
-      result = false;
-    } catch (e) {
-      console.log("Instruction failed as expected");
-      result = true;
-    }
-    assert(result);
+    });
+    afterEach("Kill listeners", async () => {
+      await Gummyroll.removeEventListener(listener);
+    });
   });
-  it("Kill listeners", async () => {
-    await program.removeEventListener(listener);
+
+  describe(`Having created a tree with ${MAX_SIZE} leaves`, () => {
+    beforeEach(async () => {
+      [merkleRollKeypair, offChainTree] = await createTreeOnChain(payer, MAX_SIZE);
+
+      listener = Gummyroll.addEventListener("ChangeLogEvent", (event) => {
+        updateTree(offChainTree, Buffer.from(event.path[0].inner), event.index);
+      });
+    });
+    it(`Replace all of them in a block`, async () => {
+      // Replace 64 leaves before syncing off-chain tree with on-chain tree
+
+      // Cache all proofs so we can execute in single block
+      let ixArray = [];
+      let txList = [];
+
+      // Create additional proof to check that it fails to execute in same block
+      const failedRoot = { inner: Array.from(offChainTree.root) };
+      const failedLeaf = { inner: Array.from(offChainTree.leaves[MAX_SIZE].node) };
+      const failedProof = getProofOfLeaf(offChainTree, MAX_SIZE).map((offChainTreeNode) => {
+        return {
+          pubkey: new PublicKey(offChainTreeNode.node),
+          isSigner: false,
+          isWritable: false,
+        };
+      });
+
+      for (let i = 0; i < MAX_SIZE; i++) {
+        const index = i;
+        const newLeaf = hash(
+          payer.publicKey.toBuffer(),
+          Buffer.from(new BN(i).toArray())
+        );
+        const proof = getProofOfLeaf(offChainTree, index);
+
+        const nodeProof = proof.map((offChainTreeNode) => {
+          return {
+            pubkey: new PublicKey(offChainTreeNode.node),
+            isSigner: false,
+            isWritable: false,
+          };
+        });
+        const replaceIx = Gummyroll.instruction.replaceLeaf(
+          { inner: Array.from(offChainTree.root) },
+          { inner: Array.from(offChainTree.leaves[i].node) },
+          { inner: Array.from(newLeaf) },
+          index,
+          {
+            accounts: {
+              merkleRoll: merkleRollKeypair.publicKey,
+              authority: payer.publicKey,
+            },
+            signers: [payer],
+            remainingAccounts: nodeProof,
+          }
+        );
+        ixArray.push(replaceIx);
+      };
+
+      // Execute all replaces in a "single block"
+      ixArray.map((ix) => {
+        const tx = new Transaction().add(ix);
+        txList.push(
+          Gummyroll.provider.send(tx, [payer], {
+            commitment: "confirmed",
+            skipPreflight: true,
+          })
+        );
+      });
+      await Promise.all(txList);
+
+      // Compare on-chain & off-chain roots
+      const merkleRoll = decodeMerkleRoll(
+        (
+          await Gummyroll.provider.connection.getAccountInfo(
+            merkleRollKeypair.publicKey
+          )
+        ).data
+      );
+      const onChainRoot =
+        merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
+
+      assert(
+        Buffer.from(onChainRoot).equals(offChainTree.root),
+        "Updated on chain root does not match root of updated off chain tree"
+      );
+
+
+      const newLeaf = crypto.randomBytes(32);
+      try {
+
+        let failedTx = await Gummyroll.rpc.replaceLeaf(
+          failedRoot,
+          failedLeaf,
+          { inner: Array.from(newLeaf) },
+          MAX_SIZE,
+          {
+            accounts: {
+              merkleRoll: merkleRollKeypair.publicKey,
+              authority: payer.publicKey,
+            },
+            signers: [payer],
+            remainingAccounts: failedProof,
+          }
+        );
+        await logTx(Gummyroll.provider, failedTx, false);
+      } catch (_) {
+        assert(false,`(${MAX_SIZE}+1)th should not fail, because fast-forward should still work`);
+      }
+    });
+    afterEach("Kill listeners", async () => {
+      await Gummyroll.removeEventListener(listener);
+    });
   });
 });

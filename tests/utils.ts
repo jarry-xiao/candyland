@@ -1,10 +1,12 @@
 import { Provider } from "@project-serum/anchor";
 
-export async function logTx(provider: Provider, txId: string) {
+export async function logTx(provider: Provider, txId: string, verbose: boolean = true) {
   await provider.connection.confirmTransaction(txId, "confirmed");
-  console.log(
-    (await provider.connection.getConfirmedTransaction(txId, "confirmed")).meta
-      .logMessages
-  );
+  if (verbose) {
+    console.log(
+      (await provider.connection.getConfirmedTransaction(txId, "confirmed")).meta
+        .logMessages
+    );
+  }
 };
 
