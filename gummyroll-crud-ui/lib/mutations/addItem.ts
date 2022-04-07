@@ -3,6 +3,13 @@ import * as anchor from "@project-serum/anchor";
 import { AnchorWallet } from "@solana/wallet-adapter-react";
 import getGummyrollCrudProgram from "../anchor_programs/getGummyrollCrudProgram";
 import getGummyrollCrudAuthorityPDA from "../anchor_programs/pdas/getGummyrollCrudAuthorityPDA";
+import { Gummyroll } from "../../../target/types/gummyroll";
+import { IdlEvent } from "@project-serum/anchor/dist/cjs/idl";
+
+type GetChangeLogEvent<T extends IdlEvent> = T["name"] extends "ChangeLogEvent"
+  ? T
+  : never;
+type ChangeLogEvent = GetChangeLogEvent<Gummyroll["events"][number]>;
 
 export default async function addItem(
   anchorWallet: AnchorWallet,
@@ -30,12 +37,23 @@ export default async function addItem(
     commitment: "confirmed",
   });
   try {
-    let index = 0;
-    transaction!.meta!.logMessages!.some((_message) => {
-      // TODO: Actually trawl the transaction logs looking for the index.
-      return true;
+    const eventParser = new anchor.EventParser(
+      new anchor.web3.PublicKey(GummyrollIdl.metadata.address),
+      new anchor.BorshCoder(GummyrollIdl as anchor.Idl)
+    );
+    let foundEventData: anchor.Event<ChangeLogEvent>["data"] | null = null;
+    eventParser.parseLogs(transaction!.meta!.logMessages!, (log) => {
+      if (foundEventData) {
+        return;
+      }
+      if (log.name === "ChangeLogEvent") {
+        foundEventData = (log as anchor.Event<ChangeLogEvent>).data;
+      }
     });
-    return index;
+    if (foundEventData == null) {
+      throw new Error("Could not find index of new asset");
+    }
+    return (foundEventData as anchor.Event<ChangeLogEvent>["data"]).index;
   } catch (e) {
     console.error(e);
     throw new Error("Could not find index of new asset");
