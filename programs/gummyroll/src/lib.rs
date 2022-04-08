@@ -90,20 +90,23 @@ pub fn empty_node(level: u32) -> Node {
 }
 
 /// Recomputes root of the Merkle tree from Node & proof
-pub fn recompute(mut leaf: Node, proof: &[Node], index: u32) -> Node {
+pub fn recompute(leaf: Node, proof: &[Node], index: u32) -> Node {
     msg!("Recompute");
+
     sol_log_compute_units();
-    for (i, s) in proof.iter().enumerate() {
-        if index >> i & 1 == 0 {
-            let res = hashv(&[leaf.as_ref(), s.as_ref()]);
-            leaf.copy_from_slice(res.as_ref());
+    let mut current_node = leaf;
+    for (depth, sibling_leaf) in proof.iter().enumerate() {
+        if index >> depth & 1 == 0 {
+            let res = hashv(&[current_node.as_ref(), sibling_leaf.as_ref()]);
+            current_node.copy_from_slice(res.as_ref());
         } else {
-            let res = hashv(&[s.as_ref(), leaf.as_ref()]);
-            leaf.copy_from_slice(res.as_ref());
+            let res = hashv(&[sibling_leaf.as_ref(), current_node.as_ref()]);
+            current_node.copy_from_slice(res.as_ref());
         }
     }
     sol_log_compute_units();
-    leaf
+
+    current_node
 }
 
 fn set_header<'a>(
@@ -228,7 +231,7 @@ pub mod gummyroll {
         for node in ctx.remaining_accounts.iter() {
             proof.push(Node::new(node.key().to_bytes()));
         }
-        assert_eq!(proof.len(), header.max_depth as usize);
+        // assert_eq!(proof.len(), header.max_depth as usize);
 
         let id = ctx.accounts.merkle_roll.key();
         match merkle_roll_apply_fn!(
@@ -515,6 +518,38 @@ pub trait ZeroCopy: Pod {
     }
 }
 
+pub fn recompute_known_height<const MAX_DEPTH: usize>(
+    leaf: Node,
+    proof: Vec<Node>,
+    index: u32,
+    height: u32,
+) -> Node {
+    msg!("proof size: {}", proof.len());
+
+    let mut full_proof: [Node; MAX_DEPTH] = [Node::new([0; 32]); MAX_DEPTH];
+    full_proof.copy_from_slice(&proof);
+
+    for i in height..MAX_DEPTH as u32 {
+        full_proof[i as usize] = empty_node(i as u32);
+    }
+
+    return recompute(leaf, &full_proof, index);
+}
+
+fn fill_in_proof<const MAX_DEPTH: usize>(
+    proof_vec: Vec<Node>,
+    full_proof: &mut [Node; MAX_DEPTH],
+    height: u32,
+) {
+    msg!("proof size: {}", proof_vec.len());
+
+    full_proof[..proof_vec.len()].copy_from_slice(&proof_vec);
+
+    for i in height..MAX_DEPTH as u32 {
+        full_proof[i as usize] = empty_node(i as u32);
+    }
+}
+
 impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH, MAX_BUFFER_SIZE> {
     pub fn initialize(&mut self) -> Option<Node> {
         let mut rightmost_proof = Path::default();
@@ -543,11 +578,11 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             leaf: rightmost_leaf,
             _padding: 0,
         };
-        assert_eq!(root, recompute(rightmost_leaf, &proof, index));
         self.change_logs[0].root = root;
         self.active_index = 0;
         self.buffer_size = 1;
         self.rightmost_proof = rightmost_proof;
+        assert_eq!(root, recompute(rightmost_leaf, &proof, index,));
         Some(root)
     }
 
@@ -667,8 +702,10 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             );
             None
         } else {
+            msg!("Height is: {}", self.get_height());
             let mut proof: [Node; MAX_DEPTH] = [Node::default(); MAX_DEPTH];
-            proof.copy_from_slice(&proof_vec[..]);
+            fill_in_proof::<MAX_DEPTH>(proof_vec, &mut proof, self.get_height());
+
             sol_log_compute_units();
             let root = self.find_and_update_leaf(
                 current_root,
@@ -680,6 +717,16 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             );
             sol_log_compute_units();
             root
+        }
+    }
+
+    fn get_height(&self) -> u32 {
+        // if power of 2, then 32 - leading_zeros - 1
+        let num_leaves = self.rightmost_proof.index;
+        if (32 - num_leaves.trailing_zeros() + num_leaves.leading_zeros()) == 1 {
+            32 - num_leaves.leading_zeros() - 1
+        } else {
+            32 - num_leaves.leading_zeros()
         }
     }
 

@@ -7,6 +7,7 @@ import {
   Keypair,
   SystemProgram,
   Transaction,
+  TransactionInstruction
 } from "@solana/web3.js";
 import { assert } from "chai";
 import * as crypto from 'crypto';
@@ -116,6 +117,42 @@ describe("gummyroll", () => {
     return [merkleRollKeypair, tree]
   }
 
+  function createReplaceIx(
+    previousLeaf: Buffer,
+    newLeaf: Buffer,
+    index: number,
+    offChainTree: Tree,
+    merkleTreeKey: PublicKey,
+    payer: Keypair,
+    minimizeProofLength: boolean = false,
+    treeHeight: number = -1,
+  ): TransactionInstruction {
+    const proof = getProofOfLeaf(offChainTree, index, minimizeProofLength, treeHeight);
+
+    const nodeProof = proof.map((offChainTreeNode) => {
+      return {
+        pubkey: new PublicKey(offChainTreeNode.node),
+        isSigner: false,
+        isWritable: false,
+      };
+    });
+
+    return Gummyroll.instruction.replaceLeaf(
+      { inner: Array.from(offChainTree.root) },
+      { inner: Array.from(previousLeaf) },
+      { inner: Array.from(newLeaf) },
+      index,
+      {
+        accounts: {
+          merkleRoll: merkleTreeKey,
+          authority: payer.publicKey,
+        },
+        signers: [payer],
+        remainingAccounts: nodeProof,
+      }
+    );
+  }
+
   beforeEach(async () => {
     payer = Keypair.generate();
 
@@ -168,36 +205,48 @@ describe("gummyroll", () => {
     });
     it("Replace that leaf", async () => {
       const previousLeaf = offChainTree.leaves[0].node;
-      const newLeaf = hash(
-        payer.publicKey.toBuffer(),
-        payer.publicKey.toBuffer()
-      );
+      const newLeaf = crypto.randomBytes(32);
       const index = 0;
-      const proof = getProofOfLeaf(offChainTree, index);
 
-      const nodeProof = proof.map((offChainTreeNode) => {
-        return {
-          pubkey: new PublicKey(offChainTreeNode.node),
-          isSigner: false,
-          isWritable: false,
-        };
+      const replaceLeafIx = createReplaceIx(previousLeaf, newLeaf, index, offChainTree, merkleRollKeypair.publicKey, payer);
+      assert(replaceLeafIx.keys.length == (2 + 20), `Failed to create proof for ${MAX_DEPTH}`);
+
+      const tx = new Transaction().add(replaceLeafIx);
+      const txid = await Gummyroll.provider.send(tx, [payer], {
+        commitment: "confirmed",
       });
+      await logTx(Gummyroll.provider, txid, false);
 
-      const replaceLeafIx = Gummyroll.instruction.replaceLeaf(
-        { inner: Array.from(offChainTree.root) },
-        { inner: Array.from(previousLeaf) },
-        { inner: Array.from(newLeaf) },
-        index,
-        {
-          accounts: {
-            merkleRoll: merkleRollKeypair.publicKey,
-            authority: payer.publicKey,
-          },
-          signers: [payer],
-          remainingAccounts: nodeProof,
-        }
+      updateTree(offChainTree, newLeaf, index);
+
+      const merkleRollAccount = await Gummyroll.provider.connection.getAccountInfo(
+        merkleRollKeypair.publicKey
       );
+      const merkleRoll = decodeMerkleRoll(merkleRollAccount.data);
+      const onChainRoot =
+        merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
 
+      assert(
+        Buffer.from(onChainRoot).equals(offChainTree.root),
+        "Updated on chain root matches root of updated off chain tree"
+      );
+    });
+
+    it("Replace that leaf with a minimal proof", async () => {
+      const previousLeaf = offChainTree.leaves[0].node;
+      const newLeaf = crypto.randomBytes(32);
+      const index = 0;
+
+      const replaceLeafIx = createReplaceIx(previousLeaf,
+        newLeaf,
+        index,
+        offChainTree,
+        merkleRollKeypair.publicKey,
+        payer,
+        true,
+        1
+      );
+      assert(replaceLeafIx.keys.length == (2 + 1), "Failed to minimize proof to expected size of 1");
       const tx = new Transaction().add(replaceLeafIx);
       const txid = await Gummyroll.provider.send(tx, [payer], {
         commitment: "confirmed",
