@@ -1,9 +1,25 @@
 import React from "react";
 import * as styles from "../styles/Button.css";
 
+type Props = Readonly<
+  React.ComponentProps<"button"> & {
+    variant?: "primary";
+  }
+>;
+
 export default React.forwardRef(function Button(
-  props: React.ComponentProps<"button">,
+  props: Props,
   ref: React.ForwardedRef<HTMLButtonElement>
 ) {
-  return <button {...props} className={styles.button} ref={ref} />;
+  return (
+    <button
+      {...props}
+      className={
+        styles.variant[
+          props.variant ?? props.type === "submit" ? "primary" : "default"
+        ]
+      }
+      ref={ref}
+    />
+  );
 });

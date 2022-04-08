@@ -1,9 +1,7 @@
-import { style } from "@vanilla-extract/css";
+import { style, styleVariants } from "@vanilla-extract/css";
 
-export const button = style({
+const base = style({
   appearance: "none",
-  backgroundColor: "darkgray",
-  borderColor: "lightgray",
   borderRadius: 8,
   borderStyle: "solid",
   borderWidth: 1,
@@ -14,14 +12,39 @@ export const button = style({
   minHeight: 44,
   padding: "0 12px",
   textTransform: "uppercase",
-  ":hover": {
-    backgroundColor: "gray",
-  },
   ":active": {
     backgroundColor: "black",
   },
   ":disabled": {
     backgroundColor: "lightgray",
+    borderColor: "lightgray",
     cursor: "not-allowed",
   },
+});
+
+export const variant = styleVariants({
+  default: [
+    base,
+    {
+      backgroundColor: "darkgray",
+      borderColor: "lightgray",
+      selectors: {
+        "&:hover:not(:active, :disabled)": {
+          backgroundColor: "gray",
+        },
+      },
+    },
+  ],
+  primary: [
+    base,
+    {
+      backgroundColor: "green",
+      borderColor: "lightgreen",
+      selectors: {
+        "&:hover:not(:active, :disabled)": {
+          backgroundColor: "darkgreen",
+        },
+      },
+    },
+  ],
 });

@@ -32,7 +32,7 @@ const OwnerItemsList: NextPage = () => {
       </ImageList>
       {publicKey ? (
         <Link href="/item/add" passHref>
-          <Button>Add</Button>
+          <Button variant="primary">Add</Button>
         </Link>
       ) : null}
     </>
