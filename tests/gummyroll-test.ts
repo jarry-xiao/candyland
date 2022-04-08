@@ -18,7 +18,6 @@ import {
   getMerkleRollAccountSize,
 } from "./merkle-roll-serde";
 import { logTx } from "./utils";
-import { sleep } from "../deps/metaplex-program-library/metaplex/js/test/utils";
 
 // @ts-ignore
 const Gummyroll = anchor.workspace.Gummyroll as Program<Gummyroll>;
@@ -29,7 +28,6 @@ describe("gummyroll", () => {
   let offChainTree: Tree;
   let merkleRollKeypair: Keypair;
   let payer: Keypair;
-  let listener: number;
 
   const MAX_SIZE = 64;
   const MAX_DEPTH = 20;
