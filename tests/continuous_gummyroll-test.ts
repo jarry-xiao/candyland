@@ -1,8 +1,8 @@
 import * as anchor from "@project-serum/anchor";
 import { Gummyroll } from "../target/types/gummyroll";
-import { Program } from "@project-serum/anchor";
+import { Program, Provider, } from "@project-serum/anchor";
 import {
-  Connection,
+  Connection as web3Connection,
   PublicKey,
   Keypair,
   SystemProgram,
@@ -11,17 +11,26 @@ import {
 import { assert } from "chai";
 
 import { buildTree, getProofOfLeaf, updateTree, Tree } from "./merkle-tree";
-import { decodeMerkleRoll, getMerkleRollAccountSize} from "./merkle-roll-serde";
+import { decodeMerkleRoll, getMerkleRollAccountSize } from "./merkle-roll-serde";
 import { sleep } from "../deps/metaplex-program-library/metaplex/js/test/utils";
+import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 
 // @ts-ignore
 const Gummyroll = anchor.workspace.Gummyroll as Program<Gummyroll>;
 
+export function chunk<T>(arr: T[], size: number): T[][] {
+  return Array.from({ length: Math.ceil(arr.length / size) }, (_: any, i: number) =>
+    arr.slice(i * size, i * size + size)
+  );
+}
+
 describe("gummyroll-continuous", () => {
-  anchor.setProvider(anchor.Provider.env());
+  let connection: web3Connection;
+  let wallet: NodeWallet;
   let offChainTree: ReturnType<typeof buildTree>;
   let merkleRollKeypair: Keypair;
   let payer: Keypair;
+  anchor.setProvider(anchor.Provider.env());
 
   const MAX_SIZE = 1024;
   const MAX_DEPTH = 20;
@@ -91,7 +100,7 @@ describe("gummyroll-continuous", () => {
     );
 
     let onChainMerkle = decodeMerkleRoll(merkleRoll.data);
-    
+
     // Check header bytes are set correctly
     assert(onChainMerkle.header.maxDepth === MAX_DEPTH, `Max depth does not match ${onChainMerkle.header.maxDepth}, expected ${MAX_DEPTH}`);
     assert(onChainMerkle.header.maxBufferSize === MAX_SIZE, `Max buffer size does not match ${onChainMerkle.header.maxBufferSize}, expected ${MAX_SIZE}`);
@@ -100,6 +109,8 @@ describe("gummyroll-continuous", () => {
       onChainMerkle.header.authority.equals(payer.publicKey),
       "Failed to write auth pubkey"
     );
+
+    offChainTree = createEmptyTreeOffChain();
 
     assert(
       onChainMerkle.roll.changeLogs[0].root.equals(new PublicKey(offChainTree.root)),
@@ -167,6 +178,7 @@ describe("gummyroll-continuous", () => {
     for (let i = 0; i < MAX_SIZE; i++) {
       indicesToSend.push(i);
     };
+    const indicesToSync = indicesToSend;
 
     while (indicesToSend.length > 0) {
       let batchesToSend = chunk<number>(indicesToSend, BATCH_SIZE);
@@ -226,15 +238,15 @@ describe("gummyroll-continuous", () => {
     }
 
     const merkleRoll = await Gummyroll.provider.connection.getAccountInfo(
-        merkleRollKeypair.publicKey
+      merkleRollKeypair.publicKey
     );
     let onChainMerkle = decodeMerkleRoll(merkleRoll.data);
-    
+
     const onChainRoot = onChainMerkle.roll.changeLogs[onChainMerkle.roll.activeIndex].root;
     const treeRoot = new PublicKey(offChainTree.root);
     assert(
-        onChainRoot.equals(treeRoot),
-        "On chain root does not match root passed in instruction"
+      onChainRoot.equals(treeRoot),
+      "On chain root does not match root passed in instruction"
     );
   });
 });

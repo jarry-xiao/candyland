@@ -128,12 +128,7 @@ describe("gummyroll", () => {
   describe("Having created a tree with a single leaf", () => {
     beforeEach(async () => {
       [merkleRollKeypair, offChainTree] = await createTreeOnChain(payer, 1);
-
-      listener = Gummyroll.addEventListener("ChangeLogEvent", (event) => {
-        updateTree(offChainTree, Buffer.from(event.path[0].inner), event.index);
-      });
     });
-
     it("Append single leaf", async () => {
       const newLeaf = hash(
         payer.publicKey.toBuffer(),
@@ -223,18 +218,11 @@ describe("gummyroll", () => {
         "Updated on chain root matches root of updated off chain tree"
       );
     });
-    afterEach("Kill listeners", async () => {
-      await Gummyroll.removeEventListener(listener);
-    });
   });
 
   describe(`Having created a tree with ${MAX_SIZE} leaves`, () => {
     beforeEach(async () => {
       [merkleRollKeypair, offChainTree] = await createTreeOnChain(payer, MAX_SIZE);
-
-      listener = Gummyroll.addEventListener("ChangeLogEvent", (event) => {
-        updateTree(offChainTree, Buffer.from(event.path[0].inner), event.index);
-      });
     });
     it(`Replace all of them in a block`, async () => {
       // Replace 64 leaves before syncing off-chain tree with on-chain tree
@@ -242,17 +230,6 @@ describe("gummyroll", () => {
       // Cache all proofs so we can execute in single block
       let ixArray = [];
       let txList = [];
-
-      // Create additional proof to check that it fails to execute in same block
-      const failedRoot = { inner: Array.from(offChainTree.root) };
-      const failedLeaf = { inner: Array.from(offChainTree.leaves[MAX_SIZE].node) };
-      const failedProof = getProofOfLeaf(offChainTree, MAX_SIZE).map((offChainTreeNode) => {
-        return {
-          pubkey: new PublicKey(offChainTreeNode.node),
-          isSigner: false,
-          isWritable: false,
-        };
-      });
 
       const leavesToUpdate = [];
       for (let i = 0; i < MAX_SIZE; i++) {
