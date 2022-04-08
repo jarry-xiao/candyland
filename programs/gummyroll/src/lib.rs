@@ -231,7 +231,6 @@ pub mod gummyroll {
         for node in ctx.remaining_accounts.iter() {
             proof.push(Node::new(node.key().to_bytes()));
         }
-        // assert_eq!(proof.len(), header.max_depth as usize);
 
         let id = ctx.accounts.merkle_roll.key();
         match merkle_roll_apply_fn!(
@@ -518,31 +517,11 @@ pub trait ZeroCopy: Pod {
     }
 }
 
-pub fn recompute_known_height<const MAX_DEPTH: usize>(
-    leaf: Node,
-    proof: Vec<Node>,
-    index: u32,
-    height: u32,
-) -> Node {
-    msg!("proof size: {}", proof.len());
-
-    let mut full_proof: [Node; MAX_DEPTH] = [Node::new([0; 32]); MAX_DEPTH];
-    full_proof.copy_from_slice(&proof);
-
-    for i in height..MAX_DEPTH as u32 {
-        full_proof[i as usize] = empty_node(i as u32);
-    }
-
-    return recompute(leaf, &full_proof, index);
-}
-
 fn fill_in_proof<const MAX_DEPTH: usize>(
     proof_vec: Vec<Node>,
     full_proof: &mut [Node; MAX_DEPTH],
     height: u32,
 ) {
-    msg!("proof size: {}", proof_vec.len());
-
     full_proof[..proof_vec.len()].copy_from_slice(&proof_vec);
 
     for i in height..MAX_DEPTH as u32 {
@@ -702,7 +681,6 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             );
             None
         } else {
-            msg!("Height is: {}", self.get_height());
             let mut proof: [Node; MAX_DEPTH] = [Node::default(); MAX_DEPTH];
             fill_in_proof::<MAX_DEPTH>(proof_vec, &mut proof, self.get_height());
 
