@@ -37,31 +37,27 @@ describe("gummyroll-continuous", () => {
       fromPubkey: payer.publicKey,
       newAccountPubkey: merkleRollKeypair.publicKey,
       lamports:
-        await program.provider.connection.getMinimumBalanceForRentExemption(
+        await Gummyroll.provider.connection.getMinimumBalanceForRentExemption(
           requiredSpace
         ),
       space: requiredSpace,
-      programId: program.programId,
+      programId: Gummyroll.programId,
     });
 
     const initGummyrollIx = Gummyroll.instruction.initEmptyGummyroll(
       MAX_DEPTH,
       MAX_SIZE,
-      root,
-      leaf,
-      tree.leaves.length,
       {
         accounts: {
           merkleRoll: merkleRollKeypair.publicKey,
           authority: payer.publicKey,
         },
         signers: [payer],
-        remainingAccounts: proof,
       }
     );
 
     const tx = new Transaction().add(allocAccountIx).add(initGummyrollIx);
-    let txid = await program.provider.send(tx, [payer, merkleRollKeypair], {
+    let txid = await Gummyroll.provider.send(tx, [payer, merkleRollKeypair], {
       commitment: "singleGossip",
     });
     return merkleRollKeypair
@@ -106,7 +102,7 @@ describe("gummyroll-continuous", () => {
     );
 
     assert(
-      onChainMerkle.roll.changeLogs[0].root.equals(new PublicKey(tree.root)),
+      onChainMerkle.roll.changeLogs[0].root.equals(new PublicKey(offChainTree.root)),
       "On chain root does not match root passed in instruction"
     );
   });
@@ -166,15 +162,13 @@ describe("gummyroll-continuous", () => {
     );
   }
 
-  it("Continuous updating and syncing", async () => {
+  it(`${MAX_SIZE} transactions in batches of ${BATCH_SIZE}`, async () => {
     let indicesToSend = [];
     for (let i = 0; i < MAX_SIZE; i++) {
       indicesToSend.push(i);
     };
 
-    let lastActiveIndex = 0;
     while (indicesToSend.length > 0) {
-      console.log(`Sending ${indicesToSend.length} transactions in batches of ${BATCH_SIZE}`);
       let batchesToSend = chunk<number>(indicesToSend, BATCH_SIZE);
       let indicesLeft: number[] = [];
 
@@ -212,22 +206,14 @@ describe("gummyroll-continuous", () => {
           console.log(`${txsToReplay.length} tx's failed in batch`)
         }
 
-        // console.log("confirming batch");
-        const confirmations = await Promise.all(batchToConfirm.map(async (txId) => {
+        await Promise.all(batchToConfirm.map(async (txId) => {
           const confirmation = await connection.confirmTransaction(txId, "confirmed")
           if (confirmation.value.err && txIdToIndex[txId]) {
             txsToReplay.push(txIdToIndex[txId]);
           }
           return confirmation;
         }));
-        // console.log(confirmations);
 
-        const merkleRoll = await Gummyroll.provider.connection.getAccountInfo(
-          merkleRollKeypair.publicKey
-        );
-        let onChainMerkle = decodeMerkleRoll(merkleRoll.data);
-        // console.log("Active index:", onChainMerkle.roll.activeIndex);
-        lastActiveIndex = onChainMerkle.roll.activeIndex;
         indicesLeft = indicesLeft.concat(txsToReplay);
       }
 
@@ -246,11 +232,6 @@ describe("gummyroll-continuous", () => {
     
     const onChainRoot = onChainMerkle.roll.changeLogs[onChainMerkle.roll.activeIndex].root;
     const treeRoot = new PublicKey(offChainTree.root);
-    console.log("onChainRoot:", onChainRoot.toString());
-    console.log("offChainRoot:", treeRoot.toString());
-    console.log("Active index:", onChainMerkle.roll.activeIndex);
-    console.log("Buffer size:", onChainMerkle.roll.bufferSize);
-
     assert(
         onChainRoot.equals(treeRoot),
         "On chain root does not match root passed in instruction"
