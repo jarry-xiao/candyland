@@ -3,13 +3,13 @@ import { NextPage } from "next";
 import { useRouter } from "next/router";
 import React, { FormEvent, useState } from "react";
 import Button from "../../components/Button";
-import addItem from "../../lib/mutations/addItem";
+import addAsset from "../../lib/mutations/addAsset";
 import { useAnchorWallet } from "@solana/wallet-adapter-react";
 import TreeSelect from "../../components/TreeSelect";
 import { unstable_serialize, useSWRConfig } from "swr";
-import { ItemPayload } from "../../lib/loaders/ItemTypes";
+import { AssetPayload } from "../../lib/loaders/AssetTypes";
 
-const AddItem: NextPage = () => {
+const AddAsset: NextPage = () => {
   const router = useRouter();
   const dataRef = React.createRef<HTMLTextAreaElement>();
   const [selectedTreeAccount, setSelectedTreeAccount] =
@@ -27,42 +27,42 @@ const AddItem: NextPage = () => {
     if (!targetTreeAccount) {
       return;
     }
-    const indexOfNewItem = await addItem(
+    const indexOfNewAsset = await addAsset(
       anchorWallet!,
       selectedTreeAccount,
       data
     );
-    const newItemPayload = {
+    const newAssetPayload = {
       data,
-      index: indexOfNewItem,
+      index: indexOfNewAsset,
       owner: newOwner.toBase58(),
       treeAccount: targetTreeAccount.toBase58(),
     };
     await Promise.all([
-      mutate<ItemPayload>(
+      mutate<AssetPayload>(
         unstable_serialize([
-          "item",
+          "asset",
           targetTreeAccount.toBase58(),
-          indexOfNewItem.toString(),
+          indexOfNewAsset.toString(),
         ]),
-        newItemPayload
+        newAssetPayload
       ),
-      mutate<ItemPayload[]>(
-        unstable_serialize(["owner", newOwner.toBase58(), "items"]),
-        (currentItems) => [...(currentItems || []), newItemPayload]
+      mutate<AssetPayload[]>(
+        unstable_serialize(["owner", newOwner.toBase58(), "assets"]),
+        (currentAssets) => [...(currentAssets || []), newAssetPayload]
       ),
     ]);
     router.replace({
-      pathname: "/item/[treeAccount]/[index]",
+      pathname: "/asset/[treeAccount]/[index]",
       query: {
         treeAccount: targetTreeAccount.toBase58(),
-        index: indexOfNewItem.toString(),
+        index: indexOfNewAsset.toString(),
       },
     });
   }
   return (
     <>
-      <h1>Add item for {router.query.ownerPubkey}</h1>
+      <h1>Add asset for {router.query.ownerPubkey}</h1>
       <form onSubmit={handleSubmit}>
         <label htmlFor="treeAccount">
           <p>Tree id</p>
@@ -79,7 +79,7 @@ const AddItem: NextPage = () => {
         </label>
         <p>
           <Button type="submit" disabled={!selectedTreeAccount}>
-            Add
+            Create Asset
           </Button>
         </p>
       </form>
@@ -87,4 +87,4 @@ const AddItem: NextPage = () => {
   );
 };
 
-export default AddItem;
+export default AddAsset;

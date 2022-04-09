@@ -2,12 +2,12 @@ import { useRouter } from "next/router";
 import { NextPage, NextPageContext } from "next/types";
 import useSWRImmutable from "swr/immutable";
 import { unstable_serialize } from "swr";
-import ItemImage from "../../../components/ItemImage";
-import getItem from "../../../lib/loaders/getItem";
-import { ItemPayload } from "../../../lib/loaders/ItemTypes";
+import AssetImage from "../../../components/AssetImage";
+import getAsset from "../../../lib/loaders/getAsset";
+import { AssetPayload } from "../../../lib/loaders/AssetTypes";
 import BufferData from "../../../components/BufferData";
 
-const ItemDetail: NextPage = () => {
+const AssetDetail: NextPage = () => {
   const router = useRouter();
   const index = router.query.index as NonNullable<
     typeof router.query.treeAccount
@@ -15,23 +15,23 @@ const ItemDetail: NextPage = () => {
   const treeAccount = router.query.treeAccount as NonNullable<
     typeof router.query.treeAccount
   >[number];
-  const { data } = useSWRImmutable<Awaited<ReturnType<typeof getItem>>>([
-    "item",
+  const { data } = useSWRImmutable<Awaited<ReturnType<typeof getAsset>>>([
+    "asset",
     treeAccount,
     index,
   ]);
   if (!data) {
     return null;
   }
-  const { data: itemData, owner } = data!;
+  const { data: assetData, owner } = data!;
   return (
     <>
       <h1>
-        Item {treeAccount}/{index} belonging to {owner}
+        Asset {treeAccount}/{index} belonging to {owner}
       </h1>
-      <ItemImage data={itemData} treeAccount={treeAccount} />
+      <AssetImage data={assetData} treeAccount={treeAccount} />
       <p>Data</p>
-      <BufferData buffer={Buffer.from(itemData)} />
+      <BufferData buffer={Buffer.from(assetData)} />
     </>
   );
 };
@@ -41,16 +41,16 @@ export async function getInitialProps({ query }: NextPageContext) {
   const treeAccount = query.treeAccount as NonNullable<
     typeof query.treeAccount
   >[number];
-  const item = await getItem(treeAccount, parseInt(index, 10));
-  if (!item) {
+  const asset = await getAsset(treeAccount, parseInt(index, 10));
+  if (!asset) {
     return { notFound: true };
   }
   const serverData = {
-    [unstable_serialize(["item", treeAccount, index])]: item as ItemPayload,
+    [unstable_serialize(["asset", treeAccount, index])]: asset as AssetPayload,
   };
   return {
     props: { serverData },
   };
 }
 
-export default ItemDetail;
+export default AssetDetail;

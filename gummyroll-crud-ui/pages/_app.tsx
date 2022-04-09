@@ -14,8 +14,8 @@ import Head from "next/head";
 import { useMemo } from "react";
 import SearchBar from "../components/SearchBar";
 import { SWRConfig } from "swr";
-import getItemsForOwner from "../lib/loaders/getItemsForOwner";
-import getItem from "../lib/loaders/getItem";
+import getAssetsForOwner from "../lib/loaders/getAssetsForOwner";
+import getAsset from "../lib/loaders/getAsset";
 import AnchorConfigurator from "../components/AnchorConfigurator";
 
 import * as styles from "../styles/app.css"; // Side-effectful import that adds global styles.
@@ -26,14 +26,14 @@ import "@solana/wallet-adapter-react-ui/styles.css"; // Side-effectful import to
  * Eventually this will just be replaced with `fetch` and API URLs.
  */
 async function localFetcher(...pathParts: string[]) {
-  if (pathParts[0] === "item") {
+  if (pathParts[0] === "asset") {
     const [_, treeAccount, index] = pathParts;
-    return await getItem(treeAccount, parseInt(index, 10));
+    return await getAsset(treeAccount, parseInt(index, 10));
   }
   if (pathParts[0] === "owner") {
-    if (pathParts[2] === "items") {
+    if (pathParts[2] === "assets") {
       const ownerPubkey = pathParts[1];
-      return await getItemsForOwner(ownerPubkey);
+      return await getAssetsForOwner(ownerPubkey);
     } else if (pathParts[2] === "trees") {
       const result = await anchor
         .getProvider()

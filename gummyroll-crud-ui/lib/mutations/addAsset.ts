@@ -11,7 +11,7 @@ type GetChangeLogEvent<T extends IdlEvent> = T["name"] extends "ChangeLogEvent"
   : never;
 type ChangeLogEvent = GetChangeLogEvent<Gummyroll["events"][number]>;
 
-export default async function addItem(
+export default async function addAsset(
   anchorWallet: AnchorWallet,
   treeAccount: anchor.web3.PublicKey,
   data: string
