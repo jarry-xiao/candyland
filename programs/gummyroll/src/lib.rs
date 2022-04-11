@@ -520,12 +520,11 @@ pub trait ZeroCopy: Pod {
 fn fill_in_proof<const MAX_DEPTH: usize>(
     proof_vec: Vec<Node>,
     full_proof: &mut [Node; MAX_DEPTH],
-    height: u32,
 ) {
     full_proof[..proof_vec.len()].copy_from_slice(&proof_vec);
 
-    for i in height..MAX_DEPTH as u32 {
-        full_proof[i as usize] = empty_node(i as u32);
+    for i in proof_vec.len()..MAX_DEPTH {
+        full_proof[i] = empty_node(i as u32);
     }
 }
 
@@ -682,7 +681,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             None
         } else {
             let mut proof: [Node; MAX_DEPTH] = [Node::default(); MAX_DEPTH];
-            fill_in_proof::<MAX_DEPTH>(proof_vec, &mut proof, self.get_height());
+            fill_in_proof::<MAX_DEPTH>(proof_vec, &mut proof);
 
             sol_log_compute_units();
             let root = self.find_and_update_leaf(
@@ -695,16 +694,6 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             );
             sol_log_compute_units();
             root
-        }
-    }
-
-    fn get_height(&self) -> u32 {
-        // if power of 2, then 32 - leading_zeros - 1
-        let num_leaves = self.rightmost_proof.index;
-        if (32 - num_leaves.trailing_zeros() + num_leaves.leading_zeros()) == 1 {
-            32 - num_leaves.leading_zeros() - 1
-        } else {
-            32 - num_leaves.leading_zeros()
         }
     }
 
