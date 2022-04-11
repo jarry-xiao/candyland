@@ -35,9 +35,10 @@ const AssetDetail: NextPage = () => {
     }
     setIsUndergoingMutation(true);
     try {
+      const { treeAccount, treeAdmin } = data;
       await removeAsset(
-        anchorWallet,
         new anchor.web3.PublicKey(treeAccount),
+        new anchor.web3.PublicKey(treeAdmin),
         parseInt(index, 10)
       );
       await Promise.all([
@@ -64,7 +65,7 @@ const AssetDetail: NextPage = () => {
     } finally {
       setIsUndergoingMutation(false);
     }
-  }, [anchorWallet, data, index, mutate, router, treeAccount]);
+  }, [anchorWallet, data, index, mutate, router]);
   if (!data) {
     return null;
   }

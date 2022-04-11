@@ -8,12 +8,12 @@ import { useAnchorWallet } from "@solana/wallet-adapter-react";
 import TreeSelect from "../../components/TreeSelect";
 import { unstable_serialize, useSWRConfig } from "swr";
 import { AssetPayload } from "../../lib/loaders/AssetTypes";
+import { TreePayload } from "../../lib/loaders/getTreesForAuthority";
 
 const AddAsset: NextPage = () => {
   const router = useRouter();
   const dataRef = React.createRef<HTMLTextAreaElement>();
-  const [selectedTreeAccount, setSelectedTreeAccount] =
-    useState<anchor.web3.PublicKey | null>(null);
+  const [selectedTree, setSelectedTree] = useState<TreePayload | null>(null);
   const { mutate } = useSWRConfig();
   const anchorWallet = useAnchorWallet();
   if (!anchorWallet) {
@@ -21,41 +21,41 @@ const AddAsset: NextPage = () => {
   }
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const targetTreeAccount = selectedTreeAccount;
-    const newOwner = anchorWallet!.publicKey;
+    const targetTreeAccount = selectedTree;
     const data = dataRef.current?.value!;
     if (!targetTreeAccount) {
       return;
     }
     const indexOfNewAsset = await addAsset(
-      anchorWallet!,
-      selectedTreeAccount,
+      new anchor.web3.PublicKey(selectedTree.account),
+      new anchor.web3.PublicKey(selectedTree.authority),
       data
     );
     const newAssetPayload = {
       data,
       index: indexOfNewAsset,
-      owner: newOwner.toBase58(),
-      treeAccount: targetTreeAccount.toBase58(),
+      owner: selectedTree.authority,
+      treeAccount: targetTreeAccount.account,
+      treeAdmin: targetTreeAccount.authority,
     };
     await Promise.all([
       mutate<AssetPayload>(
         unstable_serialize([
           "asset",
-          targetTreeAccount.toBase58(),
+          targetTreeAccount.account,
           indexOfNewAsset.toString(),
         ]),
         newAssetPayload
       ),
       mutate<AssetPayload[]>(
-        unstable_serialize(["owner", newOwner.toBase58(), "assets"]),
+        unstable_serialize(["owner", selectedTree.authority, "assets"]),
         (currentAssets) => [...(currentAssets || []), newAssetPayload]
       ),
     ]);
     router.replace({
       pathname: "/asset/[treeAccount]/[index]",
       query: {
-        treeAccount: targetTreeAccount.toBase58(),
+        treeAccount: targetTreeAccount.account,
         index: indexOfNewAsset.toString(),
       },
     });
@@ -69,8 +69,8 @@ const AddAsset: NextPage = () => {
           <TreeSelect
             anchorWallet={anchorWallet!}
             name="treeAccount"
-            onChange={setSelectedTreeAccount}
-            value={selectedTreeAccount}
+            onChange={setSelectedTree}
+            value={selectedTree?.account}
           />
         </label>
         <label htmlFor="data">
@@ -78,7 +78,7 @@ const AddAsset: NextPage = () => {
           <textarea name="data" ref={dataRef}></textarea>
         </label>
         <p>
-          <Button type="submit" disabled={!selectedTreeAccount}>
+          <Button type="submit" disabled={!selectedTree}>
             Create Asset
           </Button>
         </p>

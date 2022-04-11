@@ -3,6 +3,7 @@ export type AssetPayload = Readonly<{
   index: number;
   owner: string;
   treeAccount: string;
+  treeAdmin: string;
 }>;
 
 export type AssetProof = Readonly<{

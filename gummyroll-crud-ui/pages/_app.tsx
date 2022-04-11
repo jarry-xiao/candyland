@@ -20,6 +20,7 @@ import AnchorConfigurator from "../components/AnchorConfigurator";
 
 import * as styles from "../styles/app.css"; // Side-effectful import that adds global styles.
 import "@solana/wallet-adapter-react-ui/styles.css"; // Side-effectful import to add styles for wallet modal.
+import getTreesForAuthority from "../lib/loaders/getTreesForAuthority";
 
 /**
  * Temporary fetch implementation that knows how to look up mock data.
@@ -31,17 +32,11 @@ async function localFetcher(...pathParts: string[]) {
     return await getAsset(treeAccount, parseInt(index, 10));
   }
   if (pathParts[0] === "owner") {
+    const ownerPubkey = pathParts[1];
     if (pathParts[2] === "assets") {
-      const ownerPubkey = pathParts[1];
       return await getAssetsForOwner(ownerPubkey);
     } else if (pathParts[2] === "trees") {
-      const result = await anchor
-        .getProvider()
-        .connection.getParsedProgramAccounts(
-          new anchor.web3.PublicKey(GummyrollIdl.metadata.address),
-          "confirmed"
-        );
-      return result.map((result) => result.pubkey);
+      return await getTreesForAuthority(ownerPubkey);
     }
   }
 }

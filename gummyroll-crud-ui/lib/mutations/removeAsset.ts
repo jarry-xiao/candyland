@@ -1,17 +1,15 @@
 import GummyrollIdl from "../../../target/idl/gummyroll.json";
-import { AnchorWallet } from "@solana/wallet-adapter-react";
 import getGummyrollCrudProgram from "../anchor_programs/getGummyrollCrudProgram";
 import getGummyrollCrudAuthorityPDA from "../anchor_programs/pdas/getGummyrollCrudAuthorityPDA";
 import * as anchor from "@project-serum/anchor";
 import getProofForAsset from "../loaders/getProofForAsset";
 
 export default async function removeAsset(
-  anchorWallet: AnchorWallet,
   treeAccount: anchor.web3.PublicKey,
+  treeAdmin: anchor.web3.PublicKey,
   index: number
 ) {
   const program = getGummyrollCrudProgram();
-  const treeAdmin = anchorWallet.publicKey;
   const [authorityPda] = await getGummyrollCrudAuthorityPDA(
     treeAccount,
     treeAdmin
@@ -20,7 +18,7 @@ export default async function removeAsset(
   await program.methods
     .remove(root, hash, index)
     .accounts({
-      authority: anchorWallet.publicKey,
+      authority: treeAdmin,
       authorityPda,
       merkleRoll: treeAccount,
       gummyrollProgram: new anchor.web3.PublicKey(
