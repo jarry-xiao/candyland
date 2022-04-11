@@ -12,7 +12,6 @@ import { assert } from "chai";
 
 import { buildTree, getProofOfLeaf, updateTree, Tree } from "./merkle-tree";
 import { decodeMerkleRoll, getMerkleRollAccountSize } from "./merkle-roll-serde";
-import { sleep } from "../deps/metaplex-program-library/metaplex/js/test/utils";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 
 // @ts-ignore
