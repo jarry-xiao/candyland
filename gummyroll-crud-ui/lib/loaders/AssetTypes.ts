@@ -4,3 +4,9 @@ export type AssetPayload = Readonly<{
   owner: string;
   treeAccount: string;
 }>;
+
+export type AssetProof = Readonly<{
+  hash: number[];
+  proof: number[][];
+  root: number[];
+}>;
