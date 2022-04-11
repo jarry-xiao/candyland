@@ -58,7 +58,15 @@ export default function MyApp({
     <SWRConfig
       value={{
         ...(serverData ? { fallback: serverData } : null),
-        fetcher: localFetcher,
+        fetcher: process.env.NEXT_PUBLIC_TREE_SERVER_API_ENDPOINT
+          ? async (...pathParts: string[]) => {
+              const url = new URL(
+                pathParts.join("/") /* relative path */,
+                process.env.NEXT_PUBLIC_TREE_SERVER_API_ENDPOINT /* base */
+              );
+              return await fetch(url.toString());
+            }
+          : localFetcher,
       }}
     >
       <Head>
