@@ -3,7 +3,7 @@ import * as styles from "../styles/Button.css";
 
 type Props = Readonly<
   React.ComponentProps<"button"> & {
-    variant?: "primary";
+    variant?: "danger" | "primary";
   }
 >;
 
@@ -16,7 +16,7 @@ export default React.forwardRef(function Button(
       {...props}
       className={
         styles.variant[
-          props.variant ?? props.type === "submit" ? "primary" : "default"
+          props.variant ?? (props.type === "submit" ? "primary" : "default")
         ]
       }
       ref={ref}

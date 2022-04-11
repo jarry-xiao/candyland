@@ -35,6 +35,18 @@ export const variant = styleVariants({
       },
     },
   ],
+  danger: [
+    base,
+    {
+      backgroundColor: "red",
+      borderColor: "lightred",
+      selectors: {
+        "&:hover:not(:active, :disabled)": {
+          backgroundColor: "darkred",
+        },
+      },
+    },
+  ],
   primary: [
     base,
     {
