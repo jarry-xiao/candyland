@@ -6,6 +6,7 @@ import AssetImage from "../../../components/AssetImage";
 import getAsset from "../../../lib/loaders/getAsset";
 import { AssetPayload } from "../../../lib/loaders/AssetTypes";
 import BufferData from "../../../components/BufferData";
+import * as styles from "../../../styles/AssetDetails.css";
 
 const AssetDetail: NextPage = () => {
   const router = useRouter();
@@ -29,7 +30,11 @@ const AssetDetail: NextPage = () => {
       <h1>
         Asset {treeAccount}/{index} belonging to {owner}
       </h1>
-      <AssetImage data={assetData} treeAccount={treeAccount} />
+      <div className={styles.imageContainer}>
+        <div className={styles.imageWrapper}>
+          <AssetImage data={assetData} treeAccount={treeAccount} />
+        </div>
+      </div>
       <p>Data</p>
       <BufferData buffer={Buffer.from(assetData)} />
     </>
