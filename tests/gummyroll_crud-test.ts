@@ -173,8 +173,8 @@ describe("Gummyroll CRUD program", () => {
       expect(
         merkleRollAccount.owner.equals(Gummyroll.programId),
         "Expected the tree to be owned by the Gummyroll program " +
-          `\`${Gummyroll.programId.toBase58()}\`. Was owned by ` +
-          `\`${merkleRollAccount.owner.toBase58()}\``
+        `\`${Gummyroll.programId.toBase58()}\`. Was owned by ` +
+        `\`${merkleRollAccount.owner.toBase58()}\``
       ).to.be.true;
       expect(merkleRollAccount.data.byteLength).to.equal(requiredSpace);
       const merkleRoll = decodeMerkleRoll(merkleRollAccount.data);
@@ -183,8 +183,8 @@ describe("Gummyroll CRUD program", () => {
       expect(
         merkleRoll.header.authority.equals(treeAuthorityPDA),
         "Expected the tree authority to be the authority PDA " +
-          `\`${treeAuthorityPDA.toBase58()}\`. Got ` +
-          `\`${merkleRoll.header.authority.toBase58()}\``
+        `\`${treeAuthorityPDA.toBase58()}\`. Got ` +
+        `\`${merkleRoll.header.authority.toBase58()}\``
       ).to.be.true;
     });
   });
@@ -209,7 +209,7 @@ describe("Gummyroll CRUD program", () => {
           false,
           "Nobody other than the tree admin should be able to add an asset to the tree"
         );
-      } catch {}
+      } catch { }
     });
     describe("having appended the first item", () => {
       const firstTestMessage = "First test message";
@@ -364,13 +364,13 @@ describe("Gummyroll CRUD program", () => {
           false,
           "Transaction should have failed since the message was modified"
         );
-      } catch {}
+      } catch { }
       const actualRoot = await getActualRoot(treeKeypair.publicKey);
       const expectedRoot = tree.root;
       expect(expectedRoot.compare(actualRoot)).to.equal(
         0,
         "The transaction should have failed because the message was " +
-          "modified, but never the less, the on-chain root hash changed."
+        "modified, but never the less, the on-chain root hash changed."
       );
     });
     it("fails if someone other than the owner tries to transfer an asset", async () => {
@@ -402,7 +402,7 @@ describe("Gummyroll CRUD program", () => {
           false,
           "Transaction should have failed since the signer was not the owner"
         );
-      } catch {}
+      } catch { }
     });
   });
   describe("`Remove` instruction", () => {
@@ -487,13 +487,13 @@ describe("Gummyroll CRUD program", () => {
           false,
           "Transaction should have failed since the leaf hash was wrong"
         );
-      } catch {}
+      } catch { }
       const actualRoot = await getActualRoot(treeKeypair.publicKey);
       const expectedRoot = tree.root;
       expect(expectedRoot.compare(actualRoot)).to.equal(
         0,
         "The transaction should have failed because the leaf hash was " +
-          "wrong, but never the less, the on-chain root hash changed."
+        "wrong, but never the less, the on-chain root hash changed."
       );
     });
     it("fails if someone other than the tree admin tries to remove a leaf", async () => {
@@ -518,7 +518,7 @@ describe("Gummyroll CRUD program", () => {
           false,
           "Transaction should have failed since the signer was not the owner"
         );
-      } catch {}
+      } catch { }
     });
   });
 });

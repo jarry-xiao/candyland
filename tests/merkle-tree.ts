@@ -20,11 +20,11 @@ type TreeNode = {
 }
 
 const generateLeafNode = (seeds) => {
-  let leaf = Buffer.alloc(32);
-  for (const seed of seeds) {
-    leaf = Buffer.from(keccak_256.digest([...leaf, ...seed]));
-  }
-  return leaf;
+    let leaf = Buffer.alloc(32);
+    for (const seed of seeds) {
+        leaf = Buffer.from(keccak_256.digest([...leaf, ...seed]));
+    }
+    return leaf;
 };
 
 
@@ -98,7 +98,7 @@ export function buildTree(leaves: Buffer[]): Tree {
         }
         left.parent = parent;
         right.parent = parent;
-        nodes.enqueue(parent);    
+        nodes.enqueue(parent);
         seqNum++;
     }
 
@@ -111,12 +111,16 @@ export function buildTree(leaves: Buffer[]): Tree {
 /**
  * Takes a built Tree and returns the proof to leaf
  */
-export function getProofOfLeaf(tree: Tree, idx: number, verbose = false): TreeNode[] {
+export function getProofOfLeaf(tree: Tree, idx: number, minimizeProofHeight: boolean = false, treeHeight: number = -1, verbose = false): TreeNode[] {
     let proof: TreeNode[] = [];
 
     let node = tree.leaves[idx];
 
+    let height = 0;
     while (typeof node.parent !== 'undefined') {
+        if (minimizeProofHeight && height >= treeHeight) {
+            break;
+        }
         if (verbose) {
             console.log(`${node.level}: ${Uint8Array.from(node.node)}`);
         }
@@ -141,6 +145,7 @@ export function getProofOfLeaf(tree: Tree, idx: number, verbose = false): TreeNo
             }
         }
         node = parent;
+        height++;
     }
 
     return proof;

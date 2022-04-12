@@ -1,6 +1,6 @@
 import Link from "next/link";
 import React from "react";
-import ItemImage from "./ItemImage";
+import AssetImage from "./AssetImage";
 
 type Props = Readonly<{
   data: string;
@@ -8,16 +8,16 @@ type Props = Readonly<{
   treeAccount: string;
 }>;
 
-export default function OwnerItem({ data, index, treeAccount }: Props) {
+export default function OwnerAsset({ data, index, treeAccount }: Props) {
   return (
     <Link
       href={{
-        pathname: "/item/[treeAccount]/[index]",
+        pathname: "/asset/[treeAccount]/[index]",
         query: { index, treeAccount },
       }}
     >
       <a>
-        <ItemImage data={data} treeAccount={treeAccount} />
+        <AssetImage data={data} treeAccount={treeAccount} />
       </a>
     </Link>
   );

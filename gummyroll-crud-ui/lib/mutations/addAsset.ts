@@ -11,13 +11,12 @@ type GetChangeLogEvent<T extends IdlEvent> = T["name"] extends "ChangeLogEvent"
   : never;
 type ChangeLogEvent = GetChangeLogEvent<Gummyroll["events"][number]>;
 
-export default async function addItem(
-  anchorWallet: AnchorWallet,
+export default async function addAsset(
   treeAccount: anchor.web3.PublicKey,
+  treeAdmin: anchor.web3.PublicKey,
   data: string
 ) {
   const program = getGummyrollCrudProgram();
-  const treeAdmin = anchorWallet.publicKey;
   const [authorityPda] = await getGummyrollCrudAuthorityPDA(
     treeAccount,
     treeAdmin
@@ -25,7 +24,7 @@ export default async function addItem(
   const txid = await program.methods
     .add(Buffer.from(data, "utf-8"))
     .accounts({
-      authority: anchorWallet.publicKey,
+      authority: treeAdmin,
       authorityPda,
       merkleRoll: treeAccount,
       gummyrollProgram: new anchor.web3.PublicKey(

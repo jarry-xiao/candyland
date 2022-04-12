@@ -3,17 +3,17 @@ import { NextPage } from "next";
 import { useRouter } from "next/router";
 import React, { FormEvent, useState } from "react";
 import Button from "../../components/Button";
-import addItem from "../../lib/mutations/addItem";
+import addAsset from "../../lib/mutations/addAsset";
 import { useAnchorWallet } from "@solana/wallet-adapter-react";
 import TreeSelect from "../../components/TreeSelect";
 import { unstable_serialize, useSWRConfig } from "swr";
-import { ItemPayload } from "../../lib/loaders/ItemTypes";
+import { AssetPayload } from "../../lib/loaders/AssetTypes";
+import { TreePayload } from "../../lib/loaders/getTreesForAuthority";
 
-const AddItem: NextPage = () => {
+const AddAsset: NextPage = () => {
   const router = useRouter();
   const dataRef = React.createRef<HTMLTextAreaElement>();
-  const [selectedTreeAccount, setSelectedTreeAccount] =
-    useState<anchor.web3.PublicKey | null>(null);
+  const [selectedTree, setSelectedTree] = useState<TreePayload | null>(null);
   const { mutate } = useSWRConfig();
   const anchorWallet = useAnchorWallet();
   if (!anchorWallet) {
@@ -21,56 +21,56 @@ const AddItem: NextPage = () => {
   }
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const targetTreeAccount = selectedTreeAccount;
-    const newOwner = anchorWallet!.publicKey;
+    const targetTreeAccount = selectedTree;
     const data = dataRef.current?.value!;
     if (!targetTreeAccount) {
       return;
     }
-    const indexOfNewItem = await addItem(
-      anchorWallet!,
-      selectedTreeAccount,
+    const indexOfNewAsset = await addAsset(
+      new anchor.web3.PublicKey(selectedTree.account),
+      new anchor.web3.PublicKey(selectedTree.authority),
       data
     );
-    const newItemPayload = {
+    const newAssetPayload = {
       data,
-      index: indexOfNewItem,
-      owner: newOwner.toBase58(),
-      treeAccount: targetTreeAccount.toBase58(),
+      index: indexOfNewAsset,
+      owner: selectedTree.authority,
+      treeAccount: targetTreeAccount.account,
+      treeAdmin: targetTreeAccount.authority,
     };
     await Promise.all([
-      mutate<ItemPayload>(
+      mutate<AssetPayload>(
         unstable_serialize([
-          "item",
-          targetTreeAccount.toBase58(),
-          indexOfNewItem.toString(),
+          "asset",
+          targetTreeAccount.account,
+          indexOfNewAsset.toString(),
         ]),
-        newItemPayload
+        newAssetPayload
       ),
-      mutate<ItemPayload[]>(
-        unstable_serialize(["owner", newOwner.toBase58(), "items"]),
-        (currentItems) => [...(currentItems || []), newItemPayload]
+      mutate<AssetPayload[]>(
+        unstable_serialize(["owner", selectedTree.authority, "assets"]),
+        (currentAssets) => [...(currentAssets || []), newAssetPayload]
       ),
     ]);
     router.replace({
-      pathname: "/item/[treeAccount]/[index]",
+      pathname: "/asset/[treeAccount]/[index]",
       query: {
-        treeAccount: targetTreeAccount.toBase58(),
-        index: indexOfNewItem.toString(),
+        treeAccount: targetTreeAccount.account,
+        index: indexOfNewAsset.toString(),
       },
     });
   }
   return (
     <>
-      <h1>Add item for {router.query.ownerPubkey}</h1>
+      <h1>Add asset for {router.query.ownerPubkey}</h1>
       <form onSubmit={handleSubmit}>
         <label htmlFor="treeAccount">
           <p>Tree id</p>
           <TreeSelect
             anchorWallet={anchorWallet!}
             name="treeAccount"
-            onChange={setSelectedTreeAccount}
-            value={selectedTreeAccount}
+            onChange={setSelectedTree}
+            value={selectedTree?.account}
           />
         </label>
         <label htmlFor="data">
@@ -78,8 +78,8 @@ const AddItem: NextPage = () => {
           <textarea name="data" ref={dataRef}></textarea>
         </label>
         <p>
-          <Button type="submit" disabled={!selectedTreeAccount}>
-            Add
+          <Button type="submit" disabled={!selectedTree}>
+            Create Asset
           </Button>
         </p>
       </form>
@@ -87,4 +87,4 @@ const AddItem: NextPage = () => {
   );
 };
 
-export default AddItem;
+export default AddAsset;
