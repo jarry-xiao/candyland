@@ -12,6 +12,7 @@ import removeAsset from "../../../lib/mutations/removeAsset";
 import { useAnchorWallet } from "@solana/wallet-adapter-react";
 import * as anchor from "@project-serum/anchor";
 import { AssetPayload } from "../../../lib/loaders/AssetTypes";
+import transferAsset from "../../../lib/mutations/transferAsset";
 
 const AssetDetail: NextPage = () => {
   const router = useRouter();
@@ -66,6 +67,51 @@ const AssetDetail: NextPage = () => {
       setIsUndergoingMutation(false);
     }
   }, [anchorWallet, data, index, mutate, router]);
+  const handleTransferClick = useCallback(async () => {
+    if (!anchorWallet || !data) {
+      return;
+    }
+    setIsUndergoingMutation(true);
+    try {
+      const { treeAccount, treeAdmin, data: assetData } = data;
+      const newOwnerBase58EncodedPubkey = window.prompt(
+        "Base58-encoded public key of new owner?"
+      );
+      const newOwner = new anchor.web3.PublicKey(newOwnerBase58EncodedPubkey!);
+      const owner = new anchor.web3.PublicKey(data.owner);
+      await transferAsset(
+        new anchor.web3.PublicKey(treeAccount),
+        new anchor.web3.PublicKey(treeAdmin),
+        Buffer.from(assetData, "utf-8"),
+        parseInt(index, 10),
+        owner,
+        newOwner
+      );
+      await Promise.all([
+        mutate<AssetPayload>(
+          unstable_serialize(["asset", treeAccount, index]),
+          undefined
+        ),
+        mutate<AssetPayload[]>(
+          unstable_serialize(["owner", data.owner, "assets"]),
+          (currentAssets) =>
+            currentAssets?.filter(
+              (asset) =>
+                asset.index !== parseInt(index, 10) &&
+                asset.treeAccount !== treeAccount
+            )
+        ),
+      ]);
+      router.replace({
+        pathname: "/owner/[ownerPubkey]/assets",
+        query: {
+          ownerPubkey: anchorWallet.publicKey.toBase58(),
+        },
+      });
+    } finally {
+      setIsUndergoingMutation(false);
+    }
+  }, [anchorWallet, data, index, mutate, router]);
   if (!data) {
     return null;
   }
@@ -81,13 +127,22 @@ const AssetDetail: NextPage = () => {
         </div>
       </div>
       {anchorWallet ? (
-        <Button
-          disabled={isUndergoingMutation}
-          variant="danger"
-          onClick={handleDestroyClick}
-        >
-          Destroy
-        </Button>
+        <>
+          <Button
+            disabled={isUndergoingMutation}
+            variant="primary"
+            onClick={handleTransferClick}
+          >
+            Transfer
+          </Button>
+          <Button
+            disabled={isUndergoingMutation}
+            variant="danger"
+            onClick={handleDestroyClick}
+          >
+            Destroy
+          </Button>
+        </>
       ) : null}
       <p>Data</p>
       <BufferData buffer={Buffer.from(assetData)} />
