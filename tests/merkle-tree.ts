@@ -28,7 +28,7 @@ const generateLeafNode = (seeds) => {
 };
 
 
-function emptyNode(level: number): Buffer {
+export function emptyNode(level: number): Buffer {
     if (CACHE_EMPTY_NODE.has(level)) {
         return CACHE_EMPTY_NODE.get(level);
     }
