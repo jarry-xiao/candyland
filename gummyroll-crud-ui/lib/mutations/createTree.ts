@@ -1,7 +1,7 @@
-import GummyrollIdl from "../../../target/idl/gummyroll.json";
 import * as anchor from "@project-serum/anchor";
 import { AnchorWallet } from "@solana/wallet-adapter-react";
 import getGummyrollCrudProgram from "../anchor_programs/getGummyrollCrudProgram";
+import GummyrollProgramId from "../anchor_programs/GummyrollProgramId";
 import getGummyrollCrudAuthorityPDA from "../anchor_programs/pdas/getGummyrollCrudAuthorityPDA";
 
 type MaxDepth = 14 | 16 | 18 | 20 | 22;
@@ -13,15 +13,12 @@ export default async function createTree(
   maxBufferSize: MaxBufferSize
 ) {
   const program = getGummyrollCrudProgram();
-  const gummyrollProgramId = new anchor.web3.PublicKey(
-    GummyrollIdl.metadata.address
-  );
   const treeAdmin = anchorWallet.publicKey;
   const treeAccountSeed = Date.now().toString();
   const treeAccount = await anchor.web3.PublicKey.createWithSeed(
     treeAdmin,
     treeAccountSeed,
-    gummyrollProgramId
+    GummyrollProgramId
   );
   const requiredSpace = getMerkleRollAccountSize(maxDepth, maxBufferSize);
   const allocGummyrollAccountIx =
@@ -35,7 +32,7 @@ export default async function createTree(
         ),
       seed: treeAccountSeed,
       space: requiredSpace,
-      programId: gummyrollProgramId,
+      programId: GummyrollProgramId,
     });
   const [authorityPda] = await getGummyrollCrudAuthorityPDA(
     treeAccount,
@@ -48,7 +45,7 @@ export default async function createTree(
       authority: treeAdmin,
       authorityPda,
       merkleRoll: treeAccount,
-      gummyrollProgram: gummyrollProgramId,
+      gummyrollProgram: GummyrollProgramId,
     })
     .rpc({ commitment: "confirmed" });
   return treeAccount;

@@ -8,7 +8,8 @@ export default function getGummyrollCrudProgram() {
   if (program == null) {
     program = new Program<GummyrollCrud>(
       GummyrollCrudIdl as unknown as GummyrollCrud,
-      GummyrollCrudIdl.metadata.address
+      GummyrollCrudIdl.metadata?.address ??
+        "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
     );
   }
   return program;

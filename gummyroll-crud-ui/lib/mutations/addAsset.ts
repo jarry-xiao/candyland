@@ -1,10 +1,10 @@
 import GummyrollIdl from "../../../target/idl/gummyroll.json";
 import * as anchor from "@project-serum/anchor";
-import { AnchorWallet } from "@solana/wallet-adapter-react";
 import getGummyrollCrudProgram from "../anchor_programs/getGummyrollCrudProgram";
 import getGummyrollCrudAuthorityPDA from "../anchor_programs/pdas/getGummyrollCrudAuthorityPDA";
 import { Gummyroll } from "../../../target/types/gummyroll";
 import { IdlEvent } from "@project-serum/anchor/dist/cjs/idl";
+import GummyrollProgramId from "../anchor_programs/GummyrollProgramId";
 
 type GetChangeLogEvent<T extends IdlEvent> = T["name"] extends "ChangeLogEvent"
   ? T
@@ -27,9 +27,7 @@ export default async function addAsset(
       authority: treeAdmin,
       authorityPda,
       merkleRoll: treeAccount,
-      gummyrollProgram: new anchor.web3.PublicKey(
-        GummyrollIdl.metadata.address
-      ),
+      gummyrollProgram: GummyrollProgramId,
     })
     .rpc({ commitment: "confirmed" });
   const transaction = await program.provider.connection.getTransaction(txid, {
@@ -37,7 +35,7 @@ export default async function addAsset(
   });
   try {
     const eventParser = new anchor.EventParser(
-      new anchor.web3.PublicKey(GummyrollIdl.metadata.address),
+      GummyrollProgramId,
       new anchor.BorshCoder(GummyrollIdl as anchor.Idl)
     );
     let foundEventData: anchor.Event<ChangeLogEvent>["data"] | null = null;
