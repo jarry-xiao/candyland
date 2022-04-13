@@ -238,7 +238,10 @@ async function main() {
     }
 
     // Spec out how many append tx's can fit inside a single tx
-    for (let numAppends = 0; numAppends < 25; numAppends++) {
+    console.log(
+        `| Num Appends | Gummyroll Tx Size | Crud Tx Size |`
+    );
+    for (let numAppends = 1; numAppends < 25; numAppends++) {
         const rawSize = await getGummyrollMaxAppendTxSize(numAppends);
         const crudSize = await getGummyrollCrudMaxAppendTxSize(numAppends);
         console.log(
