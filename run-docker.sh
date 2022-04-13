@@ -8,7 +8,11 @@ cp target/x86_64-unknown-linux-gnu/debug/ingest target/debug/ingest
 mkdir -p docker-vol
 anchor build
 cross build --target x86_64-unknown-linux-gnu --release --package plerkle
-cp target/x86_64-unknown-linux-gnu/release/libplerkle.so docker-vol/plugin.so # if on mac you ned the lin unknown target in front
+if [[ $(uname -m) =~ ^.*x86.*$ ]]; then
+  cp target/release/libplerkle.so docker-vol/plugin.so
+else
+  cp target/x86_64-unknown-linux-gnu/release/libplerkle.so docker-vol/plugin.so
+fi
 cp target/deploy/merkle_wallet.so docker-vol/merkle.so
 cp target/deploy/gummyroll.so docker-vol/gummyroll.so
 cp target/deploy/gummyroll_crud.so docker-vol/gummyroll_crud.so
