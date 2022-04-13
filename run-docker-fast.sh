@@ -13,7 +13,7 @@ cp target/deploy/merkle_wallet.so docker-vol/merkle.so
 cp target/deploy/gummyroll.so docker-vol/gummyroll.so
 cp target/deploy/gummyroll_crud.so docker-vol/gummyroll_crud.so
 
-pushd deps/metaplex-program-library/mpl_token_metadata/program
+pushd deps/metaplex-program-library/token-metadata/program
   cargo build-bpf --bpf-out-dir ../../target/deploy/
 popd
 pushd deps/solana-program-library/associated-token-account
