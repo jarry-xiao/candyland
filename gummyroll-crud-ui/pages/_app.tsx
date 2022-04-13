@@ -59,7 +59,12 @@ export default function MyApp({
                 pathParts.join("/") /* relative path */,
                 process.env.NEXT_PUBLIC_TREE_SERVER_API_ENDPOINT /* base */
               );
-              return await fetch(url.toString());
+              const response = await fetch(url.toString());
+              if (!response.ok) {
+                throw new Error(response.statusText);
+              }
+              const { data } = await response.json();
+              return data;
             }
           : localFetcher,
       }}
