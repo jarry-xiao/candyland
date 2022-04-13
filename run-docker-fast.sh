@@ -1,14 +1,14 @@
 # Off Chain Setup
  # Speed up by using cargo remote
-cross build --target x86_64-unknown-linux-gnu --package nft_api
-cp target/x86_64-unknown-linux-gnu/debug/api target/debug/api
-cp target/x86_64-unknown-linux-gnu/debug/ingest target/debug/ingest
+cargo remote -c debug/api -- build --package nft_api
+cargo remote -c debug/ingest -- build --package nft_api
+
 
 # Validator setup
-mkdir -p docker-vol
 anchor build
-cross build --target x86_64-unknown-linux-gnu --release --package plerkle
-cp target/x86_64-unknown-linux-gnu/release/libplerkle.so docker-vol/plugin.so # if on mac you ned the lin unknown target in front
+cargo remote -c release/libplerkle.so -- build --release --package plerkle
+mkdir -p docker-vol
+cp target/release/libplerkle.so docker-vol/plugin.so # if on mac you ned the lin unknown target in front
 cp target/deploy/merkle_wallet.so docker-vol/merkle.so
 cp target/deploy/gummyroll.so docker-vol/gummyroll.so
 cp target/deploy/gummyroll_crud.so docker-vol/gummyroll_crud.so
