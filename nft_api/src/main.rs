@@ -162,9 +162,9 @@ fn router(db: DatabaseConnection) -> Router<Body, routerify_json_response::Error
     Router::builder()
         .middleware(Middleware::pre(logger))
         .data(db)
-        .get("/assets/:account", handle_get_assets)
+        .get("/owner/:account/assets", handle_get_assets)
         .get("/tree/:tree_id", handle_get_tree)
-        .get("/proof/:tree_id/:index", handle_get_proof)
+        .get("/assets/:tree_id/:index/proof", handle_get_proof)
         .build()
         .unwrap()
 }
