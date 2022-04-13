@@ -368,12 +368,24 @@ impl From<[u8; 32]> for Node {
     }
 }
 
+#[derive(AnchorDeserialize, AnchorSerialize, Clone, Copy, Debug)]
+pub struct PathNode {
+    pub node: Node,
+    pub index: u32,
+}
+
+impl PathNode {
+    pub fn new(node: Node, index: u32) -> Self {
+        Self { node, index }
+    }
+}
+
 #[event]
 pub struct ChangeLogEvent {
     /// Public key of the Merkle Roll
     pub id: Pubkey,
     /// Nodes of off-chain merkle tree
-    pub path: Vec<(Node, u32)>,
+    pub path: Vec<PathNode>,
     /// Bitmap of node parity (used when hashing)
     pub index: u32,
 }
@@ -394,13 +406,13 @@ pub struct ChangeLog<const MAX_DEPTH: usize> {
 impl<const MAX_DEPTH: usize> ChangeLog<MAX_DEPTH> {
     pub fn to_event(&self, id: Pubkey) -> ChangeLogEvent {
         let path_len = self.path.len() as u32;
-        let mut path: Vec<(Node, u32)> = self
+        let mut path: Vec<PathNode> = self
             .path
             .iter()
             .enumerate()
-            .map(|(lvl, n)| (*n, (1 << (path_len - lvl as u32) + (self.index >> lvl))))
+            .map(|(lvl, n)| PathNode::new(*n, (1 << (path_len - lvl as u32)) + (self.index >> lvl)))
             .collect();
-        path.push((self.root, 1));
+        path.push(PathNode::new(self.root, 1));
         ChangeLogEvent {
             id,
             path,
@@ -483,12 +495,10 @@ unsafe impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> Zeroable
     for MerkleRoll<MAX_DEPTH, MAX_BUFFER_SIZE>
 {
 }
-
 unsafe impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> Pod
     for MerkleRoll<MAX_DEPTH, MAX_BUFFER_SIZE>
 {
 }
-
 impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> ZeroCopy
     for MerkleRoll<MAX_DEPTH, MAX_BUFFER_SIZE>
 {

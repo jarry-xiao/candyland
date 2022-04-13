@@ -230,16 +230,15 @@ impl GeyserPlugin for Plerkle {
                                 gummyroll_crud::InstructionName::Remove => {
                                     let data  = instruction.data.to_owned();
                                     let data_buf = &mut data.as_slice();
-                                    let add: gummyroll_crud::instruction::Remove = gummyroll_crud::instruction::Remove::deserialize(data_buf).unwrap();
+                                    let remove: gummyroll_crud::instruction::Remove = gummyroll_crud::instruction::Remove::deserialize(data_buf).unwrap();
                                     let tree_id = keys.index(instruction.accounts[0] as usize);
                                     let owner = keys.index(instruction.accounts[1] as usize);
-                                    let hex_message = hex::encode(&add.message);
-                                    let leaf = keccak::hashv(&[&owner.to_bytes(), add.message.as_slice()]);
+                                    let leaf = hex::encode(remove.leaf_hash);
                                     let res: RedisResult<()> = self
                                         .redis_connection
                                         .as_mut()
                                         .unwrap()
-                                        .xadd_maxlen("GMC_OP", maxlen, "*", &[("op", "rm"), ("tree_id", &*tree_id.to_string()) , ("leaf", &*leaf.to_string()), ("msg", &*hex_message), ("owner", &*owner.to_string()) ]);
+                                        .xadd_maxlen("GMC_OP", maxlen, "*", &[("op", "rm"), ("tree_id", &*tree_id.to_string()) , ("leaf", &*leaf.to_string()), ("msg", ""), ("owner", &*owner.to_string()) ]);
                                     if res.is_err() {
                                         error!("{}", res.err().unwrap());
                                     } else {

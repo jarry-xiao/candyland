@@ -3,7 +3,20 @@ name = "nft_api"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name="nft_api_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "api"
+path = "src/main.rs"
+
+[[bin]]
+name = "ingest"
+path = "src/ingest/main.rs"
+
 [dependencies]
+hex = "0.4.3"
 routerify = "3"
 routerify-json-response = "3"
 redis = {version = "0.21.5", features = ["aio", "tokio-comp", "streams"]}

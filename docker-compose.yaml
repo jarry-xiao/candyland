@@ -1,6 +1,18 @@
 version: "3.9"
 services:
+  ingester:
+    volumes:
+      - ./target/debug/ingest:/bin/ingest
+    cpu_count: 2
+    environment:
+      BIN: /bin/ingest
+    depends_on:
+      - api
+    restart: always
+    image: merkle-wallet_api
   api:
+    volumes:
+      - ./target/debug/api:/bin/api
     restart: always
     build:
       context: .

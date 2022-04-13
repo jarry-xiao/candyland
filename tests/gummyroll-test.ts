@@ -58,7 +58,7 @@ describe("gummyroll", () => {
   let listener = program.addEventListener("ChangeLogEvent", (event) => {
 
   let listener = program.addEventListener("ChangeLogEvent", (event) => {
-    updateTree(tree, Buffer.from(event.path[0].inner), event.index);
+    updateTree(tree, Buffer.from(event.path[0][0].inner), event.index);
   });
 
   it("Initialize keypairs with Sol", async () => {

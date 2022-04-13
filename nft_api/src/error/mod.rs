@@ -4,6 +4,8 @@ use thiserror::Error;
 pub enum ApiError {
     #[error("ChangeLog Event Malformed")]
     ChangeLogEventMalformed,
+    #[error("Parameter Invalid")]
+    ParameterInvalid,
 
 
 }

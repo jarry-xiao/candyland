@@ -23,7 +23,7 @@ pub fn handle_change_log_event(
             for line in lines {
                 let captures = CLRE.captures(line);
                 let b64raw = captures.and_then(|c| c.get(1)).map(|c| c.as_str());
-                b64raw.inspect(|raw| events.push((**raw).parse().unwrap()));
+                b64raw.map(|raw| events.push((raw).parse().unwrap()));
             }
             if events.is_empty() {
                 err
