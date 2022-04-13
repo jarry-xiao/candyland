@@ -1,3 +1,5 @@
+import GummyrollIdl from "../../target/idl/gummyroll.json";
+import * as anchor from "@project-serum/anchor";
 import {
   ConnectionProvider,
   WalletProvider,
@@ -12,25 +14,29 @@ import Head from "next/head";
 import { useMemo } from "react";
 import SearchBar from "../components/SearchBar";
 import { SWRConfig } from "swr";
-import getItemsForOwner from "../lib/loaders/getItemsForOwner";
-import getItem from "../lib/loaders/getItem";
+import getAssetsForOwner from "../lib/loaders/getAssetsForOwner";
+import getAsset from "../lib/loaders/getAsset";
+import AnchorConfigurator from "../components/AnchorConfigurator";
 
 import * as styles from "../styles/app.css"; // Side-effectful import that adds global styles.
 import "@solana/wallet-adapter-react-ui/styles.css"; // Side-effectful import to add styles for wallet modal.
+import getTreesForAuthority from "../lib/loaders/getTreesForAuthority";
 
 /**
  * Temporary fetch implementation that knows how to look up mock data.
  * Eventually this will just be replaced with `fetch` and API URLs.
  */
 async function localFetcher(...pathParts: string[]) {
-  if (pathParts[0] === "item") {
-    const [_, treeId, index] = pathParts;
-    return await getItem(treeId, parseInt(index, 10));
+  if (pathParts[0] === "asset") {
+    const [_, treeAccount, index] = pathParts;
+    return await getAsset(treeAccount, parseInt(index, 10));
   }
   if (pathParts[0] === "owner") {
-    if (pathParts[2] === "items") {
-      const ownerPubkey = pathParts[1];
-      return await getItemsForOwner(ownerPubkey);
+    const ownerPubkey = pathParts[1];
+    if (pathParts[2] === "assets") {
+      return await getAssetsForOwner(ownerPubkey);
+    } else if (pathParts[2] === "trees") {
+      return await getTreesForAuthority(ownerPubkey);
     }
   }
 }
@@ -46,9 +52,16 @@ export default function MyApp({
   return (
     <SWRConfig
       value={{
-        fallback: serverData,
-        fetcher: localFetcher,
-        revalidateOnMount: false,
+        ...(serverData ? { fallback: serverData } : null),
+        fetcher: process.env.NEXT_PUBLIC_TREE_SERVER_API_ENDPOINT
+          ? async (...pathParts: string[]) => {
+              const url = new URL(
+                pathParts.join("/") /* relative path */,
+                process.env.NEXT_PUBLIC_TREE_SERVER_API_ENDPOINT /* base */
+              );
+              return await fetch(url.toString());
+            }
+          : localFetcher,
       }}
     >
       <Head>
@@ -60,10 +73,12 @@ export default function MyApp({
       <ConnectionProvider endpoint="https://localhost:8899">
         <WalletProvider wallets={wallets} autoConnect>
           <WalletModalProvider>
-            <div className={styles.shell}>
-              <SearchBar />
-              <Component {...pageProps} />
-            </div>
+            <AnchorConfigurator>
+              <div className={styles.shell}>
+                <SearchBar />
+                <Component {...pageProps} />
+              </div>
+            </AnchorConfigurator>
           </WalletModalProvider>
         </WalletProvider>
       </ConnectionProvider>

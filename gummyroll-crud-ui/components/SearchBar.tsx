@@ -20,7 +20,7 @@ export default function SearchBar() {
           onSubmit={(e) => {
             e.preventDefault();
             router.push({
-              pathname: "/owner/[ownerPubkey]/items",
+              pathname: "/owner/[ownerPubkey]/assets",
               query: { ownerPubkey: inputRef.current?.value },
             });
           }}
@@ -42,15 +42,20 @@ export default function SearchBar() {
         </form>
         <div className={styles.accountControls}>
           {publicKey ? (
+            <Link href="/asset/create" passHref>
+              <Button variant="primary">New Asset</Button>
+            </Link>
+          ) : null}
+          {publicKey ? (
             <>
               <Link
                 href={{
-                  pathname: "/owner/[ownerPubkey]/items",
+                  pathname: "/owner/[ownerPubkey]/assets",
                   query: { ownerPubkey: publicKey.toString() },
                 }}
                 passHref
               >
-                <Button title={publicKey.toString()}>My items</Button>
+                <Button title={publicKey.toString()}>My assets</Button>
               </Link>
               <Button onClick={disconnect}>Disconnect</Button>
             </>

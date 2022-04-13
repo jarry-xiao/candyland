@@ -1,255 +1,251 @@
 import * as anchor from "@project-serum/anchor";
-import * as crypto from 'crypto';
-import {Gummyroll} from "../target/types/gummyroll";
-import {Program, BN, Provider} from "@project-serum/anchor";
-import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
-import {fetch} from "cross-fetch";
+import { Gummyroll } from "../target/types/gummyroll";
+import { Program, Provider, } from "@project-serum/anchor";
 import {
-    Connection,
-    PublicKey,
-    Keypair,
-    SystemProgram,
-    Transaction,
+  Connection as web3Connection,
+  PublicKey,
+  Keypair,
+  SystemProgram,
+  Transaction,
 } from "@solana/web3.js";
-import {assert} from "chai";
+import { assert } from "chai";
 
-import {buildTree, hash, getProofOfLeaf, updateTree} from "./merkle-tree";
-import {decodeMerkleRoll, getMerkleRollAccountSize, OnChainMerkleRoll} from "./merkle-roll-serde";
-import {logTx} from './utils';
-import {sleep} from "../deps/metaplex-program-library/metaplex/js/test/utils";
+import { buildTree, getProofOfLeaf, updateTree, Tree } from "./merkle-tree";
+import { decodeMerkleRoll, getMerkleRollAccountSize } from "./merkle-roll-serde";
+import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 
+// @ts-ignore
+const Gummyroll = anchor.workspace.Gummyroll as Program<Gummyroll>;
 
-const MAX_SIZE = 1024;
-const MAX_DEPTH = 22;
+export function chunk<T>(arr: T[], size: number): T[][] {
+  return Array.from({ length: Math.ceil(arr.length / size) }, (_: any, i: number) =>
+    arr.slice(i * size, i * size + size)
+  );
+}
 
 describe("gummyroll-continuous", () => {
-    const connection = new Connection(
-        "http://localhost:8899",
-        {
-            commitment: 'confirmed'
-        }
-    );
-    console.log(connection);
-    const payer = Keypair.generate();
-    const wallet = new NodeWallet(payer)
-    anchor.setProvider(new Provider(connection, wallet, {commitment: connection.commitment, skipPreflight: true}));
+  let connection: web3Connection;
+  let wallet: NodeWallet;
+  let offChainTree: ReturnType<typeof buildTree>;
+  let merkleRollKeypair: Keypair;
+  let payer: Keypair;
+  anchor.setProvider(anchor.Provider.env());
 
-    /// @ts-ignore
-    const program = anchor.workspace.Gummyroll as Program<Gummyroll>;
+  const MAX_SIZE = 1024;
+  const MAX_DEPTH = 20;
+  // This is hardware dependent... if too large, then majority of tx's will fail to confirm
+  const BATCH_SIZE = 12;
 
-
+  async function createEmptyTreeOnChain(
+    payer: Keypair
+  ): Promise<Keypair> {
     const merkleRollKeypair = Keypair.generate();
-    console.log("Payer key:", payer.publicKey.toString());
-    console.log("Tree ID:", merkleRollKeypair.publicKey.toString());
-    const apiTreeId = merkleRollKeypair.publicKey.toString();
     const requiredSpace = getMerkleRollAccountSize(MAX_DEPTH, MAX_SIZE);
+    const allocAccountIx = SystemProgram.createAccount({
+      fromPubkey: payer.publicKey,
+      newAccountPubkey: merkleRollKeypair.publicKey,
+      lamports:
+        await Gummyroll.provider.connection.getMinimumBalanceForRentExemption(
+          requiredSpace
+        ),
+      space: requiredSpace,
+      programId: Gummyroll.programId,
+    });
 
-    const leaves = Array(2 ** MAX_DEPTH).fill(crypto.randomBytes(32));
+    const initGummyrollIx = Gummyroll.instruction.initEmptyGummyroll(
+      MAX_DEPTH,
+      MAX_SIZE,
+      {
+        accounts: {
+          merkleRoll: merkleRollKeypair.publicKey,
+          authority: payer.publicKey,
+        },
+        signers: [payer],
+      }
+    );
+
+    const tx = new Transaction().add(allocAccountIx).add(initGummyrollIx);
+    let txid = await Gummyroll.provider.send(tx, [payer, merkleRollKeypair], {
+      commitment: "singleGossip",
+    });
+    return merkleRollKeypair
+  }
+
+  function createEmptyTreeOffChain(): Tree {
+    const leaves = Array(2 ** MAX_DEPTH).fill(Buffer.alloc(32));
     let tree = buildTree(leaves);
-    console.log("program id:", program.programId.toString());
+    return tree;
+  }
 
-    let eventsProcessed = new Map<String, number>();
-    eventsProcessed.set("0", 0);
+  beforeEach(async () => {
+    payer = Keypair.generate();
+    connection = new web3Connection(
+      "http://localhost:8899",
+      {
+        commitment: 'singleGossip'
+      }
+    );
+    wallet = new NodeWallet(payer)
+    anchor.setProvider(new Provider(connection, wallet, { commitment: connection.commitment, skipPreflight: true }));
+    await Gummyroll.provider.connection.confirmTransaction(
+      await Gummyroll.provider.connection.requestAirdrop(payer.publicKey, 1e10),
+      "confirmed"
+    );
 
-    let listener = program.addEventListener("ChangeLogEvent", (event) => {
-        updateTree(tree, Buffer.from(event.path[0][0].inner), event.index);
-        eventsProcessed.set("0", eventsProcessed.get("0") + 1);
-    });
+    merkleRollKeypair = await createEmptyTreeOnChain(payer);
 
-    it("Initialize keypairs with Sol", async () => {
-        await program.provider.connection.confirmTransaction(
-            await program.provider.connection.requestAirdrop(payer.publicKey, 1e10),
-            "confirmed"
-        );
-        sleep(10000)
-    });
-    it("Initialize root with prepopulated leaves", async () => {
-        const allocAccountIx = SystemProgram.createAccount({
-            fromPubkey: payer.publicKey,
-            newAccountPubkey: merkleRollKeypair.publicKey,
-            lamports:
-                await program.provider.connection.getMinimumBalanceForRentExemption(
-                    requiredSpace
-                ),
-            space: requiredSpace,
-            programId: program.programId,
-        });
+    const merkleRoll = await Gummyroll.provider.connection.getAccountInfo(
+      merkleRollKeypair.publicKey
+    );
 
-        const root = {inner: Array.from(tree.root)};
-        const leaf = {inner: Array.from(leaves[0])};
-        const proof = getProofOfLeaf(tree, 0).map((node) => {
-            return {pubkey: new PublicKey(node.node), isSigner: false, isWritable: false};
-        });
+    let onChainMerkle = decodeMerkleRoll(merkleRoll.data);
 
-        const initGummyrollIx = program.instruction.initEmptyGummyroll(
-            MAX_DEPTH,
-            MAX_SIZE,
-            {
-                accounts: {
-                    merkleRoll: merkleRollKeypair.publicKey,
-                    authority: payer.publicKey,
-                },
-                signers: [payer]
-            }
-        );
+    // Check header bytes are set correctly
+    assert(onChainMerkle.header.maxDepth === MAX_DEPTH, `Max depth does not match ${onChainMerkle.header.maxDepth}, expected ${MAX_DEPTH}`);
+    assert(onChainMerkle.header.maxBufferSize === MAX_SIZE, `Max buffer size does not match ${onChainMerkle.header.maxBufferSize}, expected ${MAX_SIZE}`);
 
-        const tx = new Transaction().add(allocAccountIx).add(initGummyrollIx);
-        let txid = await program.provider.send(tx, [payer, merkleRollKeypair], {
-            commitment: "confirmed",
-        });
-        await logTx(program.provider, txid);
-        const merkleRoll = await program.provider.connection.getAccountInfo(
-            merkleRollKeypair.publicKey
-        );
+    assert(
+      onChainMerkle.header.authority.equals(payer.publicKey),
+      "Failed to write auth pubkey"
+    );
 
-        let onChainMerkle = decodeMerkleRoll(merkleRoll.data);
+    offChainTree = createEmptyTreeOffChain();
 
-        // Check header bytes are set correctly
-        assert(onChainMerkle.header.maxDepth === MAX_DEPTH, `Max depth does not match ${onChainMerkle.header.maxDepth}, expected ${MAX_DEPTH}`);
-        assert(onChainMerkle.header.maxBufferSize === MAX_SIZE, `Max buffer size does not match ${onChainMerkle.header.maxBufferSize}, expected ${MAX_SIZE}`);
+    assert(
+      onChainMerkle.roll.changeLogs[0].root.equals(new PublicKey(offChainTree.root)),
+      "On chain root does not match root passed in instruction"
+    );
+  });
 
-        assert(
-            onChainMerkle.header.authority.equals(payer.publicKey),
-            "Failed to write auth pubkey"
-        );
+  // Will be used in future test
+  function createReplaceIx(tree: Tree, merkleRollKeypair: Keypair, payer: Keypair, i: number) {
+    /// Empty nodes are special, so we have to create non-zero leaf for index 0
+    let newLeaf = Buffer.alloc(32, Buffer.from(Uint8Array.from([1 + i])));
+    let nodeProof = getProofOfLeaf(tree, i).map((node) => { return { pubkey: new PublicKey(node.node), isSigner: false, isWritable: false } });
+    const replaceLeafIx = Gummyroll.instruction.replaceLeaf(
+      { inner: Array.from(tree.root) },
+      { inner: Array.from(tree.leaves[i].node) },
+      { inner: Array.from(newLeaf) },
+      i,
+      {
+        accounts: {
+          merkleRoll: merkleRollKeypair.publicKey,
+          authority: payer.publicKey,
+        },
+        signers: [payer],
+        remainingAccounts: nodeProof,
+      }
+    );
+    return replaceLeafIx;
+  }
 
-        // assert(
-        //   onChainMerkle.roll.changeLogs[0].root.equals(new PublicKey(tree.root)),
-        //   "On chain root does not match root passed in instruction"
-        // );
-    });
+  function createInsertOrAppendIx(tree: Tree, merkleRollKeypair: Keypair, payer: Keypair, i: number) {
+    /// Empty nodes are special, so we have to create non-zero leaf for index 0
+    let newLeaf = Buffer.alloc(32, Buffer.from(Uint8Array.from([1 + i])));
+    let nodeProof = getProofOfLeaf(tree, i).map((node) => { return { pubkey: new PublicKey(node.node), isSigner: false, isWritable: false } });
+    return Gummyroll.instruction.insertOrAppend(
+      { inner: Array.from(tree.root) },
+      { inner: Array.from(newLeaf) },
+      i,
+      {
+        accounts: {
+          merkleRoll: merkleRollKeypair.publicKey,
+          authority: payer.publicKey,
+        },
+        signers: [payer],
+        remainingAccounts: nodeProof,
+      }
+    );
+  }
 
+  function createAppend(merkleRollKeypair: Keypair, payer: Keypair, i: number) {
+    let newLeaf = Buffer.alloc(32, Buffer.from(Uint8Array.from([1 + i])));
+    return Gummyroll.instruction.append(
+      { inner: Array.from(newLeaf) },
+      {
+        accounts: {
+          merkleRoll: merkleRollKeypair.publicKey,
+          authority: payer.publicKey,
+        },
+        signers: [payer],
+      }
+    );
+  }
 
-    it("Continuous updating and syncing", async () => {
-        let add_txs = [];
-        for (let i = 0; i < 100; i++) {
-            let newHash = Buffer.alloc(32, Buffer.from(Uint8Array.from([i])));
-            const newLeaf = hash(
-                payer.publicKey.toBuffer(),
-                newHash
-            );
-            const append = program.instruction.append(
-                {inner: Array.from(newLeaf)},
-                {
-                    accounts: {
-                        merkleRoll: merkleRollKeypair.publicKey,
-                        authority: payer.publicKey,
-                    },
-                    signers: [payer],
-                }
-            );
-            if (i % 100 == 0) {
-                console.log("Sent ith tx:", i);
-            }
+  it(`${MAX_SIZE} transactions in batches of ${BATCH_SIZE}`, async () => {
+    let indicesToSend = [];
+    for (let i = 0; i < MAX_SIZE; i++) {
+      indicesToSend.push(i);
+    };
+    const indicesToSync = indicesToSend;
 
-            const tx = new Transaction().add(append);
+    while (indicesToSend.length > 0) {
+      let batchesToSend = chunk<number>(indicesToSend, BATCH_SIZE);
+      let indicesLeft: number[] = [];
 
-            tx.feePayer = payer.publicKey;
-            tx.recentBlockhash = (
-                await connection.getLatestBlockhash('confirmed')
-            ).blockhash;
+      for (const batch of batchesToSend) {
+        const txIds = [];
+        const txIdToIndex: Record<string, number> = {};
+        for (const i of batch) {
+          const tx = new Transaction().add(createReplaceIx(offChainTree, merkleRollKeypair, payer, i));
 
-            await wallet.signTransaction(tx);
-            const rawTx = tx.serialize();
+          tx.feePayer = payer.publicKey;
+          tx.recentBlockhash = (
+            await connection.getLatestBlockhash('singleGossip')
+          ).blockhash;
 
-            add_txs.push(
-                connection.sendRawTransaction(rawTx, {skipPreflight: true})
-                    .then((_txid) => {
-                        return connection.confirmTransaction(_txid).then(()=> logTx(program.provider, _txid))
-                    })
-                    .then(() => {
-                        return true
-                    })
-                    .catch((reason) => {
-                        console.error(reason);
-                        return false
-                    })
-            );
+          await wallet.signTransaction(tx);
+          const rawTx = tx.serialize();
+
+          txIds.push(
+            connection.sendRawTransaction(rawTx, { skipPreflight: true })
+              .then((txId) => {
+                txIdToIndex[txId] = i;
+                return txId
+              })
+              .catch((reason) => {
+                console.error(reason);
+                return i
+              })
+          );
         }
-        let add_transactions = await Promise.all(add_txs);
-        let numSuccess = add_transactions.reduce((left, right) => {
-            return left + Number(right)
-        }, 0);
-        console.log(`${numSuccess} txs succeeded!`);
-
-        let remove_txs = [];
-        let remove_transactions = await Promise.all(remove_txs);
-        for (let i = 0; i < 100; i++) {
-            let node_index = (1 << (MAX_DEPTH - 0)) + (i >> 0);
-            let url = `http://localhost:9090/proof/${apiTreeId}/${node_index}`;
-            let proof = await fetch(url).then(r => r.json());
-            let newLeaf = Buffer.alloc(32, Buffer.from(Uint8Array.from([i])));
-            let nodeProof = proof.data.map((node) => ({
-                pubkey: new PublicKey(node.hash),
-                isSigner: false,
-                isWritable: false
-            }))
-            const replaceLeaf = program.instruction.replaceLeaf(
-                {inner: Array.from(tree.root)},
-                {inner: Array.from(tree.leaves[i].node)},
-                {inner: Array.from(newLeaf)},
-                i,
-                {
-                    accounts: {
-                        merkleRoll: merkleRollKeypair.publicKey,
-                        authority: payer.publicKey,
-                    },
-                    signers: [payer],
-                    remainingAccounts: nodeProof
-                }
-            );
-            if (i % 100 == 0) {
-                console.log("Sent ith tx:", i);
-            }
-
-            const tx = new Transaction().add(replaceLeaf);
-
-            tx.feePayer = payer.publicKey;
-            tx.recentBlockhash = (
-                await connection.getLatestBlockhash('confirmed')
-            ).blockhash;
-
-            await wallet.signTransaction(tx);
-            const rawTx = tx.serialize();
-
-            remove_txs.push(
-                connection.sendRawTransaction(rawTx, {skipPreflight: true})
-                    .then((_txid) => {
-                        return connection.confirmTransaction(_txid).then(()=> logTx(program.provider, _txid))
-                    })
-                    .then(() => {
-                        return true
-                    })
-                    .catch((reason) => {
-                        console.error(reason);
-                        return false
-                    })
-            );
+        const sendResults: (string | number)[] = (await Promise.all(txIds));
+        const batchToConfirm = sendResults.filter((result) => typeof result === "string") as string[];
+        const txsToReplay = sendResults.filter((err) => typeof err === "number") as number[];
+        if (txsToReplay.length) {
+          indicesLeft = indicesLeft.concat(txsToReplay as number[]);
+          console.log(`${txsToReplay.length} tx's failed in batch`)
         }
-        let transactions = await Promise.all(remove_transactions);
-        console.log("Txs:", transactions)
 
-        numSuccess = transactions.reduce((left, right) => {
-            return left + Number(right)
-        }, 0);
-        console.log(`${numSuccess} txs succeeded!`);
+        await Promise.all(batchToConfirm.map(async (txId) => {
+          const confirmation = await connection.confirmTransaction(txId, "confirmed")
+          if (confirmation.value.err && txIdToIndex[txId]) {
+            txsToReplay.push(txIdToIndex[txId]);
+          }
+          return confirmation;
+        }));
 
-        const merkleRoll = await program.provider.connection.getAccountInfo(
-            merkleRollKeypair.publicKey
-        );
-        let onChainMerkle = decodeMerkleRoll(merkleRoll.data);
+        indicesLeft = indicesLeft.concat(txsToReplay);
+      }
 
-        console.log("Num events processed: ", eventsProcessed.get('0'));
-        sleep(2000);
-        console.log("Num events processed: ", eventsProcessed.get('0'));
+      indicesToSend = indicesLeft;
+    }
 
-        assert(
-            onChainMerkle.roll.changeLogs[onChainMerkle.roll.activeIndex].root.equals(new PublicKey(tree.root)),
-            "On chain root does not match root passed in instruction"
-        );
-    });
+    // Sync off-chain tree
+    for (const i of indicesToSync) {
+      updateTree(offChainTree, Buffer.alloc(32, Buffer.from(Uint8Array.from([1 + i]))), i);
+    }
 
-    it("Kill listeners", async () => {
-        await program.removeEventListener(listener);
-    });
+    const merkleRoll = await Gummyroll.provider.connection.getAccountInfo(
+      merkleRollKeypair.publicKey
+    );
+    let onChainMerkle = decodeMerkleRoll(merkleRoll.data);
+
+    const onChainRoot = onChainMerkle.roll.changeLogs[onChainMerkle.roll.activeIndex].root;
+    const treeRoot = new PublicKey(offChainTree.root);
+    assert(
+      onChainRoot.equals(treeRoot),
+      "On chain root does not match root passed in instruction"
+    );
+  });
 });

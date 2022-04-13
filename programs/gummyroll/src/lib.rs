@@ -90,20 +90,23 @@ pub fn empty_node(level: u32) -> Node {
 }
 
 /// Recomputes root of the Merkle tree from Node & proof
-pub fn recompute(mut leaf: Node, proof: &[Node], index: u32) -> Node {
+pub fn recompute(leaf: Node, proof: &[Node], index: u32) -> Node {
     msg!("Recompute");
+
     sol_log_compute_units();
-    for (i, s) in proof.iter().enumerate() {
-        if index >> i & 1 == 0 {
-            let res = hashv(&[leaf.as_ref(), s.as_ref()]);
-            leaf.copy_from_slice(res.as_ref());
+    let mut current_node = leaf;
+    for (depth, sibling_leaf) in proof.iter().enumerate() {
+        if index >> depth & 1 == 0 {
+            let res = hashv(&[current_node.as_ref(), sibling_leaf.as_ref()]);
+            current_node.copy_from_slice(res.as_ref());
         } else {
-            let res = hashv(&[s.as_ref(), leaf.as_ref()]);
-            leaf.copy_from_slice(res.as_ref());
+            let res = hashv(&[sibling_leaf.as_ref(), current_node.as_ref()]);
+            current_node.copy_from_slice(res.as_ref());
         }
     }
     sol_log_compute_units();
-    leaf
+
+    current_node
 }
 
 fn set_header<'a>(
@@ -228,7 +231,6 @@ pub mod gummyroll {
         for node in ctx.remaining_accounts.iter() {
             proof.push(Node::new(node.key().to_bytes()));
         }
-        assert_eq!(proof.len(), header.max_depth as usize);
 
         let id = ctx.accounts.merkle_roll.key();
         match merkle_roll_apply_fn!(
@@ -515,6 +517,17 @@ pub trait ZeroCopy: Pod {
     }
 }
 
+fn fill_in_proof<const MAX_DEPTH: usize>(
+    proof_vec: Vec<Node>,
+    full_proof: &mut [Node; MAX_DEPTH],
+) {
+    full_proof[..proof_vec.len()].copy_from_slice(&proof_vec);
+
+    for i in proof_vec.len()..MAX_DEPTH {
+        full_proof[i] = empty_node(i as u32);
+    }
+}
+
 impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH, MAX_BUFFER_SIZE> {
     pub fn initialize(&mut self) -> Option<Node> {
         let mut rightmost_proof = Path::default();
@@ -543,11 +556,11 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             leaf: rightmost_leaf,
             _padding: 0,
         };
-        assert_eq!(root, recompute(rightmost_leaf, &proof, index));
         self.change_logs[0].root = root;
         self.active_index = 0;
         self.buffer_size = 1;
         self.rightmost_proof = rightmost_proof;
+        assert_eq!(root, recompute(rightmost_leaf, &proof, index,));
         Some(root)
     }
 
@@ -668,7 +681,8 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             None
         } else {
             let mut proof: [Node; MAX_DEPTH] = [Node::default(); MAX_DEPTH];
-            proof.copy_from_slice(&proof_vec[..]);
+            fill_in_proof::<MAX_DEPTH>(proof_vec, &mut proof);
+
             sol_log_compute_units();
             let root = self.find_and_update_leaf(
                 current_root,
@@ -780,6 +794,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             self.increment_active_index();
             Some(self.apply_changes(new_leaf, proof, index))
         } else {
+            msg!("Invalid root recomputed from proof, failing");
             None
         }
     }
