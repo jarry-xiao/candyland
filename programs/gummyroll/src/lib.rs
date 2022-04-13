@@ -159,7 +159,7 @@ pub mod gummyroll {
             &ctx.accounts.authority.key(),
         )?;
         let id = ctx.accounts.merkle_roll.key();
-        match merkle_roll_apply_fn!(header, false, id, roll_bytes, initialize,) {
+        match merkle_roll_apply_fn!(header, true, id, roll_bytes, initialize,) {
             Some(new_root) => {
                 msg!("New Root: {:?}", new_root);
                 Ok(())

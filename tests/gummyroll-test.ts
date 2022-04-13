@@ -1,5 +1,5 @@
 import * as anchor from "@project-serum/anchor";
-import { BN, TransactionNamespace, InstructionNamespace } from "@project-serum/anchor";
+import {BN, TransactionNamespace, InstructionNamespace, Provider, Program} from "@project-serum/anchor";
 import { Gummyroll } from "../target/types/gummyroll";
 import {
   Connection,
@@ -7,7 +7,7 @@ import {
   Keypair,
   SystemProgram,
   Transaction,
-  TransactionInstruction
+  TransactionInstruction, Connection as web3Connection
 } from "@solana/web3.js";
 import { assert } from "chai";
 import * as crypto from 'crypto';
@@ -18,16 +18,18 @@ import {
   getMerkleRollAccountSize,
 } from "./merkle-roll-serde";
 import { logTx } from "./utils";
+import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 
 // @ts-ignore
-const Gummyroll = anchor.workspace.Gummyroll as Program<Gummyroll>;
+let Gummyroll;
 
 describe("gummyroll", () => {
   // Configure the client to use the local cluster.
-  anchor.setProvider(anchor.Provider.env());
   let offChainTree: Tree;
   let merkleRollKeypair: Keypair;
   let payer: Keypair;
+  let connection;
+  let wallet;
 
   const MAX_SIZE = 64;
   const MAX_DEPTH = 20;
@@ -153,6 +155,15 @@ describe("gummyroll", () => {
 
   beforeEach(async () => {
     payer = Keypair.generate();
+    connection = new web3Connection(
+        "http://localhost:8899",
+        {
+          commitment: 'confirmed'
+        }
+    );
+    wallet = new NodeWallet(payer)
+    anchor.setProvider(new Provider(connection, wallet, { commitment: connection.commitment, skipPreflight: true }));
+    Gummyroll = anchor.workspace.Gummyroll as Program<Gummyroll>;
 
     await Gummyroll.provider.connection.confirmTransaction(
       await Gummyroll.provider.connection.requestAirdrop(payer.publicKey, 1e10),

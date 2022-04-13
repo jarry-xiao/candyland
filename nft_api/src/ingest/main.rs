@@ -11,7 +11,6 @@ use std::{net::SocketAddr};
 use routerify_json_response::{json_failed_resp_with_message, json_success_resp};
 
 
-use sea_orm::{DatabaseConnection, SqlxPostgresConnector};
 use gummyroll::{ChangeLogEvent, PathNode};
 
 

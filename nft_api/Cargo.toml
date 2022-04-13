@@ -27,7 +27,7 @@ base64 = "0.13.0"
 thiserror = "1.0.30"
 tokio = { version = "1.17.0", features = ["full"] }
 gummyroll={path= "../programs/gummyroll", features = ["no-entrypoint"]}
-sqlx = "0.5.11"
-sea-orm = { version = "^0", features = [ "sqlx-postgres", "runtime-tokio-rustls", "macros" ], default-features = false }
+sqlx = {version = "0.5.11", features = ["runtime-tokio-rustls","postgres"] }
 tokio-postgres = "0.7.5"
 serde = "1.0.136"
+bs58="0.4.0"
