@@ -7,6 +7,7 @@ import {
   Keypair,
   SystemProgram,
   Transaction,
+  sendAndConfirmTransaction,
 } from "@solana/web3.js";
 import { assert } from "chai";
 
