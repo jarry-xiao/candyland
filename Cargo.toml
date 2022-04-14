@@ -2,6 +2,8 @@
 members = [
     "programs/merkle_wallet",
     "programs/gummyroll",
-    "programs/gummyroll_crud",
-    "merkle-accumulator"
+    "merkle-accumulator",
+    "plerkle",
+    "nft_api",
+    "programs/gummyroll_crud"
 ]

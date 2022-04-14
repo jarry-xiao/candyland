@@ -16,7 +16,7 @@ import { decodeMerkleRoll, getMerkleRollAccountSize } from "./merkle-roll-serde"
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 
 // @ts-ignore
-const Gummyroll = anchor.workspace.Gummyroll as Program<Gummyroll>;
+let Gummyroll;
 
 export function chunk<T>(arr: T[], size: number): T[][] {
   return Array.from({ length: Math.ceil(arr.length / size) }, (_: any, i: number) =>
@@ -30,8 +30,8 @@ describe("gummyroll-continuous", () => {
   let offChainTree: ReturnType<typeof buildTree>;
   let merkleRollKeypair: Keypair;
   let payer: Keypair;
-  anchor.setProvider(anchor.Provider.env());
 
+  console.log(connection);
   const MAX_SIZE = 1024;
   const MAX_DEPTH = 20;
   // This is hardware dependent... if too large, then majority of tx's will fail to confirm
@@ -67,7 +67,7 @@ describe("gummyroll-continuous", () => {
 
     const tx = new Transaction().add(allocAccountIx).add(initGummyrollIx);
     let txid = await Gummyroll.provider.send(tx, [payer, merkleRollKeypair], {
-      commitment: "singleGossip",
+      commitment: "confirmed",
     });
     return merkleRollKeypair
   }
@@ -83,17 +83,20 @@ describe("gummyroll-continuous", () => {
     connection = new web3Connection(
       "http://localhost:8899",
       {
-        commitment: 'singleGossip'
+        commitment: 'confirmed'
       }
     );
     wallet = new NodeWallet(payer)
     anchor.setProvider(new Provider(connection, wallet, { commitment: connection.commitment, skipPreflight: true }));
+    Gummyroll = anchor.workspace.Gummyroll as Program<Gummyroll>;
     await Gummyroll.provider.connection.confirmTransaction(
       await Gummyroll.provider.connection.requestAirdrop(payer.publicKey, 1e10),
       "confirmed"
     );
 
     merkleRollKeypair = await createEmptyTreeOnChain(payer);
+
+    console.log("TREE ID: ", merkleRollKeypair.publicKey.toString())
 
     const merkleRoll = await Gummyroll.provider.connection.getAccountInfo(
       merkleRollKeypair.publicKey
@@ -174,6 +177,7 @@ describe("gummyroll-continuous", () => {
   }
 
   it(`${MAX_SIZE} transactions in batches of ${BATCH_SIZE}`, async () => {
+    return;
     let indicesToSend = [];
     for (let i = 0; i < MAX_SIZE; i++) {
       indicesToSend.push(i);

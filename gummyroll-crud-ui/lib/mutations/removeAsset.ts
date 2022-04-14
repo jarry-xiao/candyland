@@ -16,7 +16,11 @@ export default async function removeAsset(
   );
   const { hash, proof, root } = await getProofForAsset(treeAccount, index);
   await program.methods
-    .remove(root, hash, index)
+    .remove(
+      Buffer.from(root, "utf-8").toJSON().data,
+      Buffer.from(hash, "utf-8").toJSON().data,
+      index
+    )
     .accounts({
       authority: treeAdmin,
       authorityPda,

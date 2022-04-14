@@ -159,7 +159,7 @@ pub mod gummyroll {
             &ctx.accounts.authority.key(),
         )?;
         let id = ctx.accounts.merkle_roll.key();
-        match merkle_roll_apply_fn!(header, false, id, roll_bytes, initialize,) {
+        match merkle_roll_apply_fn!(header, true, id, roll_bytes, initialize,) {
             Some(new_root) => {
                 msg!("New Root: {:?}", new_root);
                 Ok(())
@@ -336,7 +336,7 @@ pub struct Modify<'info> {
 
 #[derive(Debug, Copy, Clone, AnchorDeserialize, AnchorSerialize, Default, PartialEq)]
 pub struct Node {
-    inner: [u8; 32],
+    pub inner: [u8; 32],
 }
 
 impl Node {
@@ -370,10 +370,10 @@ impl From<[u8; 32]> for Node {
     }
 }
 
-#[derive(AnchorDeserialize, AnchorSerialize, Clone, Copy)]
+#[derive(AnchorDeserialize, AnchorSerialize, Clone, Copy, Debug)]
 pub struct PathNode {
-    node: Node,
-    index: u32,
+    pub node: Node,
+    pub index: u32,
 }
 
 impl PathNode {
@@ -385,11 +385,11 @@ impl PathNode {
 #[event]
 pub struct ChangeLogEvent {
     /// Public key of the Merkle Roll
-    id: Pubkey,
+    pub id: Pubkey,
     /// Nodes of off-chain merkle tree
-    path: Vec<PathNode>,
+    pub path: Vec<PathNode>,
     /// Bitmap of node parity (used when hashing)
-    index: u32,
+    pub index: u32,
 }
 
 #[derive(Copy, Clone, PartialEq)]

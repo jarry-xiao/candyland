@@ -1,5 +1,5 @@
 pub mod merkle;
-use crate::merkle::{EMPTY, empty_node, recompute, Node, MASK, MAX_DEPTH, MAX_SIZE, PADDING};
+use crate::merkle::{empty_node, recompute, Node, EMPTY, MASK, MAX_DEPTH, MAX_SIZE, PADDING};
 use solana_program::keccak::hashv;
 
 #[derive(Default, Copy, Clone, PartialEq)]
@@ -154,7 +154,7 @@ impl MerkleAccumulator {
 
     /// Convenience function for `set_leaf`
     /// On write conflict:
-    /// Will append 
+    /// Will append
     pub fn fill_empty_or_append(
         &mut self,
         current_root: Node,
@@ -210,12 +210,20 @@ impl MerkleAccumulator {
                 continue;
             }
             let old_root = recompute(leaf, &proof, index);
-            if old_root == current_root && index > self.rightmost_proof.index && append_on_conflict {
+            if old_root == current_root && index > self.rightmost_proof.index && append_on_conflict
+            {
                 println!("RMP index: {}", self.rightmost_proof.index);
                 println!("Leaf index: {}", index);
                 return self.append(new_leaf);
             } else if old_root == current_root {
-                return self.update_and_apply_proof(leaf, new_leaf, &mut proof, index, j, append_on_conflict);
+                return self.update_and_apply_proof(
+                    leaf,
+                    new_leaf,
+                    &mut proof,
+                    index,
+                    j,
+                    append_on_conflict,
+                );
             } else {
                 return None;
             }
@@ -697,7 +705,7 @@ mod test {
     #[test]
     fn test_new_with_root_remove_and_add_fails() {
         let mut rng = thread_rng();
-        let (mut merkle, mut off_chain_merkle) = setup_new_with_root(&mut rng);
+        let (mut merkle, off_chain_merkle) = setup_new_with_root(&mut rng);
 
         let mut leaf_inds: Vec<usize> = (0..1 << MAX_DEPTH).collect();
         leaf_inds.shuffle(&mut rng);
