@@ -1,6 +1,7 @@
 import { AssetPayload } from "./AssetTypes";
 import allAssets from "./__mocks__/allAssets.json";
-import getClient from "../db/getClient";
+import getTreeServerAPIMethod from "./getTreeServerAPIMethod";
+import TreeServerNotConfiguredError from "./TreeServerNotConfiguredError";
 
 const MOCK_DATA_BY_OWNER: Record<string, ReadonlyArray<AssetPayload>> = {
   C2jDL4pcwpE2pP5EryTGn842JJUJTcurPGZUquQjySxK: allAssets,
@@ -9,9 +10,16 @@ const MOCK_DATA_BY_OWNER: Record<string, ReadonlyArray<AssetPayload>> = {
 export default async function getAssetsForOwner(
   ownerPubkey: string
 ): Promise<ReadonlyArray<AssetPayload> | undefined> {
-  if (!process.env.PGSQL_HOST) {
-    return MOCK_DATA_BY_OWNER[ownerPubkey];
+  try {
+    const assets = await getTreeServerAPIMethod<AssetPayload[]>(
+      `/owner/${ownerPubkey}/assets`
+    );
+    console.debug(`API /owner/${ownerPubkey}/assets`, assets);
+    return assets;
+  } catch (e) {
+    if (e instanceof TreeServerNotConfiguredError) {
+      return MOCK_DATA_BY_OWNER[ownerPubkey];
+    }
+    throw e;
   }
-  let result =  await fetch(`http://localhost:9090/owner/${ownerPubkey}/assets`);
-  return await result.json();
 }
