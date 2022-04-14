@@ -31,9 +31,11 @@ const AddAsset: NextPage = () => {
       new anchor.web3.PublicKey(selectedTree.authority),
       data
     );
+    const nodeIndex = (1 << 14) + indexOfNewAsset;
+    
     const newAssetPayload = {
       data,
-      index: indexOfNewAsset,
+      index: nodeIndex,
       owner: selectedTree.authority,
       treeAccount: targetTreeAccount.account,
       treeAdmin: targetTreeAccount.authority,
@@ -43,7 +45,7 @@ const AddAsset: NextPage = () => {
         unstable_serialize([
           "asset",
           targetTreeAccount.account,
-          indexOfNewAsset.toString(),
+          nodeIndex.toString(),
         ]),
         newAssetPayload
       ),
@@ -56,7 +58,7 @@ const AddAsset: NextPage = () => {
       pathname: "/asset/[treeAccount]/[index]",
       query: {
         treeAccount: targetTreeAccount.account,
-        index: indexOfNewAsset.toString(),
+        index: nodeIndex.toString(),
       },
     });
   }
