@@ -1,12 +1,15 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import getAssetsForOwner from "../../../../lib/loaders/getAssetsForOwner";
+import getAsset from "../../../../../lib/loaders/getAsset";
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
   res.status(200).json({
-    data: await getAssetsForOwner(req.query["ownerPubkey"] as string),
+    data: await getAsset(
+      req.query["treeAccount"] as string,
+      parseInt(req.query["index"] as string, 10)
+    ),
     status: 200,
     success: true,
   });
