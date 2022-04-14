@@ -151,6 +151,22 @@ export function getProofOfLeaf(tree: Tree, idx: number, minimizeProofHeight: boo
     return proof;
 }
 
+export function checkProofHash(proof: number[][], root: number[], leaf: number[], leaf_index: number): boolean {
+    let node = Buffer.from(Uint8Array.from(leaf));
+    for (let i = 0; i < proof.length; i++) {
+        if (leaf_index % 2 === 0) {
+            node = hash(node, Buffer.from(Uint8Array.from(proof[i])));
+        } else {
+            node = hash(Buffer.from(Uint8Array.from(proof[i])), node);
+        }
+        leaf_index = leaf_index >> 1
+    }
+
+    const bufferRoot = Buffer.from(Uint8Array.from(root));
+    console.log(node, bufferRoot)
+    return node.equals(bufferRoot);
+}
+
 export function updateTree(tree: Tree, newNode: Buffer, index: number, verbose = false) {
     let leaf = tree.leaves[index];
     leaf.node = newNode;

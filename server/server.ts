@@ -44,17 +44,37 @@ function createEmptyTreeOffChain() {
 let tree = createEmptyTreeOffChain();
 
 let listener = gummyroll.addEventListener("ChangeLogEvent", (event) => {
-    // console.log(event);
     if (event.index !== undefined) {
         eventsProcessed.set("0", eventsProcessed.get("0") + 1);
-        // console.log(event.path, event.path[0].node);
-        updateTree(tree, Buffer.from(event.path[0].node.inner), event.index);
+        const newRootCheck = event.id;
+        updateTree(tree, Buffer.from(event.leaf.inner), event.index);
+        const actualRoot = new PublicKey(tree.root);
+        if (!actualRoot.equals(newRootCheck)) {
+            console.log(event.index, newRootCheck.toString(), actualRoot.toString());
+            const pathLeaf = Buffer.from(event.path[0].node.inner);
+            const eventLeaf = Buffer.from(event.leaf.inner);
+            if (!pathLeaf.equals(eventLeaf)) {
+                console.log(pathLeaf, eventLeaf);
+            }
+            console.log("\n");
+        }
     }
 });
 
 app.get('/', (req, res) => {
     res.send(`Processed: ${eventsProcessed.get("0")}`)
 })
+
+app.get('/root', (req, res) => {
+    res.send(`Processed: ${new PublicKey(tree.root).toString()}`)
+})
+
+app.get("/changesProcessed", (req, res) => {
+    const result = {
+        numChanges: eventsProcessed.get("0")
+    }
+    res.send(JSON.stringify(result));
+});
 
 app.get("/proof", (req, res) => {
     const leafIndex = req.query.leafIndex;
