@@ -8,7 +8,8 @@ export default async function transferAsset(
   treeAccount: anchor.web3.PublicKey,
   treeAdmin: anchor.web3.PublicKey,
   data: Buffer,
-  index: number,
+  nodeIndex: number,
+  leafIndex: number,
   owner: anchor.web3.PublicKey,
   newOwner: anchor.web3.PublicKey
 ) {
@@ -17,9 +18,9 @@ export default async function transferAsset(
     treeAccount,
     treeAdmin
   );
-  const { proof, root } = await getProofForAsset(treeAccount, index);
+  const { proof, root } = await getProofForAsset(treeAccount, nodeIndex);
   await program.methods
-    .transfer(Buffer.from(root, "utf-8").toJSON().data, data, index)
+    .transfer(Buffer.from(root, "utf-8").toJSON().data, data, leafIndex)
     .accounts({
       authority: treeAdmin,
       authorityPda,

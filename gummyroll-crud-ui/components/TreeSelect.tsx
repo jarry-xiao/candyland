@@ -29,18 +29,16 @@ export default function TreeSelect({
     e: SyntheticEvent<HTMLButtonElement, MouseEvent>
   ) {
     e.preventDefault();
-    let newtree: anchor.web3.PublicKey | null = null;
+    let newTree: TreePayload | null = null;
     await mutate(async (currentData) => {
-      newtree = await createTree(anchorWallet, 14, 64);
-      return [
-        {
-          account: newtree.toBase58(),
-          authority: anchorWallet.publicKey.toBase58(),
-        },
-        ...(currentData ?? []),
-      ];
+      const account = await createTree(anchorWallet, 14, 64);
+      newTree = {
+        account: account.toBase58(),
+        authority: anchorWallet.publicKey.toBase58(),
+      };
+      return [newTree, ...(currentData ?? [])];
     });
-    onChange(newtree);
+    onChange(newTree);
   }
   return (
     <>
