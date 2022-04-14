@@ -63,9 +63,9 @@ const AddAsset: NextPage = () => {
     });
   }
   return (
-    <>
+    <div style={{marginLeft: '15px'}}>
       <h1>Add asset for {router.query.ownerPubkey}</h1>
-      <form onSubmit={handleSubmit}>
+      <form onSubmit={handleSubmit} >
         <label htmlFor="treeAccount">
           <p>Tree id</p>
           <TreeSelect
@@ -85,7 +85,7 @@ const AddAsset: NextPage = () => {
           </Button>
         </p>
       </form>
-    </>
+    </div>
   );
 };
 
