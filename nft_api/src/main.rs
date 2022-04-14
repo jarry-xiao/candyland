@@ -70,13 +70,12 @@ struct Root {
 }
 
 
-#[derive(Serialize)]
+#[derive(Serialize, Default, Clone, PartialEq)]
 struct NodeView {
     pub hash: String,
     pub level: i64,
     pub index: i64,
 }
-
 
 #[derive(Serialize)]
 struct AssetProof {
@@ -116,7 +115,7 @@ fn asset_to_view(r: AssetDAO) -> AssetView {
         tree_account: bs58::encode(r.tree).into_string(),
         owner: bs58::encode(r.owner).into_string().to_string(),
         tree_admin: bs58::encode(r.admin).into_string().to_string(),
-        data: bs58::encode(r.data).into_string(),
+        data: r.data
     }
 }
 
@@ -271,38 +270,21 @@ async fn get_proof(db: &Pool<Postgres>, tree_id: Vec<u8>, index: i64) -> Result<
         .bind(&tree_id)
         .fetch_all(db).await;
     let nodes_from_db = results.unwrap();
-    let mut final_node_list: Vec<NodeView> = vec![];
-    if nodes_from_db.len() == 0 {
-        return Err(ApiError::ResponseError {
-            status: StatusCode::NOT_FOUND,
-            msg: "Index/Tree Not Found".to_string(),
-        });
-    }
+    let mut final_node_list: Vec<NodeView> = vec![NodeView::default(); expected_proof_size];
     if nodes_from_db.len() > expected_proof_size {
         return Err(ApiError::ResponseError {
             status: StatusCode::INTERNAL_SERVER_ERROR,
             msg: "Tree Corrupted".to_string(),
         });
     }
-    let mut searched = 0;
     if nodes_from_db.len() != expected_proof_size {
-        for i in 0..nodes_from_db.len() {
-            let returned = nodes_from_db[i].to_owned();
-            for j in searched..nodes.len() {
-                let expected = nodes[j];
-                if returned.node_idx != expected {
-                    final_node_list.push(node_to_view(make_empty_node(searched as i64, expected)));
-                    searched = j + 1;
-                } else {
-                    final_node_list.push(node_to_view(returned));
-                    searched = j + 1;
-                    break;
-                }
-            }
+        for returned in nodes_from_db.iter() {
+            final_node_list[returned.level as usize] = node_to_view(returned.to_owned());
         }
-        for i in searched..nodes.len() {
-            let expected = nodes[i];
-            final_node_list.push(node_to_view(make_empty_node(i as i64, expected)));
+        for (i, (n, nin)) in final_node_list.iter_mut().zip(nodes).enumerate() {
+            if *n == NodeView::default() {
+                *n = node_to_view(make_empty_node(i as i64, nin));
+            }
         }
     } else {
         final_node_list = node_list_to_view(nodes_from_db);
@@ -313,11 +295,11 @@ async fn get_proof(db: &Pool<Postgres>, tree_id: Vec<u8>, index: i64) -> Result<
 fn get_required_nodes_for_proof(index: i64) -> Vec<i64> {
     let mut indexes = vec![];
     let mut idx = index;
-    while idx >= 1 {
+    while idx > 1 {
         if idx % 2 == 0 { indexes.push(idx + 1) } else { indexes.push(idx - 1) }
         idx >>= 1
     }
-    println!("{:?}", indexes);
+    println!("nodes {:?}", indexes);
     return indexes;
 }
 
@@ -329,13 +311,13 @@ fn decode_b58_param(param: &String) -> Result<Vec<u8>, ApiError> {
     Ok(pub_key.to_bytes().to_vec())
 }
 
+
+
 fn make_empty_node(lvl: i64, node_index: i64) -> NodeDAO {
-    let mut data = vec![0; 32];
-    data.fill_with(|| 0);
     NodeDAO {
         node_idx: node_index,
         level: lvl,
-        hash: data,
+        hash: empty_node(lvl as u32).inner.to_vec(),
         seq: 0,
     }
 }

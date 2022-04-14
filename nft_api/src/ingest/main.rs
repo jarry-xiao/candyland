@@ -151,7 +151,7 @@ pub async fn structured_program_event_service(ids: &Vec<StreamId>, pool: &Pool<P
         });
         if app_event.op == "add" || app_event.op == "tran" || app_event.op == "create" {
             let row = sqlx::query_as::<_, AppSpecificRev>(GET_APPSQL)
-                .bind(&app_event.message)
+                .bind(&un_jank_message(&app_event.message))
                 .bind(&bs58::decode(&app_event.tree_id).into_vec().unwrap())
                 .fetch_one(pool)
                 .await;
@@ -164,7 +164,7 @@ pub async fn structured_program_event_service(ids: &Vec<StreamId>, pool: &Pool<P
         }
         if app_event.op == "add" {
             sqlx::query(SET_APPSQL)
-                .bind(&app_event.message)
+                .bind(&un_jank_message(&app_event.message))
                 .bind(&bs58::decode(&app_event.leaf).into_vec().unwrap())
                 .bind(&bs58::decode(&app_event.owner).into_vec().unwrap())
                 .bind(&bs58::decode(&app_event.tree_id).into_vec().unwrap())
@@ -173,7 +173,7 @@ pub async fn structured_program_event_service(ids: &Vec<StreamId>, pool: &Pool<P
         } else if app_event.op == "tran" {
             new_owner.map(|x| async move {
                 sqlx::query(SET_APPSQL)
-                    .bind(&app_event.message)
+                    .bind(&un_jank_message(&app_event.message))
                     .bind(&bs58::decode(&app_event.leaf).into_vec().unwrap())
                     .bind(&bs58::decode(&x).into_vec().unwrap())
                     .bind(&bs58::decode(&app_event.tree_id).into_vec().unwrap())
@@ -182,7 +182,7 @@ pub async fn structured_program_event_service(ids: &Vec<StreamId>, pool: &Pool<P
             });
         } else if app_event.op == "rm" {
             sqlx::query(DEL_APPSQL)
-                .bind(&app_event.message)
+                .bind(&un_jank_message(&app_event.message))
                 .bind(&bs58::decode(app_event.tree_id).into_vec().unwrap())
                 .execute(pool).await.unwrap();
         } else if app_event.op == "create" {
@@ -197,6 +197,9 @@ pub async fn structured_program_event_service(ids: &Vec<StreamId>, pool: &Pool<P
     last_id
 }
 
+fn un_jank_message(hex_str: &String) -> String {
+    String::from_utf8(hex::decode(hex_str).unwrap()).unwrap()
+}
 
 #[tokio::main]
 async fn main() {
@@ -222,15 +225,10 @@ async fn main() {
         for StreamKey { key, ids } in srr.keys {
             println!("{}", key);
             if key == "GM_CL" {
-                println!("hwllo ckl");
                 cl_service(&ids, &pool).await;
             } else if key == "GMC_OP" {
-                println!("hwllo gm");
                 structured_program_event_service(&ids, &pool).await;
             }
-            // let id_strs: Vec<&String> =
-            //     ids.iter().map(|StreamId { id, map: _ }| id).collect();
-            // conn.xack(key, group_name, &id_strs).expect("ack")
         }
     }
 }
