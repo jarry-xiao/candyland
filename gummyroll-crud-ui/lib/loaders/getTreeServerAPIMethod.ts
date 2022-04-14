@@ -7,7 +7,6 @@ export default async function getTreeServerAPIMethod<TResponse>(path: string) {
     throw new TreeServerNotConfiguredError();
   }
   const url = new URL(path, treeServerURL);
-  console.log(url.toString());
   const response = await fetch(url.toString());
   if (response.ok) {
     const json = (await response.json()) as { data: TResponse };
