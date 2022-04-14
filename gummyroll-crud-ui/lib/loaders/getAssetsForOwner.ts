@@ -12,6 +12,6 @@ export default async function getAssetsForOwner(
   if (!process.env.PGSQL_HOST) {
     return MOCK_DATA_BY_OWNER[ownerPubkey];
   }
-  // const client = await getClient();
-  // const results = await client?.query("SELECT * from cl_items;");
+  let result =  await fetch(`http://localhost:9090/owner/${ownerPubkey}/assets`);
+  return await result.json();
 }

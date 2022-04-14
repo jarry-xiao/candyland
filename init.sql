@@ -17,13 +17,20 @@ CREATE INDEX cl_items__tree_node ON cl_items (tree, node_idx);
 
 create table app_specific
 (
-    leaf    BYTEA not null,
+    leaf    bytea not null,
     msg     text PRIMARY KEY,
-    tree_id BYTEA not null,
-    owner   BYTEA not null,
+    tree_id bytea not null,
+    owner   bytea not null,
     revision bigint not null
 );
 
 CREATE INDEX app_specific_idx_owner ON app_specific (owner);
 CREATE INDEX app_specific_idx_tree_id ON app_specific (tree_id);
 
+create table app_specific_ownership
+(
+    authority bytea not null,
+    tree_id bytea not null primary key
+);
+
+create index app_specific_shizzle_mynizzle On app_specific_ownership (authority);

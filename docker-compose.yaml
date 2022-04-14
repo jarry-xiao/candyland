@@ -3,11 +3,11 @@ services:
   ingester:
     volumes:
       - ./target/debug/ingest:/bin/ingest
-    cpu_count: 2
     environment:
       BIN: /bin/ingest
     depends_on:
       - api
+      - redis
     restart: always
     image: merkle-wallet_api
   api:
@@ -20,6 +20,7 @@ services:
     ports:
       - "9090:9090"
   redis:
+    cpu_count: 2
     image: "redis:alpine"
     ports:
       - "6379:6379"

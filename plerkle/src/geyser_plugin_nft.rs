@@ -188,6 +188,21 @@ impl GeyserPlugin for Plerkle {
                         (program, instruction) if program == program_ids::GummyRollCrud() => {
                             let maxlen = StreamMaxlen::Approx(5000);
                             let message = match gummyroll_crud::get_instruction_type(&instruction.data) {
+                                gummyroll_crud::InstructionName::CreateTree => {
+                                    warn!("yo yo yo yo");
+                                    let tree_id = keys.index(instruction.accounts[3] as usize);
+                                    let auth = keys.index(instruction.accounts[0] as usize);
+                                    let res: RedisResult<()> = self
+                                        .redis_connection
+                                        .as_mut()
+                                        .unwrap()
+                                        .xadd_maxlen("GMC_OP", maxlen, "*", &[("op", "create"), ("tree_id", &*tree_id.to_string()), ("authority", &*auth.to_string()) ]);
+                                    if res.is_err() {
+                                        error!("{}", res.err().unwrap());
+                                    } else {
+                                        info!("Data Sent")
+                                    }
+                                }
                                 gummyroll_crud::InstructionName::Add => {
                                     let data  = instruction.data[8..].to_owned();
                                     let data_buf = &mut data.as_slice();
@@ -211,9 +226,9 @@ impl GeyserPlugin for Plerkle {
                                     let data  = instruction.data[8..].to_owned();
                                     let data_buf = &mut data.as_slice();
                                     let add: gummyroll_crud::instruction::Transfer = gummyroll_crud::instruction::Transfer::deserialize(data_buf).unwrap();
-                                    let tree_id = keys.index(instruction.accounts[3] as usize);
-                                    let owner = keys.index(instruction.accounts[4] as usize);
-                                    let new_owner = keys.index(instruction.accounts[5] as usize);
+                                    let tree_id = keys.index(instruction.accounts[0] as usize);
+                                    let owner = keys.index(instruction.accounts[1] as usize);
+                                    let new_owner = keys.index(instruction.accounts[2] as usize);
                                     let hex_message = hex::encode(&add.message);
                                     let leaf = keccak::hashv(&[&new_owner.to_bytes(), add.message.as_slice()]);
                                     let res: RedisResult<()> = self
@@ -231,8 +246,8 @@ impl GeyserPlugin for Plerkle {
                                     let data  = instruction.data[8..].to_owned();
                                     let data_buf = &mut data.as_slice();
                                     let remove: gummyroll_crud::instruction::Remove = gummyroll_crud::instruction::Remove::deserialize(data_buf).unwrap();
-                                    let tree_id = keys.index(instruction.accounts[3] as usize);
-                                    let owner = keys.index(instruction.accounts[0] as usize);
+                                    let tree_id = keys.index(instruction.accounts[0] as usize);
+                                    let owner = keys.index(instruction.accounts[1] as usize);
                                     let leaf = hex::encode(remove.leaf_hash);
                                     let res: RedisResult<()> = self
                                         .redis_connection
