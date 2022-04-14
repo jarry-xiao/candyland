@@ -60,8 +60,8 @@ struct AssetView {
     pub data: String,
     pub index: i64,
     pub owner: String,
-    pub tree_account: String,
-    pub tree_admin: String,
+    pub treeAccount: String,
+    pub treeAdmin: String,
 }
 
 #[derive(sqlx::FromRow)]
@@ -112,9 +112,9 @@ fn asset_list_to_view(items: Vec<AssetDAO>) -> Vec<AssetView> {
 fn asset_to_view(r: AssetDAO) -> AssetView {
     AssetView {
         index: r.index,
-        tree_account: bs58::encode(r.tree).into_string(),
+        treeAccount: bs58::encode(r.tree).into_string(),
         owner: bs58::encode(r.owner).into_string().to_string(),
-        tree_admin: bs58::encode(r.admin).into_string().to_string(),
+        treeAdmin: bs58::encode(r.admin).into_string().to_string(),
         data: r.data
     }
 }
