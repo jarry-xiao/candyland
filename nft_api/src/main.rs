@@ -89,6 +89,11 @@ fn encode_root(root: Root) -> String {
     bs58::encode(root.hash).into_string()
 }
 
+async fn handler_get_assets_for_owner(req: Request<Body>) -> Result<Response<Body>, routerify_json_response::Error>  {
+
+    json_success_resp(&String::new())
+}
+
 async fn handle_get_tree(req: Request<Body>) -> Result<Response<Body>, routerify_json_response::Error> {
     let db: &Pool<Postgres> = req.data::<Pool<Postgres>>().unwrap();
     let tree_id = hex::decode(req.param("tree_id").unwrap()).unwrap();
@@ -140,13 +145,8 @@ async fn handle_get_proof(req: Request<Body>) -> Result<Response<Body>, routerif
     let mut searched = 0;
     if nodes_from_db.len() != expected_proof_size {
         let things : Vec<i64> =  nodes_from_db.iter().map(|i| i.node_idx).collect();
-        println!("{:?}", nodes);
-        println!("{:?}", things);
         for i in 0..nodes_from_db.len() {
             let returned = nodes_from_db[i].to_owned();
-            // if searched >= nodes_from_db.len() {
-            //     final_node_list.push(to_view(make_empty_node(i as i64, expected)));
-            // }
             for j in searched..nodes.len() {
                 let expected = nodes[j];
                 if returned.node_idx != expected {
@@ -200,7 +200,7 @@ fn router(db: Pool<Postgres>) -> Router<Body, routerify_json_response::Error> {
     Router::builder()
         .middleware(Middleware::pre(logger))
         .data(db)
-        // .get("/assets/:account", handle_get_assets)
+        .get("/owner/:pubkey/assets", handler_get_assets_for_owner)
         .get("/tree/:tree_id", handle_get_tree)
         .get("/root/:tree_id", handle_get_root)
         .get("/proof/:tree_id/:index", handle_get_proof)

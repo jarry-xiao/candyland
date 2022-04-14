@@ -17,10 +17,10 @@ CREATE INDEX cl_items__tree_node ON cl_items (tree, node_idx);
 
 create table app_specific
 (
-    leaf    varchar(32) not null,
+    leaf    BYTEA not null,
     msg     text PRIMARY KEY,
-    tree_id varchar(32) not null,
-    owner   varchar(32) not null,
+    tree_id BYTEA not null,
+    owner   BYTEA not null,
     revision bigint not null
 );
 

@@ -30,10 +30,16 @@ struct AppEvent {
     tree_id: String,
 }
 
-const SET_APPSQL: &str = "INSERT INTO app_specific (msg, leaf, owner, tree_id, revision) VALUES ($1,$2,$3,$4,$5) ON conflict msg DO UPDATE";
+const SET_APPSQL: &str = r#"INSERT INTO app_specific (msg, leaf, owner, tree_id, revision) VALUES ($1,$2,$3,$4,$5) ON conflict msg
+                            DO UPDATE SET leaf = excluded.leaf, owner = excluded.owner, tree_id = excluded.tree_id, revision = excluded.revision"#;
 const GET_APPSQL: &str = "SELECT revision FROM app_specific WHERE msg = $1 AND tree_id = $2 RETURNING revision";
 const DEL_APPSQL: &str = "DELETE FROM app_specific WHERE msg = $1 AND tree_id = $2";
 const SET_CLSQL_ITEM: &str = "INSERT INTO cl_items (tree, seq, level, hash, node_idx) VALUES ($1,$2,$3,$4,$5)";
+
+#[derive(sqlx::FromRow, Clone, Debug)]
+struct AppSpecificRev {
+    revision: i64,
+}
 
 pub async fn cl_service(client: &redis::Client, pool: &Pool<Postgres>) {
     let conn_res = client.get_connection();
@@ -147,12 +153,16 @@ pub async fn structured_program_event_service(client: &redis::Client, pool: &Poo
                 }
             });
             if app_event.op == "add" || app_event.op == "tran" {
-                let row: (i64, ) = sqlx::query_as(GET_APPSQL)
+                let row = sqlx::query_as::<_, AppSpecificRev>(GET_APPSQL)
                     .bind(&app_event.message)
                     .bind(&app_event.tree_id)
-                    .fetch_one(pool).await.unwrap();
-                if pid < row.0 as i64 {
-                    continue;
+                    .fetch_one(pool)
+                    .await;
+                if row.is_ok() {
+                    let res = row.unwrap();
+                    if pid < res.revision as i64 {
+                        continue;
+                    }
                 }
             }
             if app_event.op == "add" {
