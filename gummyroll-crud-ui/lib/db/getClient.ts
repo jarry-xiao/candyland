@@ -2,6 +2,9 @@ import { Client } from "ts-postgres";
 
 let client: Client | null;
 export default async function getClient() {
+  if (!process.env.PGSQL_HOST) {
+    return null;
+  }
   if (!client) {
     client = new Client({
       database: process.env.PGSQL_DATABASE!,

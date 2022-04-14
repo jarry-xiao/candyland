@@ -6,6 +6,14 @@ export default async function handler(
   res: NextApiResponse
 ) {
   const client = await getClient();
-  const results = await client!.query("SELECT * from cl_items;");
-  res.status(200).json({ query: req.query });
+  const results = await client?.query("SELECT * from cl_items;");
+  res.status(200).json({
+    data: {
+      hash: "TODO",
+      proof: ["TODO"],
+      root: "TODO",
+    },
+    status: 200,
+    success: true,
+  });
 }
