@@ -8,9 +8,11 @@ export default async function getProofForAsset(
   index: number
 ): Promise<AssetProof> {
   try {
-    const proof = await getTreeServerAPIMethod<AssetProof>(
+    let proof = await getTreeServerAPIMethod<AssetProof>(
       `/assets/${treeAccount.toBase58()}/${index}/proof`
     );
+    // Super dirty hack, we will fix for prod
+    proof.proof.pop();
     console.log(`API /assets/${treeAccount.toBase58()}/${index}/proof`, proof);
     return proof;
   } catch (e) {

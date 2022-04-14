@@ -6,8 +6,8 @@ export type AssetPayload = Readonly<{
   treeAdmin: string;
 }>;
 
-export type AssetProof = Readonly<{
+export type AssetProof = {
   hash: string;
   proof: string[];
   root: string;
-}>;
+};

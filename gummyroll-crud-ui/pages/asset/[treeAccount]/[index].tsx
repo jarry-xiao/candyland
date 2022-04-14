@@ -37,10 +37,13 @@ const AssetDetail: NextPage = () => {
     setIsUndergoingMutation(true);
     try {
       const { treeAccount, treeAdmin } = data;
+      const nodeIndex = parseInt(index, 10);
+      const leafIndex = nodeIndex - (1 << Math.floor(Math.log2(nodeIndex)));
       await removeAsset(
-        new anchor.web3.PublicKey(treeAccount),
-        new anchor.web3.PublicKey(treeAdmin),
-        parseInt(index, 10)
+        new anchor.web3.PublicKey(data.treeAccount),
+        new anchor.web3.PublicKey(data.treeAdmin),
+        nodeIndex,
+        leafIndex, 
       );
       await Promise.all([
         mutate<AssetPayload>(
