@@ -47,16 +47,11 @@ let listener = gummyroll.addEventListener("ChangeLogEvent", (event) => {
     if (event.index !== undefined) {
         eventsProcessed.set("0", eventsProcessed.get("0") + 1);
         const newRootCheck = event.id;
-        updateTree(tree, Buffer.from(event.leaf.inner), event.index);
+        const leafFromPath = Buffer.from(event.path[0].node.inner);
+        updateTree(tree, leafFromPath, event.index);
         const actualRoot = new PublicKey(tree.root);
         if (!actualRoot.equals(newRootCheck)) {
             console.log(event.index, newRootCheck.toString(), actualRoot.toString());
-            const pathLeaf = Buffer.from(event.path[0].node.inner);
-            const eventLeaf = Buffer.from(event.leaf.inner);
-            if (!pathLeaf.equals(eventLeaf)) {
-                console.log(pathLeaf, eventLeaf);
-            }
-            console.log("\n");
         }
     }
 });

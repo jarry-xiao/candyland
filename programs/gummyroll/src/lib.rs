@@ -160,7 +160,7 @@ pub mod gummyroll {
         )?;
         let id = ctx.accounts.merkle_roll.key();
         let empty = empty_node(0);
-        match merkle_roll_apply_fn!(header, true, id, empty, roll_bytes, initialize,) {
+        match merkle_roll_apply_fn!(header, false, id, empty, roll_bytes, initialize,) {
             Some(new_root) => {
                 msg!("New Root: {:?}", new_root);
                 Ok(())
@@ -423,7 +423,6 @@ impl<const MAX_DEPTH: usize> ChangeLog<MAX_DEPTH> {
             id,
             path,
             index: self.index,
-            leaf,
         }
     }
 
