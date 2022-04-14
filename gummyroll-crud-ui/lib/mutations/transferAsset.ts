@@ -19,7 +19,7 @@ export default async function transferAsset(
   );
   const { proof, root } = await getProofForAsset(treeAccount, index);
   await program.methods
-    .transfer(root, data, index)
+    .transfer(Buffer.from(root, "utf-8").toJSON().data, data, index)
     .accounts({
       authority: treeAdmin,
       authorityPda,

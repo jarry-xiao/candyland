@@ -7,7 +7,7 @@ export type AssetPayload = Readonly<{
 }>;
 
 export type AssetProof = Readonly<{
-  hash: number[];
-  proof: number[][];
-  root: number[];
+  hash: string;
+  proof: string[];
+  root: string;
 }>;

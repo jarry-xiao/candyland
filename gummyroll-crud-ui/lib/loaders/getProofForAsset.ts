@@ -11,20 +11,20 @@ export default async function getProofForAsset(
       "Returning mock proof data. Do not expect any transfer/remove instruction to succeed"
     );
     return {
-      hash: Array.from(anchor.web3.PublicKey.default.toBytes()),
+      hash: anchor.web3.PublicKey.default.toString(),
       proof: Array.from({ length: 32 }, () =>
-        Array.from(anchor.web3.PublicKey.default.toBytes())
+        anchor.web3.PublicKey.default.toString()
       ),
-      root: Array.from(anchor.web3.PublicKey.default.toBytes()),
+      root: anchor.web3.PublicKey.default.toString(),
     };
   }
   // const client = await getClient();
   // const results = await client?.query("SELECT * from cl_items;");
   return {
-    hash: Array.from(anchor.web3.PublicKey.default.toBytes()),
+    hash: anchor.web3.PublicKey.default.toString(),
     proof: Array.from({ length: 32 }, () =>
-      Array.from(anchor.web3.PublicKey.default.toBytes())
+      anchor.web3.PublicKey.default.toString()
     ),
-    root: Array.from(anchor.web3.PublicKey.default.toBytes()),
+    root: anchor.web3.PublicKey.default.toString(),
   };
 }
