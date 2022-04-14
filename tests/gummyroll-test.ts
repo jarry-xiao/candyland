@@ -35,11 +35,15 @@ describe("gummyroll", () => {
   async function createTreeOnChain(
     payer: Keypair,
     numLeaves: number,
+    maxDepth?: number,
+    maxSize?: number,
   ): Promise<[Keypair, Tree]> {
+    if (maxDepth === undefined) { maxDepth = MAX_DEPTH }
+    if (maxSize === undefined) { maxSize = MAX_SIZE }
     const merkleRollKeypair = Keypair.generate();
 
-    const requiredSpace = getMerkleRollAccountSize(MAX_DEPTH, MAX_SIZE);
-    const leaves = Array(2 ** MAX_DEPTH).fill(Buffer.alloc(32));
+    const requiredSpace = getMerkleRollAccountSize(maxDepth, maxSize);
+    const leaves = Array(2 ** maxDepth).fill(Buffer.alloc(32));
     for (let i = 0; i < numLeaves; i++) {
       leaves[i] = crypto.randomBytes(32);
     }
@@ -56,33 +60,48 @@ describe("gummyroll", () => {
       programId: Gummyroll.programId,
     });
 
-    const root = { inner: Array.from(tree.root) };
-    const leaf = { inner: Array.from(leaves[numLeaves - 1]) };
-    const proof = getProofOfLeaf(tree, numLeaves - 1).map((node) => {
-      return {
-        pubkey: new PublicKey(node.node),
-        isSigner: false,
-        isWritable: false,
-      };
-    });
+    let tx = new Transaction().add(allocAccountIx);
+    if (numLeaves > 0) {
 
-    const initGummyrollIx = Gummyroll.instruction.initGummyrollWithRoot(
-      MAX_DEPTH,
-      MAX_SIZE,
-      root,
-      leaf,
-      numLeaves - 1,
-      {
-        accounts: {
-          merkleRoll: merkleRollKeypair.publicKey,
-          authority: payer.publicKey,
-        },
-        signers: [payer],
-        remainingAccounts: proof,
-      }
-    );
+      const root = { inner: Array.from(tree.root) };
+      const leaf = { inner: Array.from(leaves[numLeaves - 1]) };
+      const proof = getProofOfLeaf(tree, numLeaves - 1).map((node) => {
+        return {
+          pubkey: new PublicKey(node.node),
+          isSigner: false,
+          isWritable: false,
+        };
+      });
 
-    const tx = new Transaction().add(allocAccountIx).add(initGummyrollIx);
+      tx = tx.add(Gummyroll.instruction.initGummyrollWithRoot(
+        maxDepth,
+        maxSize,
+        root,
+        leaf,
+        numLeaves - 1,
+        {
+          accounts: {
+            merkleRoll: merkleRollKeypair.publicKey,
+            authority: payer.publicKey,
+          },
+          signers: [payer],
+          remainingAccounts: proof,
+        }
+      ));
+    } else {
+      tx = tx.add(Gummyroll.instruction.initEmptyGummyroll(
+        maxDepth,
+        maxSize,
+        {
+          accounts: {
+            merkleRoll: merkleRollKeypair.publicKey,
+            authority: payer.publicKey,
+          },
+          signers: [payer],
+        }
+      ));
+    }
+
     await Gummyroll.provider.send(tx, [payer, merkleRollKeypair], {
       commitment: "confirmed",
     });
@@ -94,12 +113,12 @@ describe("gummyroll", () => {
 
     // Check header bytes are set correctly
     assert(
-      onChainMerkle.header.maxDepth === MAX_DEPTH,
-      `Max depth does not match ${onChainMerkle.header.maxDepth}, expected ${MAX_DEPTH}`
+      onChainMerkle.header.maxDepth === maxDepth,
+      `Max depth does not match ${onChainMerkle.header.maxDepth}, expected ${maxDepth}`
     );
     assert(
-      onChainMerkle.header.maxBufferSize === MAX_SIZE,
-      `Max buffer size does not match ${onChainMerkle.header.maxBufferSize}, expected ${MAX_SIZE}`
+      onChainMerkle.header.maxBufferSize === maxSize,
+      `Max buffer size does not match ${onChainMerkle.header.maxBufferSize}, expected ${maxSize}`
     );
 
     assert(
@@ -225,6 +244,7 @@ describe("gummyroll", () => {
         merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
 
       assert(
+
         Buffer.from(onChainRoot).equals(offChainTree.root),
         "Updated on chain root matches root of updated off chain tree"
       );
@@ -343,6 +363,96 @@ describe("gummyroll", () => {
         Buffer.from(onChainRoot).equals(offChainTree.root),
         "Updated on chain root does not match root of updated off chain tree"
       );
+    });
+  });
+
+  describe(`Having created a tree with depth 3`, () => {
+    const DEPTH = 3;
+    beforeEach(async () => {
+      [merkleRollKeypair, offChainTree] = await createTreeOnChain(payer, 0, DEPTH, 2 ** DEPTH);
+
+      for (let i = 0; i < 2 ** DEPTH; i++) {
+        const appendIx = Gummyroll.instruction.append(
+          {
+            inner: Array.from(Buffer.alloc(32, i + 1))
+          },
+          {
+            accounts: {
+              merkleRoll: merkleRollKeypair.publicKey,
+              authority: payer.publicKey,
+            },
+            signers: [payer],
+          }
+        );
+        const tx = new Transaction().add(appendIx);
+        await Gummyroll.provider.send(tx, [payer], {
+          commitment: "confirmed",
+        });
+      }
+
+      // Compare on-chain & off-chain roots
+      const merkleRoll = decodeMerkleRoll(
+        (
+          await Gummyroll.provider.connection.getAccountInfo(
+            merkleRollKeypair.publicKey
+          )
+        ).data
+      );
+
+      assert(
+        merkleRoll.roll.bufferSize === 2 ** DEPTH,
+        "Not all changes were processed"
+      );
+      assert(
+        merkleRoll.roll.activeIndex === 0,
+        "Not all changes were processed"
+      );
+    });
+
+    it("Random attacker fails to fake the existence of a leaf by autocompleting proof", async () => {
+      const maliciousLeafHash = crypto.randomBytes(32);
+      const maliciousLeafHash1 = crypto.randomBytes(32);
+      const nodeProof = [];
+      for (let i = 0; i < DEPTH; i++) {
+        nodeProof.push({ pubkey: new PublicKey(Buffer.alloc(32)), isSigner: false, isWritable: false });
+      }
+
+      const replaceIx = Gummyroll.instruction.replaceLeaf(
+        // Root - make this nonsense so it won't match what's in CL, and force proof autocompletion
+        { inner: Buffer.alloc(32) },
+        { inner: maliciousLeafHash },
+        { inner: maliciousLeafHash1 },
+        0,
+        {
+          accounts: {
+            merkleRoll: merkleRollKeypair.publicKey,
+            authority: payer.publicKey,
+          },
+          signers: [payer],
+          remainingAccounts: nodeProof,
+        }
+      );
+
+      const tx = new Transaction().add(replaceIx);
+      try {
+        await Gummyroll.provider.send(tx, [payer], { commitment: "confirmed" });
+        assert(false, "Attacker was able to succesfully write fake existence of a leaf");
+      } catch (e) {
+
+      }
+
+      const merkleRoll = decodeMerkleRoll(
+        (
+          await Gummyroll.provider.connection.getAccountInfo(
+            merkleRollKeypair.publicKey
+          )
+        ).data
+      );
+
+      assert(
+        merkleRoll.roll.activeIndex === 0,
+        "Merkle roll updated its active index after attacker's transaction, when it shouldn't have done anything"
+      )
     });
   });
 });
