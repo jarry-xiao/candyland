@@ -19,6 +19,7 @@ import { decodeMerkleRoll, getMerkleRollAccountSize } from "./merkle-roll-serde"
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 import fetch from "node-fetch";
 import { sleep } from "@metaplex-foundation/amman/dist/utils";
+import * as borsh from 'borsh';
 
 // @ts-ignore
 const Gummyroll = anchor.workspace.Gummyroll as Program<Gummyroll>;
@@ -42,7 +43,7 @@ describe("gummyroll-continuous-fetchproof", () => {
   let payer: Keypair;
   anchor.setProvider(anchor.Provider.env());
 
-  const MAX_SIZE = 64;
+  const MAX_SIZE = 256;
   const MAX_DEPTH = 20;
   // This is hardware dependent... if too large, then majority of tx's will fail to confirm
   const BATCH_SIZE = 5;
@@ -93,7 +94,8 @@ describe("gummyroll-continuous-fetchproof", () => {
     connection = new web3Connection(
       "http://localhost:8899",
       {
-        commitment: 'singleGossip'
+        commitment: 'singleGossip',
+        confirmTransactionInitialTimeout: 60 * 1000,
       }
     );
     wallet = new NodeWallet(payer)
@@ -170,7 +172,11 @@ describe("gummyroll-continuous-fetchproof", () => {
   }
 
   function createAppend(merkleRollKeypair: Keypair, payer: Keypair, i: number) {
-    let newLeaf = Buffer.alloc(32, Buffer.from(Uint8Array.from([1 + i])));
+    const writer = new borsh.BinaryWriter();
+    writer.writeU64(i + 1)
+    const buffer = writer.toArray();
+
+    let newLeaf = Buffer.alloc(32, Buffer.from(buffer, 0, 32));
     return Gummyroll.instruction.append(
       { inner: Array.from(newLeaf) },
       {
@@ -211,6 +217,7 @@ describe("gummyroll-continuous-fetchproof", () => {
       await Promise.all(toConfirm.map(async (txId) => {
         const confirmation = await connection.confirmTransaction(txId, "confirmed")
         if (confirmation.value.err && txIdToIndex[txId]) {
+          console.log(txIdToIndex[txId], confirmation.value, txId);
           txsToReplay.push(txIdToIndex[txId]);
         }
         return confirmation;
@@ -317,13 +324,9 @@ describe("gummyroll-continuous-fetchproof", () => {
       }));
 
       if (txsToReplay.length) {
-        // batchesToSend.add(txsToReplay);
         console.log(`${txsToReplay.length} tx's failed in batch`)
       }
       replacesToSend = txsToReplay;
     }
-
-    // indicesToSend = indicesLeft;
-
   });
 });
