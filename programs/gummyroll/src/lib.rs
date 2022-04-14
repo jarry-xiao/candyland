@@ -228,9 +228,11 @@ pub mod gummyroll {
         let header = load_and_check_header(header_bytes, ctx.accounts.authority.key())?;
 
         let mut proof = vec![];
-        for node in ctx.remaining_accounts.iter() {
+        for (i, node) in ctx.remaining_accounts.iter().enumerate() {
+            msg!("{}: {}", i, node.key());
             proof.push(Node::new(node.key().to_bytes()));
         }
+        msg!("Current root: {:?}", root.inner);
 
         let id = ctx.accounts.merkle_roll.key();
         match merkle_roll_apply_fn!(
@@ -534,7 +536,12 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         for (i, node) in rightmost_proof.proof.iter_mut().enumerate() {
             *node = empty_node(i as u32);
         }
+        let mut path = [Node::default(); MAX_DEPTH];
+        for (i, node) in path.iter_mut().enumerate() {
+            *node = empty_node(i as u32);
+        }
         self.change_logs[0].root = empty_node(MAX_DEPTH as u32);
+        self.change_logs[0].path = path;
         self.active_index = 0;
         self.buffer_size = 1;
         self.rightmost_proof = rightmost_proof;

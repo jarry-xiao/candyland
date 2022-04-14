@@ -53,6 +53,7 @@ struct AssetDAO {
     pub owner: Vec<u8>,
     pub tree: Vec<u8>,
     pub admin: Vec<u8>,
+    pub hash: Vec<u8>,
 }
 
 #[derive(Serialize)]
@@ -62,6 +63,7 @@ struct AssetView {
     pub owner: String,
     pub treeAccount: String,
     pub treeAdmin: String,
+    pub hash: String,
 }
 
 #[derive(sqlx::FromRow)]
@@ -115,7 +117,8 @@ fn asset_to_view(r: AssetDAO) -> AssetView {
         treeAccount: bs58::encode(r.tree).into_string(),
         owner: bs58::encode(r.owner).into_string().to_string(),
         treeAdmin: bs58::encode(r.admin).into_string().to_string(),
-        data: r.data
+        hash: bs58::encode(r.hash).into_string().to_string(),
+        data: r.data,
     }
 }
 
@@ -143,11 +146,11 @@ async fn handler_get_assets_for_owner(req: Request<Body>) -> Result<Response<Bod
     let owner = decode_b58_param(req.param("owner").unwrap()).unwrap();
 
     let results = sqlx::query_as::<_, AssetDAO>(r#"
-    select a.msg as data, c.node_idx as index, a.owner, a.tree_id as tree , aso.authority as admin, max(seq) as seq from app_specific as a
+    select a.msg as data, c.node_idx as index, a.owner, a.tree_id as tree , aso.authority as admin, a.leaf as hash, max(seq) as seq from app_specific as a
     join cl_items as c on c.tree = a.tree_id and c.hash = a.leaf
     join app_specific_ownership aso on a.tree_id = aso.tree_id
     where a.owner = $1
-    group by c.node_idx, a.msg, a.owner, a.tree_id, aso.authority
+    group by c.node_idx, a.msg, a.owner, a.tree_id, aso.authority, a.leaf
     order by seq"#
     )
         .bind(owner)
@@ -216,7 +219,7 @@ async fn handle_get_asset_proof(req: Request<Body>) -> Result<Response<Body>, ro
     let asset_proof = result.and_then(|n| {
         proof.map(|p| {
             AssetProof {
-                hash: n.data,
+                hash: n.hash,
                 root: p.last().unwrap().clone(),
                 proof: p,
             }
@@ -236,11 +239,11 @@ async fn handle_get_asset_proof(req: Request<Body>) -> Result<Response<Body>, ro
 
 async fn get_asset(db: &Pool<Postgres>, tree_id: Vec<u8>, index: i64) -> Result<AssetView, ApiError> {
     let result = sqlx::query_as::<_, AssetDAO>(r#"
-    select a.msg as data, c.node_idx as index, a.owner, a.tree_id as tree , aso.authority as admin, max(seq) as seq from app_specific as a
+    select a.msg as data, c.node_idx as index, a.owner, a.tree_id as tree , aso.authority as admin, a.leaf as hash, max(seq) as seq from app_specific as a
             join cl_items as c on c.tree = a.tree_id and c.hash = a.leaf
             join app_specific_ownership aso on a.tree_id = aso.tree_id
     where a.tree_id = $1 AND c.node_idx = $2
-    group by c.node_idx, a.msg, a.owner, a.tree_id, aso.authority
+    group by c.node_idx, a.msg, a.owner, a.tree_id, aso.authority, a.leaf
     order by seq
     limit 1
     "#
@@ -299,6 +302,7 @@ fn get_required_nodes_for_proof(index: i64) -> Vec<i64> {
         if idx % 2 == 0 { indexes.push(idx + 1) } else { indexes.push(idx - 1) }
         idx >>= 1
     }
+    indexes.push(1);
     println!("nodes {:?}", indexes);
     return indexes;
 }
