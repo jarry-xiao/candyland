@@ -75,15 +75,20 @@ const AssetDetail: NextPage = () => {
     try {
       const { treeAccount, treeAdmin, data: assetData } = data;
       const newOwnerBase58EncodedPubkey = window.prompt(
-        "Base58-encoded public key of new owner?"
+        "Please enter the base58-encoded public key of new owner:"
       );
       const newOwner = new anchor.web3.PublicKey(newOwnerBase58EncodedPubkey!);
       const owner = new anchor.web3.PublicKey(data.owner);
+      const nodeIndex = parseInt(index, 10);
+      const leafIndex = nodeIndex - (1 << Math.floor(Math.log2(nodeIndex)));
+      console.log(nodeIndex);
+      console.log(leafIndex);
       await transferAsset(
-        new anchor.web3.PublicKey(treeAccount),
-        new anchor.web3.PublicKey(treeAdmin),
+        new anchor.web3.PublicKey(data.treeAccount),
+        new anchor.web3.PublicKey(data.treeAdmin),
         Buffer.from(assetData, "utf-8"),
-        parseInt(index, 10),
+        nodeIndex,
+        leafIndex,
         owner,
         newOwner
       );
