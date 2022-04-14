@@ -8,10 +8,11 @@ export default async function getAsset(
   index: number
 ): Promise<AssetPayload | undefined> {
   try {
+    const node_index = (1 << 14) + index;
     const asset = await getTreeServerAPIMethod<AssetPayload>(
-      `/assets/${treeAccount}/${index}`
+      `/assets/${treeAccount}/${node_index}`
     );
-    console.debug(`API /assets/${treeAccount}/${index}`, asset);
+    console.debug(`API /assets/${treeAccount}/${node_index}`, asset);
     return asset;
   } catch (e) {
     if (e instanceof TreeServerNotConfiguredError) {
