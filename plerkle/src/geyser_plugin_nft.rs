@@ -248,7 +248,7 @@ impl GeyserPlugin for Plerkle {
                                     let remove: gummyroll_crud::instruction::Remove = gummyroll_crud::instruction::Remove::deserialize(data_buf).unwrap();
                                     let tree_id = keys.index(instruction.accounts[3] as usize);
                                     let owner = keys.index(instruction.accounts[0] as usize);
-                                    let leaf = hex::encode(remove.leaf_hash);
+                                    let leaf = bs58::encode(&remove.leaf_hash).into_string();
                                     let res: RedisResult<()> = self
                                         .redis_connection
                                         .as_mut()

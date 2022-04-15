@@ -39,7 +39,7 @@ const SET_APPSQL: &str = r#"INSERT INTO app_specific (msg, leaf, owner, tree_id,
 const SET_OWNERSHIP_APPSQL: &str = r#"INSERT INTO app_specific_ownership (tree_id, authority) VALUES ($1,$2) ON CONFLICT (tree_id)
                             DO UPDATE SET authority = excluded.authority"#;
 const GET_APPSQL: &str = "SELECT revision FROM app_specific WHERE msg = $1 AND tree_id = $2";
-const DEL_APPSQL: &str = "DELETE FROM app_specific WHERE msg = $1 AND tree_id = $2";
+const DEL_APPSQL: &str = "DELETE FROM app_specific WHERE leaf = $1 AND tree_id = $2";
 const SET_CLSQL_ITEM: &str = "INSERT INTO cl_items (tree, seq, level, hash, node_idx) VALUES ($1,$2,$3,$4,$5)";
 
 #[derive(sqlx::FromRow, Clone, Debug)]
@@ -193,8 +193,8 @@ pub async fn structured_program_event_service(ids: &Vec<StreamId>, pool: &Pool<P
             };
         } else if app_event.op == "rm" {
             sqlx::query(DEL_APPSQL)
-                .bind(&un_jank_message(&app_event.message))
-                .bind(&bs58::decode(app_event.tree_id).into_vec().unwrap())
+                .bind(&bs58::decode(&app_event.leaf).into_vec().unwrap())
+                .bind(&bs58::decode(&app_event.tree_id).into_vec().unwrap())
                 .execute(pool).await.unwrap();
         } else if app_event.op == "create" {
             sqlx::query(SET_OWNERSHIP_APPSQL)
