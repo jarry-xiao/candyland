@@ -3,7 +3,7 @@ use std::ops::Index;
 
 extern crate redis;
 
-//use crate::error::PlerkleError;
+use crate::error::PlerkleError;
 use crate::macros::*;
 use redis::streams::StreamMaxlen;
 use redis::Commands;
@@ -31,8 +31,8 @@ mod program_ids {
 }
 
 pub fn handle_transaction_info(
-    transaction_info: ReplicaTransactionInfo,
-    redis_connection: Option<Connection>
+    transaction_info: &ReplicaTransactionInfo,
+    redis_connection: &mut Connection
 ) -> Result<()> {
 
     if transaction_info.is_vote || transaction_info.transaction_status_meta.status.is_err() {
@@ -46,8 +46,8 @@ pub fn handle_transaction_info(
         if change_log_event.is_ok() {
             change_log_event.unwrap().iter().for_each(|ev| {
                 let res: RedisResult<()> = redis_connection
-                    .as_mut()
-                    .unwrap()
+                    //.as_mut()
+                    //.unwrap()
                     .xadd_maxlen("GM_CL", maxlen, "*", &[("data", ev)]);
                 if res.is_err() {
                     error!("{}", res.err().unwrap());
@@ -58,7 +58,7 @@ pub fn handle_transaction_info(
         }
     }
     // Handle Instruction Parsing
-    let instructions = Plerkle::order_instructions(transaction_info);
+    let instructions = Plerkle::order_instructions(&transaction_info);
 
     for program_instruction in instructions {
         match program_instruction {
@@ -70,8 +70,8 @@ pub fn handle_transaction_info(
                         let tree_id = keys.index(instruction.accounts[3] as usize);
                         let auth = keys.index(instruction.accounts[0] as usize);
                         let res: RedisResult<()> = redis_connection
-                            .as_mut()
-                            .unwrap()
+                            //.as_mut()
+                            //.unwrap()
                             .xadd_maxlen("GMC_OP", maxlen, "*", &[("op", "create"), ("tree_id", &*tree_id.to_string()), ("authority", &*auth.to_string()) ]);
                         if res.is_err() {
                             error!("{}", res.err().unwrap());
@@ -88,8 +88,8 @@ pub fn handle_transaction_info(
                         let hex_message = hex::encode(&add.message);
                         let leaf = keccak::hashv(&[&owner.to_bytes(), add.message.as_slice()]);
                         let res: RedisResult<()> = redis_connection
-                            .as_mut()
-                            .unwrap()
+                            //.as_mut()
+                            //.unwrap()
                             .xadd_maxlen("GMC_OP", maxlen, "*", &[("op", "add"), ("tree_id", &*tree_id.to_string()) , ("leaf", &*leaf.to_string()), ("msg", &*hex_message), ("owner", &*owner.to_string()) ]);
                         if res.is_err() {
                             error!("{}", res.err().unwrap());
@@ -107,8 +107,8 @@ pub fn handle_transaction_info(
                         let hex_message = hex::encode(&add.message);
                         let leaf = keccak::hashv(&[&new_owner.to_bytes(), add.message.as_slice()]);
                         let res: RedisResult<()> = redis_connection
-                            .as_mut()
-                            .unwrap()
+                            //.as_mut()
+                            //.unwrap()
                             .xadd_maxlen("GMC_OP", maxlen, "*", &[("op", "tran"), ("tree_id", &*tree_id.to_string()) , ("leaf", &*leaf.to_string()), ("msg", &*hex_message), ("owner", &*owner.to_string()), ("new_owner", &*new_owner.to_string()) ]);
                         if res.is_err() {
                             error!("{}", res.err().unwrap());
@@ -124,8 +124,7 @@ pub fn handle_transaction_info(
                         let owner = keys.index(instruction.accounts[0] as usize);
                         let leaf = bs58::encode(&remove.leaf_hash).into_string();
                         let res: RedisResult<()> = redis_connection
-                            .as_mut()
-                            .unwrap()
+                            //.unwrap()
                             .xadd_maxlen("GMC_OP", maxlen, "*", &[("op", "rm"), ("tree_id", &*tree_id.to_string()) , ("leaf", &*leaf.to_string()), ("msg", ""), ("owner", &*owner.to_string()) ]);
                         if res.is_err() {
                             error!("{}", res.err().unwrap());
