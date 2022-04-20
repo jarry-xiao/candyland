@@ -31,17 +31,7 @@ use {
 use gummyroll_crud::InstructionName;
 use crate::programs::gummy_roll::handle_change_log_event;
 
-mod program_ids {
-    #![allow(missing_docs)]
-
-    use solana_sdk::pubkeys;
-    pubkeys!(TokenMetadata, "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
-    pubkeys!(GummyRollCrud, "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
-    pubkeys!(GummyRoll, "GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD");
-    pubkeys!(Token, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
-    pubkeys!(AToken, "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
-}
-
+#[macro_use]
 pub mod macros {
     macro_rules! define_redis_plugin {
         ($struct:ident, $name:literal, $func:ident) => {
@@ -93,13 +83,13 @@ pub mod macros {
                 }
             }
 
-            impl Debug for Plerkle {
+            impl Debug for $struct {
                 fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
                     Ok(())
                 }
             }
 
-            impl GeyserPlugin for Plerkle {
+            impl GeyserPlugin for $struct {
                 fn name(&self) -> &'static str {
                     $name
                 }
@@ -160,6 +150,8 @@ pub mod macros {
                 ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
                     match transaction {
                         ReplicaTransactionInfoVersions::V0_0_1(transaction_info) => {
+                            $func(transaction_info, redis_connection);
+                            /*
                             if transaction_info.is_vote || transaction_info.transaction_status_meta.status.is_err() {
                                 return Ok(());
                             }
@@ -270,6 +262,7 @@ pub mod macros {
                                     _ => {}
                                 };
                             }
+                        */
                             Ok(())
                         }
                     }
@@ -299,5 +292,4 @@ pub mod macros {
             }
         }
     }
-
 }
