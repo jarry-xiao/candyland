@@ -1,8 +1,12 @@
 use anchor_client::anchor_lang;
 use std::borrow::{Borrow, BorrowMut};
 use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
-use std::ops::Index;
+use std::{
+    fmt::{Debug, Formatter},
+    ops::Index,
+    rc::Rc,
+    cell::RefCell,
+};
 use std::result::Iter;
 
 extern crate redis;
@@ -152,7 +156,9 @@ pub mod macros {
                 ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
                     match transaction {
                         ReplicaTransactionInfoVersions::V0_0_1(transaction_info) => {
-                            match &self.redis_connection {
+                            self.$func(transaction_info);
+                            /*
+                            match self.redis_connection {
                                 Some(mut connection) => {
                                     $func(transaction_info, &mut connection);
                                 }
@@ -163,6 +169,7 @@ pub mod macros {
                                     }));
                                 }
                             }
+                            */
                             Ok(())
                         }
                     }
