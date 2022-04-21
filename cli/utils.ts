@@ -64,8 +64,7 @@ export function loadLeaves(inputFile: string, maxDepth: number) {
 }
 
 /**
- * TODO(ngundotra): actually do BFS from the tree root down to leaves & write in here
- * @param leaves 
+ * Do BFS from the tree root down to leaves & write to outFile
  */
 export function writeTree(tree: Tree, treeId: PublicKey, outFile: string) {
     const writer = createArrayCsvWriter({

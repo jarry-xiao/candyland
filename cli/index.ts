@@ -42,7 +42,7 @@ program
         log.info("Writing to file:", outFile);
         log.info("Tree id is:", treeId.toString());
         log.info("depth is:", maxDepth);
-        log.info('\n\n');
+        log.info('\n');
 
         // Load in leaves, up to max depth
         const leaves = loadLeaves(inputFile, maxDepth);
@@ -50,8 +50,7 @@ program
         // Create tree in memory
         const tree = buildTree(leaves);
 
-        // BFS search of tree
-        // Write leaves to CSV in schema
+        // BFS search of tree && write leaves to CSV in 'GM CL' schema
         writeTree(tree, treeId, outFile);
     });
 
