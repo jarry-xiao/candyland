@@ -17,5 +17,6 @@ default = []
 
 [dependencies]
 anchor-lang = "0.22.1"
+anchor-spl = {version = "^0.22.1"}
 gummyroll = { path = "../gummyroll", features = ["cpi"] }
 bytemuck = "1.8.0"

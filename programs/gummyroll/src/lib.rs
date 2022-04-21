@@ -27,7 +27,7 @@ macro_rules! merkle_roll_depth_size_apply_fn {
                     match merkle_roll.$func($($arg)*) {
                         Some(x) => {
                             if $emit_msg {
-                                emit!(merkle_roll.get_change_log().to_event($id));
+                                emit!(merkle_roll.get_change_log().to_event($id, merkle_roll.sequence_number));
                             }
                             Some(x)
                         }
@@ -110,6 +110,7 @@ fn set_header<'a>(
     max_depth: u32,
     max_buffer_size: u32,
     authority: &Pubkey,
+    append_authority: &Pubkey,
 ) -> Result<MerkleRollHeader> {
     let mut header = MerkleRollHeader::try_from_slice(header_bytes)?;
     // Check header is empty
@@ -119,20 +120,11 @@ fn set_header<'a>(
     header.max_buffer_size = max_buffer_size;
     header.max_depth = max_depth;
     header.authority = *authority;
+    header.append_authority = *append_authority;
     header.serialize(&mut header_bytes)?;
     Ok(header)
 }
 
-fn load_header<'a>(header_bytes: &'a [u8]) -> Result<MerkleRollHeader> {
-    let header = MerkleRollHeader::try_from_slice(header_bytes)?;
-    Ok(header)
-}
-
-fn load_and_check_header(header_bytes: &[u8], authority: Pubkey) -> Result<MerkleRollHeader> {
-    let header = load_header(header_bytes)?;
-    assert_eq!(header.authority, authority);
-    Ok(header)
-}
 
 #[program]
 pub mod gummyroll {
@@ -153,6 +145,7 @@ pub mod gummyroll {
             max_depth,
             max_buffer_size,
             &ctx.accounts.authority.key(),
+            &ctx.accounts.append_authority.key(),
         )?;
         let id = ctx.accounts.merkle_roll.key();
         match merkle_roll_apply_fn!(header, true, id, roll_bytes, initialize,) {
@@ -182,6 +175,7 @@ pub mod gummyroll {
             max_depth,
             max_buffer_size,
             &ctx.accounts.authority.key(),
+            &ctx.accounts.append_authority.key(),
         )?;
 
         let mut proof = vec![];
@@ -221,7 +215,8 @@ pub mod gummyroll {
         let (header_bytes, roll_bytes) =
             merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
-        let header = load_and_check_header(header_bytes, ctx.accounts.authority.key())?;
+        let header = MerkleRollHeader::try_from_slice(header_bytes)?;
+        assert_eq!(header.authority, ctx.accounts.authority.key());
 
         let mut proof = vec![];
         for (i, node) in ctx.remaining_accounts.iter().enumerate() {
@@ -251,12 +246,14 @@ pub mod gummyroll {
         }
     }
 
-    pub fn append(ctx: Context<Modify>, leaf: Node) -> ProgramResult {
+    pub fn append(ctx: Context<Append>, leaf: Node) -> ProgramResult {
         let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
         let (header_bytes, roll_bytes) =
             merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
-        let header = load_and_check_header(header_bytes, ctx.accounts.authority.key())?;
+        let header = MerkleRollHeader::try_from_slice(header_bytes)?;
+        assert_eq!(header.authority, ctx.accounts.authority.key());
+        assert_eq!(header.append_authority, ctx.accounts.append_authority.key());
 
         let id = ctx.accounts.merkle_roll.key();
         match merkle_roll_apply_fn!(header, true, id, roll_bytes, append, leaf) {
@@ -269,7 +266,7 @@ pub mod gummyroll {
     }
 
     pub fn insert_or_append(
-        ctx: Context<Modify>,
+        ctx: Context<Append>,
         root: Node,
         leaf: Node,
         index: u32,
@@ -278,7 +275,9 @@ pub mod gummyroll {
         let (header_bytes, roll_bytes) =
             merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
-        let header = load_and_check_header(header_bytes, ctx.accounts.authority.key())?;
+        let header = MerkleRollHeader::try_from_slice(header_bytes)?;
+        assert_eq!(header.authority, ctx.accounts.authority.key());
+        assert_eq!(header.append_authority, ctx.accounts.append_authority.key());
 
         let mut proof = vec![];
         for node in ctx.remaining_accounts.iter() {
@@ -313,6 +312,7 @@ pub struct MerkleRollHeader {
     pub max_buffer_size: u32,
     pub max_depth: u32,
     pub authority: Pubkey,
+    pub append_authority: Pubkey,
     // pub byte_vec: Vec<u8>
 }
 
@@ -322,6 +322,8 @@ pub struct Initialize<'info> {
     /// CHECK: unsafe
     pub merkle_roll: UncheckedAccount<'info>,
     pub authority: Signer<'info>,
+    /// CHECK: unsafe
+    pub append_authority: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -330,6 +332,15 @@ pub struct Modify<'info> {
     /// CHECK: unsafe :P
     pub merkle_roll: UncheckedAccount<'info>,
     pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
+pub struct Append<'info> {
+    #[account(mut)]
+    /// CHECK: unsafe :P
+    pub merkle_roll: UncheckedAccount<'info>,
+    pub authority: Signer<'info>,
+    pub append_authority: Signer<'info>,
 }
 
 #[derive(Debug, Copy, Clone, AnchorDeserialize, AnchorSerialize, Default, PartialEq)]
@@ -386,6 +397,7 @@ pub struct ChangeLogEvent {
     pub id: Pubkey,
     /// Nodes of off-chain merkle tree
     pub path: Vec<PathNode>,
+    pub seq: u128,
     /// Bitmap of node parity (used when hashing)
     pub index: u32,
 }
@@ -404,7 +416,7 @@ pub struct ChangeLog<const MAX_DEPTH: usize> {
 }
 
 impl<const MAX_DEPTH: usize> ChangeLog<MAX_DEPTH> {
-    pub fn to_event(&self, id: Pubkey) -> ChangeLogEvent {
+    pub fn to_event(&self, id: Pubkey, seq: u128) -> ChangeLogEvent {
         let path_len = self.path.len() as u32;
         let mut path: Vec<PathNode> = self
             .path
@@ -416,6 +428,7 @@ impl<const MAX_DEPTH: usize> ChangeLog<MAX_DEPTH> {
         ChangeLogEvent {
             id,
             path,
+            seq,
             index: self.index,
         }
     }
@@ -470,6 +483,7 @@ impl<const MAX_DEPTH: usize> Default for Path<MAX_DEPTH> {
 /// was generated for a that has had at most MAX_SIZE updates since the tx was submitted
 #[derive(Copy, Clone)]
 pub struct MerkleRoll<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> {
+    sequence_number: u128,
     /// Index of most recent root & changes
     active_index: u64,
     /// Number of active changes we are tracking
@@ -538,6 +552,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         }
         self.change_logs[0].root = empty_node(MAX_DEPTH as u32);
         self.change_logs[0].path = path;
+        self.sequence_number = 0;
         self.active_index = 0;
         self.buffer_size = 1;
         self.rightmost_proof = rightmost_proof;
@@ -560,6 +575,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             _padding: 0,
         };
         self.change_logs[0].root = root;
+        self.sequence_number = 1;
         self.active_index = 0;
         self.buffer_size = 1;
         self.rightmost_proof = rightmost_proof;
@@ -644,6 +660,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         };
         self.rightmost_proof.index = self.rightmost_proof.index + 1;
         self.rightmost_proof.leaf = leaf;
+        self.sequence_number = self.sequence_number.saturating_add(1);
         Some(node)
     }
 
@@ -795,6 +812,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         }
         if valid_root {
             self.increment_active_index();
+            self.sequence_number = self.sequence_number.saturating_add(1);
             Some(self.apply_changes(new_leaf, proof, index))
         } else {
             msg!("Invalid root recomputed from proof, failing");

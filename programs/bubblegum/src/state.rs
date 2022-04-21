@@ -36,7 +36,14 @@ pub struct Uses { // 17 bytes + Option byte
     pub total: u64, //8
 }
 
-#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Copy, Clone)]
+#[repr(C)]
+#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Debug, Clone)]
+pub struct Collection {
+    pub verified: bool,
+    pub key: Pubkey,
+}
+
+#[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Clone)]
 pub struct MetadataArgs {
     pub mint: Option<Pubkey>,
     /// The name of the asset
