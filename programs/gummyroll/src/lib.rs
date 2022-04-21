@@ -49,23 +49,23 @@ macro_rules! merkle_roll_apply_fn {
             (14, 64) => merkle_roll_depth_size_apply_fn!(14, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
             (14, 256) => merkle_roll_depth_size_apply_fn!(14, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
             (14, 1024) => merkle_roll_depth_size_apply_fn!(14, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (14, 2448) => merkle_roll_depth_size_apply_fn!(14, 2448, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (14, 2048) => merkle_roll_depth_size_apply_fn!(14, 2048, $emit_msg, $id, $bytes, $func, $($arg)*),
             (16, 64) => merkle_roll_depth_size_apply_fn!(16, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
             (16, 256) => merkle_roll_depth_size_apply_fn!(16, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
             (16, 1024) => merkle_roll_depth_size_apply_fn!(16, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (16, 2448) => merkle_roll_depth_size_apply_fn!(16, 2448, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (16, 2048) => merkle_roll_depth_size_apply_fn!(16, 2048, $emit_msg, $id, $bytes, $func, $($arg)*),
             (18, 64) => merkle_roll_depth_size_apply_fn!(18, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
             (18, 256) => merkle_roll_depth_size_apply_fn!(18, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
             (18, 1024) => merkle_roll_depth_size_apply_fn!(18, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (18, 2448) => merkle_roll_depth_size_apply_fn!(18, 2448, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (18, 2048) => merkle_roll_depth_size_apply_fn!(18, 2048, $emit_msg, $id, $bytes, $func, $($arg)*),
             (20, 64) => merkle_roll_depth_size_apply_fn!(20, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
             (20, 256) => merkle_roll_depth_size_apply_fn!(20, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
             (20, 1024) => merkle_roll_depth_size_apply_fn!(20, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (20, 2448) => merkle_roll_depth_size_apply_fn!(20, 2448, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (20, 2048) => merkle_roll_depth_size_apply_fn!(20, 2048, $emit_msg, $id, $bytes, $func, $($arg)*),
             (22, 64) => merkle_roll_depth_size_apply_fn!(22, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
             (22, 256) => merkle_roll_depth_size_apply_fn!(22, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
             (22, 1024) => merkle_roll_depth_size_apply_fn!(22, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (22, 2448) => merkle_roll_depth_size_apply_fn!(22, 2448, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (22, 2048) => merkle_roll_depth_size_apply_fn!(22, 2048, $emit_msg, $id, $bytes, $func, $($arg)*),
             _ => {
                 msg!("Failed to apply {} on merkle roll with max depth {} and max buffer size {}", stringify!($func), $header.max_depth, $header.max_buffer_size);
                 None
@@ -91,9 +91,6 @@ pub fn empty_node(level: u32) -> Node {
 
 /// Recomputes root of the Merkle tree from Node & proof
 pub fn recompute(leaf: Node, proof: &[Node], index: u32) -> Node {
-    msg!("Recompute");
-
-    sol_log_compute_units();
     let mut current_node = leaf;
     for (depth, sibling_leaf) in proof.iter().enumerate() {
         if index >> depth & 1 == 0 {
@@ -104,7 +101,6 @@ pub fn recompute(leaf: Node, proof: &[Node], index: u32) -> Node {
             current_node.copy_from_slice(res.as_ref());
         }
     }
-    sol_log_compute_units();
 
     current_node
 }
