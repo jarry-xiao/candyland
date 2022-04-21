@@ -21,6 +21,7 @@ type MerkleRollHeader = {
     maxDepth: number, // u32
     maxBufferSize: number, // u32
     authority: PublicKey,
+    appendAuthority: PublicKey,
 }
 
 type MerkleRoll = {
@@ -54,7 +55,8 @@ export function decodeMerkleRoll(buffer: Buffer): OnChainMerkleRoll {
     let header: MerkleRollHeader = {
         maxBufferSize: reader.readU32(),
         maxDepth: reader.readU32(),
-        authority: readPublicKey(reader)
+        authority: readPublicKey(reader),
+        appendAuthority: readPublicKey(reader)
     };
 
     // Decode MerkleRoll
@@ -108,9 +110,9 @@ export function decodeMerkleRoll(buffer: Buffer): OnChainMerkleRoll {
 }
 
 export function getMerkleRollAccountSize(maxDepth: number, maxBufferSize: number): number {
-  let headerSize = 8 + 32;
+  let headerSize = 8 + 32 + 32;
   let changeLogSize = (maxDepth * 32 + 32 + 4 + 4) * maxBufferSize;
   let rightMostPathSize = maxDepth * 32 + 32 + 4 + 4;
-  let merkleRollSize = 8 + 8 + changeLogSize + rightMostPathSize;
+  let merkleRollSize = 8 + 8 + 16 + changeLogSize + rightMostPathSize;
   return merkleRollSize + headerSize; 
 }

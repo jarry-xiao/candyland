@@ -1,6 +1,6 @@
 use anchor_lang::{prelude::*, solana_program::keccak};
 
-use gummyroll::{program::Gummyroll, Node};
+use gummyroll::{program::Gummyroll, state::node::Node};
 
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
@@ -133,6 +133,7 @@ pub mod gummyroll_crud {
             gummyroll_program,
             gummyroll::cpi::accounts::Initialize {
                 authority: authority_pda.clone(),
+                append_authority: authority_pda.clone(),
                 merkle_roll,
             },
             authority_pda_signer,
@@ -155,8 +156,9 @@ pub mod gummyroll_crud {
         let authority_pda_signer = &[&seeds[..]];
         let cpi_ctx = CpiContext::new_with_signer(
             gummyroll_program,
-            gummyroll::cpi::accounts::Modify {
+            gummyroll::cpi::accounts::Append {
                 authority: authority_pda.clone(),
+                append_authority: authority_pda.clone(),
                 merkle_roll,
             },
             authority_pda_signer,

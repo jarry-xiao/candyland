@@ -1,12 +1,12 @@
 use anchor_lang::{prelude::*, solana_program::keccak};
 use anchor_spl::token::Token;
-use gummyroll::{program::Gummyroll, Node};
+use gummyroll::{program::Gummyroll, state::node::Node};
 
 pub mod state;
 
 use crate::state::MetadataArgs;
 
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o");
 
 pub struct RawLeafSchema {
     pub owner: Pubkey,
@@ -116,10 +116,10 @@ pub struct Mint<'info> {
         bump,
     )]
     pub nonce: Account<'info, Nonce>,
+    pub gummyroll_program: Program<'info, Gummyroll>,
     pub owner: Signer<'info>,
     /// CHECK: This account is neither written to nor read from.
     pub delegate: UncheckedAccount<'info>,
-    pub gummyroll_program: Program<'info, Gummyroll>,
     #[account(mut)]
     /// CHECK: unsafe
     pub merkle_roll: UncheckedAccount<'info>,
@@ -134,13 +134,13 @@ pub struct Burn<'info> {
     /// CHECK: This account is neither written to nor read from.
     pub authority: UncheckedAccount<'info>,
     pub gummyroll_program: Program<'info, Gummyroll>,
-    #[account(mut)]
-    /// CHECK: unsafe
-    pub merkle_roll: UncheckedAccount<'info>,
     /// CHECK: This account is checked in the instruction
     pub owner: UncheckedAccount<'info>,
     /// CHECK: This account is chekced in the instruction
     pub delegate: UncheckedAccount<'info>,
+    #[account(mut)]
+    /// CHECK: unsafe
+    pub merkle_roll: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -151,16 +151,16 @@ pub struct Transfer<'info> {
     )]
     /// CHECK: This account is neither written to nor read from.
     pub authority: UncheckedAccount<'info>,
-    pub gummyroll_program: Program<'info, Gummyroll>,
-    #[account(mut)]
-    /// CHECK: This account is modified in the downstream program
-    pub merkle_roll: UncheckedAccount<'info>,
     /// CHECK: This account is checked in the instruction
     pub owner: UncheckedAccount<'info>,
     /// CHECK: This account is chekced in the instruction
     pub delegate: UncheckedAccount<'info>,
     /// CHECK: This account is neither written to nor read from.
     pub new_owner: UncheckedAccount<'info>,
+    pub gummyroll_program: Program<'info, Gummyroll>,
+    #[account(mut)]
+    /// CHECK: This account is modified in the downstream program
+    pub merkle_roll: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -171,15 +171,15 @@ pub struct Delegate<'info> {
     )]
     /// CHECK: This account is neither written to nor read from.
     pub authority: UncheckedAccount<'info>,
-    pub gummyroll_program: Program<'info, Gummyroll>,
-    #[account(mut)]
-    /// CHECK: This account is modified in the downstream program
-    pub merkle_roll: UncheckedAccount<'info>,
     pub owner: Signer<'info>,
     /// CHECK: This account is neither written to nor read from.
     pub previous_delegate: UncheckedAccount<'info>,
     /// CHECK: This account is neither written to nor read from.
     pub new_delegate: UncheckedAccount<'info>,
+    pub gummyroll_program: Program<'info, Gummyroll>,
+    #[account(mut)]
+    /// CHECK: This account is modified in the downstream program
+    pub merkle_roll: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -197,10 +197,15 @@ pub struct Decompress<'info> {
     pub owner: Signer<'info>,
     /// CHECK: This account is neither written to nor read from.
     pub token_program: Program<'info, Token>,
+    /// CHECK: unsafe
     pub mint: UncheckedAccount<'info>,
+    /// CHECK: unsafe
     pub token_account: UncheckedAccount<'info>,
+    /// CHECK: unsafe
     pub token_metadata_program: UncheckedAccount<'info>,
+    /// CHECK: unsafe
     pub token_metadata: UncheckedAccount<'info>,
+    /// CHECK: unsafe
     pub master_edition: UncheckedAccount<'info>,
 }
 
