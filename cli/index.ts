@@ -2,7 +2,7 @@ import { Keypair, PublicKey } from '@solana/web3.js';
 import { program } from 'commander';
 import log from 'loglevel';
 import { buildTree, hashLeaves, Tree } from '../tests/merkle-tree';
-import { writeHashes, loadMessages, hashMessages, loadLeaves, writeTree } from './utils';
+import { writeHashes, loadMessages, hashMessages, loadLeaves, writeTree, writeMetadata } from './utils';
 
 program.version('0.0.1');
 log.setLevel('DEBUG');
@@ -70,5 +70,35 @@ program.command('hashMessages')
         const hashes = hashMessages(messages);
         writeHashes(hashes, outFile);
     });
+
+program.command('prepareMetadata')
+    .option(
+        '-f, --input-file <string>',
+        'CSV file containing owner,message columns',
+    )
+    .option(
+        '-o, --out-file <string>',
+        'Output CSV to be used in batchMint',
+        'metadata.csv'
+    )
+    .option(
+        '-p, --pubkey <string>',
+        'Pubkey of the tree',
+        undefined
+    )
+    .action(async (directory, cmd) => {
+        const { inputFile, outFile, pubkey } = cmd.opts();
+
+        let treeId: PublicKey;
+        if (pubkey == undefined) {
+            treeId = Keypair.generate().publicKey;
+        } else {
+            treeId = new PublicKey(pubkey);
+        }
+
+        const messages = loadMessages(inputFile);
+        writeMetadata(treeId, messages, outFile);
+    });
+
 
 program.parse(process.argv);

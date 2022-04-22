@@ -69,7 +69,7 @@ export function loadLeaves(inputFile: string, maxDepth: number) {
 export function writeTree(tree: Tree, treeId: PublicKey, outFile: string) {
     const writer = createArrayCsvWriter({
         path: outFile,
-        header: ['treeId', 'node_idx', 'seq', 'level', 'hash']
+        header: ['tree', 'node_idx', 'seq', 'level', 'hash']
     });
 
     log.debug("doing bfs on a tree");
@@ -77,7 +77,7 @@ export function writeTree(tree: Tree, treeId: PublicKey, outFile: string) {
     const records = bfs(tree, (treeNode, idx) => {
         return [
             treeIdStr,
-            idx.toString(),
+            (idx + 1).toString(),
             '0',
             treeNode.level.toString(),
             new PublicKey(treeNode.node).toString(),
@@ -85,6 +85,25 @@ export function writeTree(tree: Tree, treeId: PublicKey, outFile: string) {
     });
 
     log.debug(records[0], records[records.length - 1]);
+    writer.writeRecords(records);
+}
+
+export function writeMetadata(treeId: PublicKey, messages: OwnedMessage[], outFile: string) {
+    const writer = createArrayCsvWriter({
+        path: outFile,
+        header: ["msg", "tree", "owner", "leaf", "revision"]
+    });
+    log.debug("Wrote metadata csv to:", outFile);
+
+    const records = messages.map((ownedMessage) => {
+        return [
+            ownedMessage.message,
+            treeId.toString(),
+            ownedMessage.owner,
+            new PublicKey(hashOwnedMessage(ownedMessage)).toString(),
+            0
+        ]
+    })
     writer.writeRecords(records);
 }
 
@@ -101,9 +120,13 @@ export function loadMessages(inputFile: string): OwnedMessage[] {
     return messages;
 }
 
+function hashOwnedMessage(ownedMessage: OwnedMessage): Buffer {
+    return hash(new PublicKey(ownedMessage.owner).toBuffer(), Buffer.from(ownedMessage.message));
+}
+
 export function hashMessages(messages: OwnedMessage[]): Buffer[] {
     return messages.map((ownedMessage) => {
-        return hash(new PublicKey(ownedMessage.owner).toBuffer(), Buffer.from(ownedMessage.message));
+        return hashOwnedMessage(ownedMessage)
     });
 }
 
