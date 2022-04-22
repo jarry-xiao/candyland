@@ -7,7 +7,11 @@ use std::result::Iter;
 
 extern crate redis;
 
-use crate::error::PlerkleError;
+use crate::{
+    error::PlerkleError,
+    accounts_selector::AccountsSelector,
+    transaction_selector::TransactionSelector,
+};
 use anchor_lang::Event;
 use redis::streams::StreamMaxlen;
 use redis::Commands;
@@ -45,11 +49,66 @@ mod program_ids {
 #[derive(Default)]
 pub struct Plerkle {
     redis_connection: Option<Connection>,
+    accounts_selector: Option<AccountsSelector>,
+    transaction_selector: Option<TransactionSelector>,
 }
 
 impl Plerkle {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    fn create_accounts_selector_from_config(config: &serde_json::Value) -> AccountsSelector {
+        let accounts_selector = &config["accounts_selector"];
+
+        if accounts_selector.is_null() {
+            AccountsSelector::default()
+        } else {
+            let accounts = &accounts_selector["accounts"];
+            let accounts: Vec<String> = if accounts.is_array() {
+                accounts
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|val| val.as_str().unwrap().to_string())
+                    .collect()
+            } else {
+                Vec::default()
+            };
+            let owners = &accounts_selector["owners"];
+            let owners: Vec<String> = if owners.is_array() {
+                owners
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|val| val.as_str().unwrap().to_string())
+                    .collect()
+            } else {
+                Vec::default()
+            };
+            AccountsSelector::new(&accounts, &owners)
+        }
+    }
+
+    fn create_transaction_selector_from_config(config: &serde_json::Value) -> TransactionSelector {
+        let transaction_selector = &config["transaction_selector"];
+
+        if transaction_selector.is_null() {
+            TransactionSelector::default()
+        } else {
+            let accounts = &transaction_selector["mentions"];
+            let accounts: Vec<String> = if accounts.is_array() {
+                accounts
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|val| val.as_str().unwrap().to_string())
+                    .collect()
+            } else {
+                Vec::default()
+            };
+            TransactionSelector::new(&accounts)
+        }
     }
 
     pub fn txn_contains_program<'a>(keys: AccountKeys, program: &Pubkey) -> bool {
@@ -103,11 +162,43 @@ impl GeyserPlugin for Plerkle {
 
     fn on_load(&mut self, config_file: &str) -> Result<()> {
         solana_logger::setup_with_default("info");
+
+        // Read in config file.
         info!(
             "Loading plugin {:?} from config_file {:?}",
             self.name(),
             config_file
         );
+        let mut file = File::open(config_file)?;
+        let mut contents = String::new();
+        file.read_to_string(&mut contents)?;
+
+        // Setup accounts and transaction selectors based on config file JSON.
+        let result = serde_json::from_str(&contents);
+        match result {
+            Ok(config) => {
+                // TODO: I used the objects from the Example Postgres Plugin for selecting
+                // accounts and transactions.  I do some additional error handling in case the
+                // config file cannot be read, but otherwise follow the example.  I chose
+                // this because it meets our needs of specifiying program IDs for filtering
+                // (see example-config.json) and having parity with the example may make it
+                // easier for someone to maintain if they already understand the example.
+                // If we instead want to streamline it for program ID only, I can easly simplify
+                // this handling to one program ID selection config item.
+                self.accounts_selector = Some(Self::create_accounts_selector_from_config(&config));
+                self.transaction_selector = Some(Self::create_transaction_selector_from_config(&config));
+            }
+            Err(err) => {
+                return Err(GeyserPluginError::ConfigFileReadError {
+                    msg: format!(
+                        "Could not read config file JSON: {:?}",
+                        err
+                    ),
+                })
+            }
+        }
+
+        // Setup Redis client.
         let client = redis::Client::open("redis://redis/").unwrap();
         self.redis_connection = client
             .get_connection()
@@ -118,6 +209,7 @@ impl GeyserPlugin for Plerkle {
                 }))
             })
             .ok();
+
         Ok(())
     }
 
@@ -131,7 +223,19 @@ impl GeyserPlugin for Plerkle {
         slot: u64,
         _is_startup: bool,
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
-        let ReplicaAccountInfoVersions::V0_0_1(accountv1) = account;
+        match account {
+            ReplicaAccountInfoVersions::V0_0_1(account) => {
+
+                // Check if account was selected in config.
+                if let Some(accounts_selector) = &self.accounts_selector {
+                    if !accounts_selector.is_account_selected(account.pubkey, account.owner) {
+                        return Ok(());
+                    }
+                } else {
+                    return Ok(());
+                }
+            }
+        }
         Ok(())
     }
 
@@ -152,15 +256,29 @@ impl GeyserPlugin for Plerkle {
 
     fn notify_transaction(
         &mut self,
-        transaction: ReplicaTransactionInfoVersions,
+        transaction_info: ReplicaTransactionInfoVersions,
         slot: u64,
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
-        match transaction {
+        match transaction_info {
             ReplicaTransactionInfoVersions::V0_0_1(transaction_info) => {
+                // Don't log votes or transactions with error status.
                 if transaction_info.is_vote || transaction_info.transaction_status_meta.status.is_err() {
                     return Ok(());
                 }
-                // Handle Log PArsing
+
+                // Check if transaction was selected in config.
+                if let Some(transaction_selector) = &self.transaction_selector {
+                    if !transaction_selector.is_transaction_selected(
+                        transaction_info.is_vote,
+                        Box::new(transaction_info.transaction.message().account_keys().iter()),
+                    ) {
+                        return Ok(());
+                    }
+                } else {
+                    return Ok(());
+                }
+
+                // Handle log parsing.
                 let keys = transaction_info.transaction.message().account_keys();
                 if keys.iter().any(|v| v == &program_ids::GummyRoll()) {
                     let maxlen = StreamMaxlen::Approx(55000);
@@ -180,7 +298,7 @@ impl GeyserPlugin for Plerkle {
                         });
                     }
                 }
-                /// Handle Instruction Parsing
+                // Handle Instruction Parsing
                 let instructions = Plerkle::order_instructions(transaction_info);
 
                 for program_instruction in instructions {
@@ -287,11 +405,15 @@ impl GeyserPlugin for Plerkle {
     }
 
     fn account_data_notifications_enabled(&self) -> bool {
-        true
+        self.accounts_selector
+            .as_ref()
+            .map_or_else(|| false, |selector| selector.is_enabled())
     }
 
     fn transaction_notifications_enabled(&self) -> bool {
-        true
+        self.transaction_selector
+            .as_ref()
+            .map_or_else(|| false, |selector| selector.is_enabled())
     }
 }
 
