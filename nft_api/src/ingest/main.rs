@@ -51,6 +51,248 @@ struct AppSpecificRev {
     revision: i64,
 }
 
+enum Table {
+    ChangeLogItems,
+    AppSpecific,
+}
+
+pub async fn write_assets_to_file(uri: &str, tree_id: &str, key: &str) -> Result<String, ApiError> {
+    println!("Requesting to see arweave link for {}", key);
+    let fname = format!("{}-{}.csv", tree_id, key);
+    let url = format!("https://arweave.net/{}", uri);
+    let body = reqwest::get(url)
+        .await?
+        .text()
+        .await?;
+    let mut file = File::create(&fname)?;
+    println!("{:?}", body.len());
+    file.write_all(body.as_bytes())?;
+    println!("Wrote response to {}", &fname);
+    Ok(fname.to_string())
+}
+
+#[derive(Debug, Deserialize)]
+struct CLRecord {
+    node_idx: u32,
+    level: u32,
+    seq: u32,
+    hash: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct AppSpecificRecord {
+    msg: String,
+    owner: String,
+    leaf: String,
+    revision: u32,
+}
+
+
+async fn batch_insert_app_specific_records(pool: &Pool<Postgres>, records: &Vec<AppSpecificRecord>, tree_id: &str) {
+    let mut tree_ids: Vec<Vec<u8>> = vec![];
+    let mut owners: Vec<Vec<u8>> = vec![];
+    let mut revisions: Vec<u32> = vec![];
+    let mut msgs: Vec<String> = vec![];
+    let mut leaves: Vec<Vec<u8>> = vec![];
+
+    for record in records.iter() {
+        tree_ids.push(bs58::decode(&tree_id).into_vec().unwrap());
+        owners.push(bs58::decode(&record.owner).into_vec().unwrap());
+        revisions.push(record.revision);
+        msgs.push(record.msg.clone());
+        leaves.push(bs58::decode(&record.leaf).into_vec().unwrap());
+    }
+
+    let txnb = pool.begin().await;
+    match txnb {
+        Ok(txn) => {
+            let f = sqlx::query(BATCH_INSERT_APPSQL)
+                .bind(&msgs)
+                .bind(&leaves)
+                .bind(&owners)
+                .bind(&tree_ids)
+                .bind(&revisions)
+                .execute(pool).await;
+            
+            if f.is_err() {
+                println!("Error: {:?}", f.err().unwrap());
+            }
+            
+            match txn.commit().await {
+                Ok(_r) => {
+                    println!("Saved CL");
+                }
+                Err(e) => {
+                    println!("{}", e.to_string())
+                }
+            }
+        }
+        Err(e) => {
+            println!("{}", e.to_string())
+        }
+    }
+}
+
+async fn batch_insert_cl_records(pool: &Pool<Postgres>, records: &Vec<CLRecord>, tree_id: &str) {
+    let mut tree_ids: Vec<Vec<u8>> = vec![];
+    let mut node_idxs: Vec<u32> = vec![];
+    let mut seq_nums: Vec<u32> = vec![];
+    let mut levels: Vec<u32> = vec![];
+    let mut hashes: Vec<Vec<u8>> = vec![];
+
+    for record in records.iter() {
+        tree_ids.push(bs58::decode(&tree_id).into_vec().unwrap());
+        node_idxs.push(record.node_idx);
+        levels.push(record.level);
+        seq_nums.push(record.seq);
+        hashes.push(bs58::decode(&record.hash).into_vec().unwrap());
+    }
+
+    let txnb = pool.begin().await;
+    match txnb {
+        Ok(txn) => {
+            let f = sqlx::query(BATCH_INSERT_CLSQL)
+                .bind(&tree_ids)
+                .bind(&node_idxs)
+                .bind(&seq_nums)
+                .bind(&levels)
+                .bind(&hashes)
+                .execute(pool).await;
+            
+            if f.is_err() {
+                println!("Error: {:?}", f.err().unwrap());
+            }
+            
+            match txn.commit().await {
+                Ok(_r) => {
+                    println!("Saved CL");
+                }
+                Err(e) => {
+                    println!("{}", e.to_string())
+                }
+            }
+        }
+        Err(e) => {
+            println!("{}", e.to_string())
+        }
+    }
+}
+
+pub async fn insert_csv_cl(
+    pool: &Pool<Postgres>, 
+    fname: &str, 
+    batch_size: usize, 
+    tree_id: &str,
+) {
+    let tmp_file = File::open(fname).unwrap();
+    let mut reader = csv::Reader::from_reader(tmp_file);
+    
+    let mut batch = vec![];
+    let mut num_batches = 0;
+    for result in reader.deserialize() {
+        let record = result.unwrap();
+        batch.push(record);
+       
+        if batch.len() == batch_size {
+            println!("Executing batch write: {}", num_batches);
+            batch_insert_cl_records(pool, &batch, tree_id).await;
+            batch = vec![];
+            num_batches += 1;
+        }
+    }
+    if batch.len() > 0 {
+        batch_insert_cl_records(pool, &batch, tree_id).await;
+        num_batches += 1;
+    }
+    println!("Uploaded to db in {} batches", num_batches);
+}
+
+pub async fn insert_csv_metadata(
+    pool: &Pool<Postgres>, 
+    fname: &str, 
+    batch_size: usize, 
+    tree_id: &str
+) {
+    let tmp_file = File::open(fname).unwrap();
+    let mut reader = csv::Reader::from_reader(tmp_file);
+    
+    let mut batch = vec![];
+    let mut num_batches = 0;
+    for result in reader.deserialize() {
+        let record = result.unwrap();
+        println!("Record: {:?}", record);
+        batch.push(record);
+       
+        if batch.len() == batch_size {
+            println!("Executing batch write: {}", num_batches);
+            batch_insert_app_specific_records(pool, &batch, tree_id).await;
+            batch = vec![];
+            num_batches += 1;
+        }
+    }
+    if batch.len() > 0 {
+        batch_insert_app_specific_records(pool, &batch, tree_id).await;
+        num_batches += 1;
+    }
+    println!("Uploaded to db in {} batches", num_batches);
+}
+
+
+#[derive(Default, Debug)]
+struct InitWithRootEvent {
+    changelog_dburi: String,
+    metadata_dburi: String,
+    authority: String,
+    tree_id: String
+}
+
+pub async fn cl_init_service(ids: &Vec<StreamId>, pool: &Pool<Postgres>) -> String {
+    let mut last_id = "".to_string();
+    for StreamId { id, map } in ids {
+        println!("\tCL INIT STREAM ID {}", id);
+
+        let mut event = InitWithRootEvent::default();
+        for (k, v) in map.to_owned() {
+            if let Value::Data(bytes) = v.to_owned() {
+                let value = String::from_utf8(bytes);
+                if k == "changelog_dburi" {
+                    event.changelog_dburi = value.unwrap();
+                } else if k == "metadata_dburi" {
+                    event.metadata_dburi = value.unwrap();
+                } else if k == "authority" {
+                    event.authority = value.unwrap();
+                } else if k == "tree_id" {
+                    event.tree_id = value.unwrap();
+                }
+            }
+        }
+
+        println!("Found data: {:?}", event);
+
+        let changelog_fname = write_assets_to_file(&event.changelog_dburi, &event.tree_id, "changelog").await.unwrap();
+        let metadata_fname = write_assets_to_file(&event.metadata_dburi, &event.tree_id, "metadata").await.unwrap();
+
+        insert_csv_cl(pool, &changelog_fname, 100, &event.tree_id).await;
+        println!("Wrote changelog file to db");
+        insert_csv_metadata(pool, &metadata_fname, 100, &event.tree_id).await;
+        println!("Wrote metadata file to db");
+
+        println!("Issuing authority update for tree: {} auth: {}", &event.tree_id, &event.authority);
+        let tree_bytes: Vec<u8> = bs58::decode(&event.tree_id).into_vec().unwrap();
+        let auth_bytes: Vec<u8> = bs58::decode(&event.authority).into_vec().unwrap();
+        let pid = id.replace("-", "").parse::<i64>().unwrap();
+        sqlx::query(SET_OWNERSHIP_APPSQL)
+            .bind(&tree_bytes)
+            .bind(&auth_bytes)
+            .bind(&pid)
+            .execute(pool).await.unwrap();
+
+
+        last_id = id.clone();
+    }
+    last_id
+}
+
 pub async fn cl_service(ids: &Vec<StreamId>, pool: &Pool<Postgres>) -> String {
     let mut last_id = "".to_string();
     for StreamId { id, map } in ids {
