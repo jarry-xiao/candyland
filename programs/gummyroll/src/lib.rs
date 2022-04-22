@@ -252,7 +252,7 @@ pub mod gummyroll {
     }
 
     pub fn insert_or_append(
-        ctx: Context<Append>,
+        ctx: Context<Modify>,
         root: Node,
         leaf: Node,
         index: u32,
@@ -263,7 +263,6 @@ pub mod gummyroll {
 
         let header = MerkleRollHeader::try_from_slice(header_bytes)?;
         assert_eq!(header.authority, ctx.accounts.authority.key());
-        assert_eq!(header.append_authority, ctx.accounts.append_authority.key());
 
         let mut proof = vec![];
         for node in ctx.remaining_accounts.iter() {

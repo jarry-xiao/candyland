@@ -8,9 +8,9 @@ pub mod utils;
 use crate::state::{
     leaf_schema::{LeafSchema, RawLeafSchema},
     metaplex_adapter::MetadataArgs,
-    metaplex_anchor::{TokenMetadata, MasterEdition},
+    metaplex_anchor::{MasterEdition, TokenMetadata},
 };
-use crate::utils::{append_leaf, replace_leaf};
+use crate::utils::{append_leaf, insert_or_append_leaf, replace_leaf};
 
 declare_id!("BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o");
 
@@ -163,8 +163,32 @@ pub struct Redeem<'info> {
 }
 
 #[derive(Accounts)]
+#[instruction(_root: [u8; 32], _data_hash: [u8; 32], nonce: u128, _index: u32)]
+pub struct CancelRedeem<'info> {
+    #[account(
+        seeds = [merkle_roll.key().as_ref()],
+        bump,
+    )]
+    /// CHECK: This account is neither written to nor read from.
+    pub authority: UncheckedAccount<'info>,
+    pub gummyroll_program: Program<'info, Gummyroll>,
+    #[account(mut)]
+    /// CHECK: unsafe
+    pub merkle_roll: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        close = payer,
+        seeds = [merkle_roll.key().as_ref(), nonce.to_le_bytes().as_ref()],
+        bump
+    )]
+    pub voucher: Account<'info, LeafSchema>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+}
+
+#[derive(Accounts)]
 pub struct Decompress<'info> {
-    /// CHECK: This account is not read 
+    /// CHECK: This account is not read
     pub merkle_roll: UncheckedAccount<'info>,
     /// CHECK: This account is checked in the instruction
     pub owner: UncheckedAccount<'info>,
@@ -177,10 +201,10 @@ pub struct Decompress<'info> {
         bump
     )]
     pub voucher: Account<'info, LeafSchema>,
-    /// CHECK: versioning is handled in the instruction 
+    /// CHECK: versioning is handled in the instruction
     #[account(mut)]
     pub token_account: AccountInfo<'info>,
-    /// CHECK: versioning is handled in the instruction 
+    /// CHECK: versioning is handled in the instruction
     #[account(mut)]
     pub mint: AccountInfo<'info>,
     #[account(mut)]
@@ -191,7 +215,7 @@ pub struct Decompress<'info> {
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
     pub token_metadata_program: UncheckedAccount<'info>,
-    /// CHECK: versioning is handled in the instruction 
+    /// CHECK: versioning is handled in the instruction
     pub token_program: UncheckedAccount<'info>,
     pub associated_token_program: UncheckedAccount<'info>,
 }
@@ -329,7 +353,7 @@ pub mod bubblegum {
             index,
         )
     }
-    
+
     pub fn redeem<'info>(
         ctx: Context<'_, '_, '_, 'info, Redeem<'info>>,
         root: [u8; 32],
@@ -362,6 +386,35 @@ pub mod bubblegum {
         voucher.nonce = previous_leaf.nonce;
         voucher.data_hash = previous_leaf.data_hash;
         Ok(())
+    }
+
+    pub fn cancel_redeem<'info>(
+        ctx: Context<'_, '_, '_, 'info, CancelRedeem<'info>>,
+        root: [u8; 32],
+        data_hash: [u8; 32],
+        nonce: u128,
+        index: u32,
+    ) -> Result<()> {
+        let voucher = &ctx.accounts.voucher;
+        let merkle_roll = ctx.accounts.merkle_roll.to_account_info();
+        let root_node = Node::new(root);
+        let leaf = LeafSchema::new(
+            voucher.owner,
+            voucher.delegate,
+            voucher.nonce,
+            voucher.data_hash,
+        );
+        insert_or_append_leaf(
+            &merkle_roll.key(),
+            *ctx.bumps.get("authority").unwrap(),
+            &ctx.accounts.gummyroll_program.to_account_info(),
+            &ctx.accounts.authority.to_account_info(),
+            &ctx.accounts.merkle_roll.to_account_info(),
+            ctx.remaining_accounts,
+            root_node,
+            leaf.to_node(),
+            index,
+        )
     }
 
     // pub fn decompress(
