@@ -3,6 +3,7 @@ import {
     PublicKey
 } from '@solana/web3.js';
 import * as borsh from 'borsh';
+import { BN } from '@project-serum/anchor';
 
 
     // maxDepth: number, // u32
@@ -25,6 +26,7 @@ type MerkleRollHeader = {
 }
 
 type MerkleRoll = {
+    sequenceNumber: BN, // u64
     activeIndex: number, // u64
     bufferSize: number, // u64
     changeLogs: ChangeLog[],
@@ -60,6 +62,7 @@ export function decodeMerkleRoll(buffer: Buffer): OnChainMerkleRoll {
     };
 
     // Decode MerkleRoll
+    let sequenceNumber = reader.readU128();
     let activeIndex = reader.readU64().toNumber();
     let bufferSize = reader.readU64().toNumber();
 
@@ -94,6 +97,7 @@ export function decodeMerkleRoll(buffer: Buffer): OnChainMerkleRoll {
     }
 
     const roll = {
+        sequenceNumber,
         activeIndex,
         bufferSize,
         changeLogs,
