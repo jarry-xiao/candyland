@@ -30,7 +30,7 @@ impl RawLeafSchema {
     }
 }
 
-#[account]
+#[derive(AnchorDeserialize, AnchorSerialize, Clone, Copy, Default, Debug)]
 pub struct LeafSchema {
     pub owner: Pubkey,
     pub delegate: Pubkey, // Defaults to owner

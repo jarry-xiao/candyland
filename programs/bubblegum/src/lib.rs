@@ -1,4 +1,4 @@
-use anchor_lang::{prelude::*};
+use anchor_lang::prelude::*;
 use gummyroll::{program::Gummyroll, state::node::Node};
 
 pub mod state;
@@ -8,16 +8,11 @@ use crate::state::{
     leaf_schema::{LeafSchema, RawLeafSchema},
     metaplex_adapter::MetadataArgs,
     metaplex_anchor::{MasterEdition, TokenMetadata},
+    Nonce, Voucher,
 };
 use crate::utils::{append_leaf, insert_or_append_leaf, replace_leaf};
 
 declare_id!("BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o");
-
-#[account]
-#[derive(Copy)]
-pub struct Nonce {
-    pub count: u128,
-}
 
 #[derive(Accounts)]
 pub struct InitNonce<'info> {
@@ -153,10 +148,10 @@ pub struct Redeem<'info> {
         init,
         seeds = [merkle_roll.key().as_ref(), nonce.to_le_bytes().as_ref()],
         payer = owner,
-        space = 8 + 32 + 32 + 16 + 32,
+        space = 8 + 32 + 32 + 16 + 32 + 4 + 32,
         bump
     )]
-    pub voucher: Account<'info, LeafSchema>,
+    pub voucher: Account<'info, Voucher>,
     pub system_program: Program<'info, System>,
 }
 
@@ -179,7 +174,7 @@ pub struct CancelRedeem<'info> {
         seeds = [merkle_roll.key().as_ref(), nonce.to_le_bytes().as_ref()],
         bump
     )]
-    pub voucher: Account<'info, LeafSchema>,
+    pub voucher: Account<'info, Voucher>,
     #[account(mut)]
     pub owner: Signer<'info>,
 }
@@ -195,10 +190,10 @@ pub struct Decompress<'info> {
     #[account(
         mut,
         close = payer,
-        seeds = [merkle_roll.key().as_ref(), voucher.nonce.to_le_bytes().as_ref()],
+        seeds = [voucher.merkle_roll.as_ref(), voucher.leaf_schema.nonce.to_le_bytes().as_ref()],
         bump
     )]
-    pub voucher: Account<'info, LeafSchema>,
+    pub voucher: Account<'info, Voucher>,
     /// CHECK: versioning is handled in the instruction
     #[account(mut)]
     pub token_account: AccountInfo<'info>,
@@ -212,11 +207,11 @@ pub struct Decompress<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
-    /// CHECK: 
+    /// CHECK:
     pub token_metadata_program: UncheckedAccount<'info>,
     /// CHECK: versioning is handled in the instruction
     pub token_program: UncheckedAccount<'info>,
-    /// CHECK: 
+    /// CHECK:
     pub associated_token_program: UncheckedAccount<'info>,
 }
 
@@ -247,9 +242,9 @@ pub struct Compress<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
-    /// CHECK: 
+    /// CHECK:
     pub token_metadata_program: UncheckedAccount<'info>,
-    /// CHECK: 
+    /// CHECK:
     pub token_program: UncheckedAccount<'info>,
     pub gummyroll_program: Program<'info, Gummyroll>,
 }
@@ -413,25 +408,20 @@ pub mod bubblegum {
             new_leaf,
             index,
         )?;
-        ctx.accounts.voucher.set_inner(previous_leaf);
+        ctx.accounts
+            .voucher
+            .set_inner(Voucher::new(previous_leaf, index, merkle_roll.key()));
         Ok(())
     }
 
     pub fn cancel_redeem<'info>(
         ctx: Context<'_, '_, '_, 'info, CancelRedeem<'info>>,
         root: [u8; 32],
-        index: u32,
     ) -> Result<()> {
         let voucher = &ctx.accounts.voucher;
-        assert_eq!(ctx.accounts.owner.key(), voucher.owner);
+        assert_eq!(ctx.accounts.owner.key(), voucher.leaf_schema.owner);
         let merkle_roll = ctx.accounts.merkle_roll.to_account_info();
         let root_node = Node::new(root);
-        let leaf = LeafSchema::new(
-            voucher.owner,
-            voucher.delegate,
-            voucher.nonce,
-            voucher.data_hash,
-        );
         insert_or_append_leaf(
             &merkle_roll.key(),
             *ctx.bumps.get("authority").unwrap(),
@@ -440,15 +430,12 @@ pub mod bubblegum {
             &ctx.accounts.merkle_roll.to_account_info(),
             ctx.remaining_accounts,
             root_node,
-            leaf.to_node(),
-            index,
+            voucher.leaf_schema.to_node(),
+            voucher.index,
         )
     }
 
-    pub fn decompress(
-        _ctx: Context<Decompress>,
-        _metadata: MetadataArgs,
-    ) -> Result<()> {
+    pub fn decompress(_ctx: Context<Decompress>, _metadata: MetadataArgs) -> Result<()> {
         // TODO
         Ok(())
     }
