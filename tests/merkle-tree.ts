@@ -19,6 +19,36 @@ type TreeNode = {
     id: number,
 }
 
+export function getRoot(tree: Tree): TreeNode {
+    let node = tree.leaves[0];
+    while (node.parent) {
+        node = node.parent;
+    }
+    return node;
+}
+
+export function bfs<T>(tree: Tree, iterFunc: (node: TreeNode, nodeIdx: number) => T): T[] {
+    let toExplore = [getRoot(tree)];
+    const results = []
+    let idx = 0;
+    while (toExplore.length) {
+        const nextLevel = [];
+        for (let i = 0; i < toExplore.length; i++) {
+            const node = toExplore[i];
+            if (node.left) {
+                nextLevel.push(node.left);
+            }
+            if (node.right) {
+                nextLevel.push(node.right);
+            }
+            results.push(iterFunc(node, idx));
+            idx++;
+        }
+        toExplore = nextLevel;
+    }
+    return results;
+}
+
 const generateLeafNode = (seeds) => {
     let leaf = Buffer.alloc(32);
     for (const seed of seeds) {
