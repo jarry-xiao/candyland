@@ -53,7 +53,7 @@ pub struct CreateTree<'info> {
 #[derive(Accounts)]
 pub struct Mint<'info> {
     /// CHECK: This account is neither written to nor read from.
-    pub mint_authority: UncheckedAccount<'info>,
+    pub mint_authority: Signer<'info>,
     #[account(
         seeds = [merkle_roll.key().as_ref()],
         bump,
