@@ -53,7 +53,7 @@ pub fn append_leaf<'info>(
         },
         authority_pda_signer,
     );
-    gummyroll::cpi::append(cpi_ctx, leaf)
+    gummyroll::cpi::append(cpi_ctx, leaf_node)
 }
 
 pub fn insert_or_append_leaf<'info>(

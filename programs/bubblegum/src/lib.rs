@@ -143,7 +143,8 @@ pub struct Redeem<'info> {
     pub authority: UncheckedAccount<'info>,
     pub gummyroll_program: Program<'info, Gummyroll>,
     /// CHECK: This account is checked in the instruction
-    pub owner: UncheckedAccount<'info>,
+    #[account(mut)]
+    pub owner: Signer<'info>,
     /// CHECK: This account is chekced in the instruction
     pub delegate: UncheckedAccount<'info>,
     #[account(mut)]
@@ -152,13 +153,11 @@ pub struct Redeem<'info> {
     #[account(
         init,
         seeds = [merkle_roll.key().as_ref(), nonce.to_le_bytes().as_ref()],
-        payer = payer,
+        payer = owner,
         space = 8 + 32 + 32 + 16 + 32,
         bump
     )]
     pub voucher: Account<'info, LeafSchema>,
-    #[account(mut)]
-    pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -177,13 +176,13 @@ pub struct CancelRedeem<'info> {
     pub merkle_roll: UncheckedAccount<'info>,
     #[account(
         mut,
-        close = payer,
+        close = owner,
         seeds = [merkle_roll.key().as_ref(), nonce.to_le_bytes().as_ref()],
         bump
     )]
     pub voucher: Account<'info, LeafSchema>,
     #[account(mut)]
-    pub payer: Signer<'info>,
+    pub owner: Signer<'info>,
 }
 
 #[derive(Accounts)]
@@ -214,10 +213,46 @@ pub struct Decompress<'info> {
     #[account(mut)]
     pub payer: Signer<'info>,
     pub system_program: Program<'info, System>,
+    /// CHECK: 
     pub token_metadata_program: UncheckedAccount<'info>,
     /// CHECK: versioning is handled in the instruction
     pub token_program: UncheckedAccount<'info>,
+    /// CHECK: 
     pub associated_token_program: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct Compress<'info> {
+    #[account(
+        seeds = [merkle_roll.key().as_ref()],
+        bump,
+    )]
+    /// CHECK: This account is neither written to nor read from.
+    pub authority: UncheckedAccount<'info>,
+    /// CHECK: This account is not read
+    pub merkle_roll: UncheckedAccount<'info>,
+    /// CHECK: This account is checked in the instruction
+    pub owner: Signer<'info>,
+    /// CHECK: This account is chekced in the instruction
+    pub delegate: UncheckedAccount<'info>,
+    /// CHECK: versioning is handled in the instruction
+    #[account(mut)]
+    pub token_account: AccountInfo<'info>,
+    /// CHECK: versioning is handled in the instruction
+    #[account(mut)]
+    pub mint: AccountInfo<'info>,
+    #[account(mut)]
+    pub metadata: Box<Account<'info, TokenMetadata>>,
+    #[account(mut)]
+    pub master_edition: Box<Account<'info, MasterEdition>>,
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    pub system_program: Program<'info, System>,
+    /// CHECK: 
+    pub token_metadata_program: UncheckedAccount<'info>,
+    /// CHECK: 
+    pub token_program: UncheckedAccount<'info>,
+    pub gummyroll_program: Program<'info, Gummyroll>,
 }
 
 #[program]
@@ -361,11 +396,10 @@ pub mod bubblegum {
         nonce: u128,
         index: u32,
     ) -> Result<()> {
-        let owner = ctx.accounts.owner.to_account_info();
-        let delegate = ctx.accounts.delegate.to_account_info();
-        assert!(owner.is_signer || delegate.is_signer);
+        let owner = ctx.accounts.owner.key();
+        let delegate = ctx.accounts.delegate.key();
         let merkle_roll = ctx.accounts.merkle_roll.to_account_info();
-        let previous_leaf = LeafSchema::new(owner.key(), delegate.key(), nonce, data_hash);
+        let previous_leaf = LeafSchema::new(owner, delegate, nonce, data_hash);
         let new_leaf = Node::default();
         let root_node = Node::new(root);
         replace_leaf(
@@ -380,22 +414,17 @@ pub mod bubblegum {
             new_leaf,
             index,
         )?;
-        let voucher = &mut ctx.accounts.voucher;
-        voucher.owner = previous_leaf.owner;
-        voucher.delegate = previous_leaf.delegate;
-        voucher.nonce = previous_leaf.nonce;
-        voucher.data_hash = previous_leaf.data_hash;
+        ctx.accounts.voucher.set_inner(previous_leaf);
         Ok(())
     }
 
     pub fn cancel_redeem<'info>(
         ctx: Context<'_, '_, '_, 'info, CancelRedeem<'info>>,
         root: [u8; 32],
-        data_hash: [u8; 32],
-        nonce: u128,
         index: u32,
     ) -> Result<()> {
         let voucher = &ctx.accounts.voucher;
+        assert_eq!(ctx.accounts.owner.key(), voucher.owner);
         let merkle_roll = ctx.accounts.merkle_roll.to_account_info();
         let root_node = Node::new(root);
         let leaf = LeafSchema::new(
@@ -417,27 +446,15 @@ pub mod bubblegum {
         )
     }
 
-    // pub fn decompress(
-    //     ctx: Context<Decompress<'info>>,
-    //     root: [u8; 32],
-    //     index: u32,
-    // ) -> Result<()> {
-    //     Ok(())
-    // }
+    pub fn decompress(
+        ctx: Context<Decompress>,
+        metadata: MetadataArgs,
+    ) -> Result<()> {
+        // TODO
+        Ok(())
+    }
 
-    // pub fn decompress_to_accounts(
-    //     ctx: Context<Decompress<'info>>,
-    //     root: [u8; 32],
-    //     index: u32,
-    // ) -> Result<()> {
-    //     Ok(())
-    // }
-
-    // pub fn compress_from_hash() -> Result<()> {
-    //     Ok(())
-    // }
-
-    // pub fn compress_from_accounts() -> Result<()> {
-    //     Ok(())
-    // }
+    pub fn compress(ctx: Context<Compress>) -> Result<()> {
+        Ok(())
+    }
 }
