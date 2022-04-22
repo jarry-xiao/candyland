@@ -15,7 +15,6 @@ export default function useHashImage(data: string): DataURL {
   const cacheEntry = cache[data];
   if (cacheEntry === undefined) {
     const promise = new Promise<void>(async (resolve) => {
-      console.log(data);
       const url = (await hashprint({ data })) as DataURL;
       cache[data] = { __type: "result", url };
       resolve();
