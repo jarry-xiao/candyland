@@ -1,5 +1,4 @@
-use anchor_lang::{prelude::*, solana_program::keccak};
-use anchor_spl::token::Token;
+use anchor_lang::{prelude::*};
 use gummyroll::{program::Gummyroll, state::node::Node};
 
 pub mod state;
@@ -447,14 +446,14 @@ pub mod bubblegum {
     }
 
     pub fn decompress(
-        ctx: Context<Decompress>,
-        metadata: MetadataArgs,
+        _ctx: Context<Decompress>,
+        _metadata: MetadataArgs,
     ) -> Result<()> {
         // TODO
         Ok(())
     }
 
-    pub fn compress(ctx: Context<Compress>) -> Result<()> {
+    pub fn compress(_ctx: Context<Compress>) -> Result<()> {
         Ok(())
     }
 }
