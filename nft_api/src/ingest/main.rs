@@ -51,11 +51,6 @@ struct AppSpecificRev {
     revision: i64,
 }
 
-enum Table {
-    ChangeLogItems,
-    AppSpecific,
-}
-
 pub async fn write_assets_to_file(uri: &str, tree_id: &str, key: &str) -> Result<String, ApiError> {
     println!("Requesting to see arweave link for {}", key);
     let fname = format!("{}-{}.csv", tree_id, key);
