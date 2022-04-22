@@ -5,7 +5,7 @@ import { Buffer } from 'buffer';
 import { bfs, hash } from '../tests/merkle-tree';
 import { PublicKey } from '@solana/web3.js';
 import { createArrayCsvWriter } from 'csv-writer';
-import { Tree, getRoot } from '../tests/merkle-tree';
+import { Tree } from '../tests/merkle-tree';
 
 type LeafSchema = {
     leafIndex: string,
@@ -66,17 +66,15 @@ export function loadLeaves(inputFile: string, maxDepth: number) {
 /**
  * Do BFS from the tree root down to leaves & write to outFile
  */
-export function writeTree(tree: Tree, treeId: PublicKey, outFile: string) {
+export function writeTree(tree: Tree, outFile: string) {
     const writer = createArrayCsvWriter({
         path: outFile,
-        header: ['tree', 'node_idx', 'seq', 'level', 'hash']
+        header: ['node_idx', 'seq', 'level', 'hash']
     });
 
     log.debug("doing bfs on a tree");
-    const treeIdStr = treeId.toString();
     const records = bfs(tree, (treeNode, idx) => {
         return [
-            treeIdStr,
             (idx + 1).toString(),
             '0',
             treeNode.level.toString(),
@@ -88,17 +86,16 @@ export function writeTree(tree: Tree, treeId: PublicKey, outFile: string) {
     writer.writeRecords(records);
 }
 
-export function writeMetadata(treeId: PublicKey, messages: OwnedMessage[], outFile: string) {
+export function writeMetadata(messages: OwnedMessage[], outFile: string) {
     const writer = createArrayCsvWriter({
         path: outFile,
-        header: ["msg", "tree", "owner", "leaf", "revision"]
+        header: ["msg", "owner", "leaf", "revision"]
     });
     log.debug("Wrote metadata csv to:", outFile);
 
     const records = messages.map((ownedMessage) => {
         return [
             ownedMessage.message,
-            treeId.toString(),
             ownedMessage.owner,
             new PublicKey(hashOwnedMessage(ownedMessage)).toString(),
             0

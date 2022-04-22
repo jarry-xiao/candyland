@@ -1,7 +1,6 @@
 import { BN } from "@project-serum/anchor";
 import { keccak_256 } from "js-sha3";
 import * as Collections from 'typescript-collections';
-import { getOrCreateAssociatedTokenAccount } from "../deps/solana-program-library/token/js/src";
 
 const MAX_DEPTH = 20;
 let CACHE_EMPTY_NODE = new Map<number, Buffer>();

@@ -1,14 +1,14 @@
 import { Keypair, PublicKey } from '@solana/web3.js';
 import { program } from 'commander';
 import log from 'loglevel';
-import { buildTree, hashLeaves, Tree } from '../tests/merkle-tree';
+import { buildTree } from '../tests/merkle-tree';
 import { writeHashes, loadMessages, hashMessages, loadLeaves, writeTree, writeMetadata } from './utils';
 
 program.version('0.0.1');
 log.setLevel('DEBUG');
 
 program
-    .command('batchMint')
+    .command('createNodes')
     .option(
         '-f, --input-file <string>',
         'CSV file containing leaves',
@@ -23,24 +23,11 @@ program
         'Max depth of the tree to be supported',
         '14'
     )
-    .option(
-        '-p, --pubkey <string>',
-        'Pubkey of the tree',
-        undefined
-    )
     .action(async (directory, cmd) => {
-        const { inputFile, outFile, maxDepth, pubkey } = cmd.opts();
-
-        let treeId: PublicKey;
-        if (pubkey == undefined) {
-            treeId = Keypair.generate().publicKey;
-        } else {
-            treeId = new PublicKey(pubkey);
-        }
+        const { inputFile, outFile, maxDepth } = cmd.opts();
 
         log.info("Received input file:", inputFile);
         log.info("Writing to file:", outFile);
-        log.info("Tree id is:", treeId.toString());
         log.info("depth is:", maxDepth);
         log.info('\n');
 
@@ -51,7 +38,7 @@ program
         const tree = buildTree(leaves);
 
         // BFS search of tree && write leaves to CSV in 'GM CL' schema
-        writeTree(tree, treeId, outFile);
+        writeTree(tree, outFile);
     });
 
 program.command('hashMessages')
@@ -81,11 +68,6 @@ program.command('prepareMetadata')
         'Output CSV to be used in batchMint',
         'metadata.csv'
     )
-    .option(
-        '-p, --pubkey <string>',
-        'Pubkey of the tree',
-        undefined
-    )
     .action(async (directory, cmd) => {
         const { inputFile, outFile, pubkey } = cmd.opts();
 
@@ -97,7 +79,7 @@ program.command('prepareMetadata')
         }
 
         const messages = loadMessages(inputFile);
-        writeMetadata(treeId, messages, outFile);
+        writeMetadata(messages, outFile);
     });
 
 
