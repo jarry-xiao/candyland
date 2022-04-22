@@ -276,6 +276,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             );
         }
         msg!("Failed to find root, attempting to replay change log");
+        // Optimistic search
         self.update_and_apply_proof(
             leaf,
             new_leaf,
@@ -307,8 +308,9 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         let mask: usize = MAX_BUFFER_SIZE - 1;
         let padding: usize = 32 - MAX_DEPTH;
         sol_log_compute_units();
-        // Implement circular index addition
+        // Modifies proof by iterating through the change log 
         loop {
+            // If use_full_buffer is false, this loop will terminate if the initial value of j is the active index 
             if !use_full_buffer && j == self.active_index {
                 break;
             }
@@ -322,6 +324,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             } else {
                 updated_leaf = self.change_logs[j as usize].get_leaf();
             }
+            // If use_full_buffer is true, this loop will do 1 full pass of the change logs
             if use_full_buffer && j == self.active_index {
                 break;
             }

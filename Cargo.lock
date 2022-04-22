@@ -489,6 +489,9 @@ dependencies = [
  "anchor-spl",
  "bytemuck",
  "gummyroll",
+ "mpl-token-metadata",
+ "spl-associated-token-account 1.0.5",
+ "spl-token-2022 0.2.0 (git+https://github.com/solana-labs/solana-program-library)",
 ]
 
 [[package]]
