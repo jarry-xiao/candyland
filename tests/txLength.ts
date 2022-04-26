@@ -169,6 +169,7 @@ async function getGummyrollMaxAppendTxSize(numAppends: number): Promise<number> 
                     accounts: {
                         merkleRoll: merkleRollKeypair.publicKey,
                         authority: payer.publicKey,
+                        appendAuthority: payer.publicKey,
                     },
                     signers: [payer],
                 }
