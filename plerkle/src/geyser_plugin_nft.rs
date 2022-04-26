@@ -1,59 +1,31 @@
-use anchor_client::anchor_lang;
-use std::borrow::{Borrow, BorrowMut};
-use std::collections::HashMap;
-use std::fmt::{Debug, Formatter};
-use std::ops::Index;
-use std::result::Iter;
-
-extern crate redis;
-
-use crate::{
-    error::PlerkleError,
-    accounts_selector::AccountsSelector,
-    transaction_selector::TransactionSelector,
-};
-use anchor_lang::Event;
-use redis::streams::StreamMaxlen;
-use redis::Commands;
-use redis::{Client, Connection, RedisResult};
-use regex::Regex;
-use solana_geyser_plugin_interface::geyser_plugin_interface::{GeyserPluginError, ReplicaAccountInfoVersions, ReplicaBlockInfoVersions, ReplicaTransactionInfo, ReplicaTransactionInfoVersions, Result, SlotStatus};
-use std::str::FromStr;
-use solana_sdk::instruction::CompiledInstruction;
-use solana_sdk::message::AccountKeys;
-use solana_sdk::pubkey::Pubkey;
-use solana_sdk::{keccak, pubkeys};
-use solana_sdk::transaction::Transaction;
-use anchor_client::anchor_lang::AnchorDeserialize;
-use hex;
 use {
+    crate::{
+        accounts_selector::AccountsSelector,
+        error::PlerkleError,
+        messenger::{Messenger, RedisMessenger},
+        transaction_selector::TransactionSelector,
+    },
     log::*,
-    solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPlugin,
-    std::{fs::File, io::Read},
-    thiserror::Error,
+    solana_geyser_plugin_interface::geyser_plugin_interface::{
+        GeyserPlugin, GeyserPluginError, ReplicaAccountInfoVersions, ReplicaBlockInfoVersions,
+        ReplicaTransactionInfoVersions, Result, SlotStatus,
+    },
+    solana_sdk::{message::AccountKeys, pubkey::Pubkey},
+    std::{
+        fmt::{Debug, Formatter},
+        fs::File,
+        io::Read,
+    },
 };
-use gummyroll_crud::InstructionName;
-use crate::programs::gummy_roll::handle_change_log_event;
-
-mod program_ids {
-    #![allow(missing_docs)]
-
-    use solana_sdk::pubkeys;
-    pubkeys!(TokenMetadata, "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
-    pubkeys!(GummyRollCrud, "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
-    pubkeys!(GummyRoll, "GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD");
-    pubkeys!(Token, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
-    pubkeys!(AToken, "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
-}
 
 #[derive(Default)]
-pub struct Plerkle {
-    redis_connection: Option<Connection>,
+pub struct Plerkle<T: Messenger + Default> {
     accounts_selector: Option<AccountsSelector>,
     transaction_selector: Option<TransactionSelector>,
+    messenger: Option<T>,
 }
 
-impl Plerkle {
+impl<T: Messenger + Default> Plerkle<T> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -111,51 +83,24 @@ impl Plerkle {
         }
     }
 
-    pub fn txn_contains_program<'a>(keys: AccountKeys, program: &Pubkey) -> bool {
-        keys.iter().find(|p| {
-            let d = *p;
-            d.eq(program)
-        }).is_some()
-    }
-
-    pub fn order_instructions(
-        transaction_info: &ReplicaTransactionInfo,
-    ) -> Vec<(Pubkey, CompiledInstruction)> {
-        let inner_ixs = transaction_info
-            .transaction_status_meta
-            .clone()
-            .inner_instructions;
-        let outer_instructions = transaction_info.transaction.message().instructions();
-        let keys = transaction_info.transaction.message().account_keys();
-        let mut ordered_ixs: Vec<(Pubkey, CompiledInstruction)> = vec![];
-        if inner_ixs.is_some() {
-            let inner_ix_list = inner_ixs.as_ref().unwrap().as_slice();
-            for inner in inner_ix_list {
-                let outer = outer_instructions.get(inner.index as usize).unwrap();
-                let program_id = keys.index(outer.program_id_index as usize);
-                ordered_ixs.push((*program_id, outer.to_owned()));
-                for inner_ix_instance in &inner.instructions {
-                    let inner_program_id = keys.index(inner_ix_instance.program_id_index as usize);
-                    ordered_ixs.push((*inner_program_id, inner_ix_instance.to_owned()));
-                }
-            }
-        } else {
-            for instruction in outer_instructions {
-                let program_id = keys.index(instruction.program_id_index as usize);
-                ordered_ixs.push((*program_id, instruction.to_owned()));
-            }
-        }
-        ordered_ixs.to_owned()
+    // Currently not used but may want later.
+    pub fn _txn_contains_program<'b>(keys: AccountKeys, program: &Pubkey) -> bool {
+        keys.iter()
+            .find(|p| {
+                let d = *p;
+                d.eq(program)
+            })
+            .is_some()
     }
 }
 
-impl Debug for Plerkle {
+impl<T: Messenger + Default> Debug for Plerkle<T> {
     fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
 }
 
-impl GeyserPlugin for Plerkle {
+impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T> {
     fn name(&self) -> &'static str {
         "Plerkle"
     }
@@ -186,29 +131,22 @@ impl GeyserPlugin for Plerkle {
                 // If we instead want to streamline it for program ID only, I can easly simplify
                 // this handling to one program ID selection config item.
                 self.accounts_selector = Some(Self::create_accounts_selector_from_config(&config));
-                self.transaction_selector = Some(Self::create_transaction_selector_from_config(&config));
+                self.transaction_selector =
+                    Some(Self::create_transaction_selector_from_config(&config));
             }
             Err(err) => {
                 return Err(GeyserPluginError::ConfigFileReadError {
-                    msg: format!(
-                        "Could not read config file JSON: {:?}",
-                        err
-                    ),
+                    msg: format!("Could not read config file JSON: {:?}", err),
                 })
             }
         }
 
-        // Setup Redis client.
-        let client = redis::Client::open("redis://redis/").unwrap();
-        self.redis_connection = client
-            .get_connection()
-            .map_err(|e| {
-                error!("{}", e.to_string());
-                GeyserPluginError::Custom(Box::new(PlerkleError::ConfigurationError {
-                    msg: e.to_string(),
-                }))
-            })
-            .ok();
+        // Setup messenger.
+        // TODO: if we want Messenger to be a trait, we probably don't want to have it tied to
+        // our json config file.  If we want to instead treat it like the postgres example
+        // code and configure with json, maybe remove the trait and just go back to Messenger
+        // struct.
+        self.messenger = Some(T::new()?);
 
         Ok(())
     }
@@ -220,12 +158,11 @@ impl GeyserPlugin for Plerkle {
     fn update_account(
         &mut self,
         account: ReplicaAccountInfoVersions,
-        slot: u64,
+        _slot: u64,
         _is_startup: bool,
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
         match account {
             ReplicaAccountInfoVersions::V0_0_1(account) => {
-
                 // Check if account was selected in config.
                 if let Some(accounts_selector) = &self.accounts_selector {
                     if !accounts_selector.is_account_selected(account.pubkey, account.owner) {
@@ -234,9 +171,20 @@ impl GeyserPlugin for Plerkle {
                 } else {
                     return Ok(());
                 }
+
+                // Send account info over messenger.
+                match &mut self.messenger {
+                    None => {
+                        return Err(GeyserPluginError::Custom(Box::new(
+                            PlerkleError::DataStoreConnectionError {
+                                msg: "There is no connection to data store.".to_string(),
+                            },
+                        )));
+                    }
+                    Some(messenger) => messenger.send_account(account),
+                }
             }
         }
-        Ok(())
     }
 
     fn notify_end_of_startup(
@@ -257,12 +205,14 @@ impl GeyserPlugin for Plerkle {
     fn notify_transaction(
         &mut self,
         transaction_info: ReplicaTransactionInfoVersions,
-        slot: u64,
+        _slot: u64,
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
         match transaction_info {
             ReplicaTransactionInfoVersions::V0_0_1(transaction_info) => {
                 // Don't log votes or transactions with error status.
-                if transaction_info.is_vote || transaction_info.transaction_status_meta.status.is_err() {
+                if transaction_info.is_vote
+                    || transaction_info.transaction_status_meta.status.is_err()
+                {
                     return Ok(());
                 }
 
@@ -278,118 +228,20 @@ impl GeyserPlugin for Plerkle {
                     return Ok(());
                 }
 
-                // Handle log parsing.
-                let keys = transaction_info.transaction.message().account_keys();
-                if keys.iter().any(|v| v == &program_ids::GummyRoll()) {
-                    let maxlen = StreamMaxlen::Approx(55000);
-                    let change_log_event = handle_change_log_event(transaction_info);
-                    if change_log_event.is_ok() {
-                        change_log_event.unwrap().iter().for_each(|ev| {
-                            let res: RedisResult<()> = self
-                                .redis_connection
-                                .as_mut()
-                                .unwrap()
-                                .xadd_maxlen("GM_CL", maxlen, "*", &[("data", ev)]);
-                            if res.is_err() {
-                                error!("{}", res.err().unwrap());
-                            } else {
-                                info!("Data Sent")
-                            }
-                        });
+                // Send transaction info over messenger.
+                match &mut self.messenger {
+                    None => {
+                        return Err(GeyserPluginError::Custom(Box::new(
+                            PlerkleError::DataStoreConnectionError {
+                                msg: "There is no connection to data store.".to_string(),
+                            },
+                        )));
                     }
+                    Some(messenger) => messenger.send_transaction(transaction_info),
                 }
-                // Handle Instruction Parsing
-                let instructions = Plerkle::order_instructions(transaction_info);
-
-                for program_instruction in instructions {
-                    match program_instruction {
-                        (program, instruction) if program == program_ids::GummyRollCrud() => {
-                            let maxlen = StreamMaxlen::Approx(5000);
-                            let message = match gummyroll_crud::get_instruction_type(&instruction.data) {
-                                gummyroll_crud::InstructionName::CreateTree => {
-                                    warn!("yo yo yo yo");
-                                    let tree_id = keys.index(instruction.accounts[3] as usize);
-                                    let auth = keys.index(instruction.accounts[0] as usize);
-                                    let res: RedisResult<()> = self
-                                        .redis_connection
-                                        .as_mut()
-                                        .unwrap()
-                                        .xadd_maxlen("GMC_OP", maxlen, "*", &[("op", "create"), ("tree_id", &*tree_id.to_string()), ("authority", &*auth.to_string()) ]);
-                                    if res.is_err() {
-                                        error!("{}", res.err().unwrap());
-                                    } else {
-                                        info!("Data Sent")
-                                    }
-                                }
-                                gummyroll_crud::InstructionName::Add => {
-                                    let data  = instruction.data[8..].to_owned();
-                                    let data_buf = &mut data.as_slice();
-                                    let add: gummyroll_crud::instruction::Add = gummyroll_crud::instruction::Add::deserialize(data_buf).unwrap();
-                                    let tree_id = keys.index(instruction.accounts[3] as usize);
-                                    let owner = keys.index(instruction.accounts[0] as usize);
-                                    let hex_message = hex::encode(&add.message);
-                                    let leaf = keccak::hashv(&[&owner.to_bytes(), add.message.as_slice()]);
-                                    let res: RedisResult<()> = self
-                                        .redis_connection
-                                        .as_mut()
-                                        .unwrap()
-                                        .xadd_maxlen("GMC_OP", maxlen, "*", &[("op", "add"), ("tree_id", &*tree_id.to_string()) , ("leaf", &*leaf.to_string()), ("msg", &*hex_message), ("owner", &*owner.to_string()) ]);
-                                    if res.is_err() {
-                                        error!("{}", res.err().unwrap());
-                                    } else {
-                                        info!("Data Sent")
-                                    }
-                                },
-                                gummyroll_crud::InstructionName::Transfer => {
-                                    let data  = instruction.data[8..].to_owned();
-                                    let data_buf = &mut data.as_slice();
-                                    let add: gummyroll_crud::instruction::Transfer = gummyroll_crud::instruction::Transfer::deserialize(data_buf).unwrap();
-                                    let tree_id = keys.index(instruction.accounts[3] as usize);
-                                    let owner = keys.index(instruction.accounts[4] as usize);
-                                    let new_owner = keys.index(instruction.accounts[5] as usize);
-                                    let hex_message = hex::encode(&add.message);
-                                    let leaf = keccak::hashv(&[&new_owner.to_bytes(), add.message.as_slice()]);
-                                    let res: RedisResult<()> = self
-                                        .redis_connection
-                                        .as_mut()
-                                        .unwrap()
-                                        .xadd_maxlen("GMC_OP", maxlen, "*", &[("op", "tran"), ("tree_id", &*tree_id.to_string()) , ("leaf", &*leaf.to_string()), ("msg", &*hex_message), ("owner", &*owner.to_string()), ("new_owner", &*new_owner.to_string()) ]);
-                                    if res.is_err() {
-                                        error!("{}", res.err().unwrap());
-                                    } else {
-                                        info!("Data Sent")
-                                    }
-                                }
-                                gummyroll_crud::InstructionName::Remove => {
-                                    let data  = instruction.data[8..].to_owned();
-                                    let data_buf = &mut data.as_slice();
-                                    let remove: gummyroll_crud::instruction::Remove = gummyroll_crud::instruction::Remove::deserialize(data_buf).unwrap();
-                                    let tree_id = keys.index(instruction.accounts[3] as usize);
-                                    let owner = keys.index(instruction.accounts[0] as usize);
-                                    let leaf = bs58::encode(&remove.leaf_hash).into_string();
-                                    let res: RedisResult<()> = self
-                                        .redis_connection
-                                        .as_mut()
-                                        .unwrap()
-                                        .xadd_maxlen("GMC_OP", maxlen, "*", &[("op", "rm"), ("tree_id", &*tree_id.to_string()) , ("leaf", &*leaf.to_string()), ("msg", ""), ("owner", &*owner.to_string()) ]);
-                                    if res.is_err() {
-                                        error!("{}", res.err().unwrap());
-                                    } else {
-                                        info!("Data Sent")
-                                    }
-                                }
-                                _ => {}
-                            };
-
-                        }
-                        _ => {}
-                    };
-                }
-                Ok(())
             }
         }
     }
-
 
     fn notify_block_metadata(
         &mut self,
@@ -423,15 +275,7 @@ impl GeyserPlugin for Plerkle {
 ///
 /// This function returns the GeyserPluginPostgres pointer as trait GeyserPlugin.
 pub unsafe extern "C" fn _create_plugin() -> *mut dyn GeyserPlugin {
-    let plugin = Plerkle::new();
+    let plugin = Plerkle::<RedisMessenger>::new();
     let plugin: Box<dyn GeyserPlugin> = Box::new(plugin);
     Box::into_raw(plugin)
 }
-
-/*
-`put uc_merkley on chain
-decide hashing parameters and spec
-consider new storage design given new uc_merkley
-
-
- */
