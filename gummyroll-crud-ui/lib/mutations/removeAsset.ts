@@ -7,19 +7,24 @@ import GummyrollProgramId from "../anchor_programs/GummyrollProgramId";
 export default async function removeAsset(
   treeAccount: anchor.web3.PublicKey,
   treeAdmin: anchor.web3.PublicKey,
-  index: number
+  nodeIndex: number,
+  leafIndex: number,
 ) {
   const program = getGummyrollCrudProgram();
   const [authorityPda] = await getGummyrollCrudAuthorityPDA(
     treeAccount,
     treeAdmin
   );
-  const { hash, proof, root } = await getProofForAsset(treeAccount, index);
+
+  const { hash, proof, root } = await getProofForAsset(treeAccount, nodeIndex);
+  let rootPk = new anchor.web3.PublicKey(root);
+  let hashPk = new anchor.web3.PublicKey(hash);
+
   await program.methods
     .remove(
-      Buffer.from(root, "utf-8").toJSON().data,
-      Buffer.from(hash, "utf-8").toJSON().data,
-      index
+      Array.from(rootPk.toBytes()),
+      Array.from(hashPk.toBytes()),
+      leafIndex,
     )
     .accounts({
       authority: treeAdmin,

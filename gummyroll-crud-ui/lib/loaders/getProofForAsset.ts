@@ -8,11 +8,12 @@ export default async function getProofForAsset(
   index: number
 ): Promise<AssetProof> {
   try {
-    const node_index = (1 << 14) + index;
-    const proof = await getTreeServerAPIMethod<AssetProof>(
-      `/assets/${treeAccount.toBase58()}/${node_index}/proof`
+    let proof = await getTreeServerAPIMethod<AssetProof>(
+      `/assets/${treeAccount.toBase58()}/${index}/proof`
     );
-    console.log(`API /assets/${treeAccount.toBase58()}/${node_index}/proof`, proof);
+    // Super dirty hack, we will fix for prod
+    proof.proof.pop();
+    console.log(`API /assets/${treeAccount.toBase58()}/${index}/proof`, proof);
     return proof;
   } catch (e) {
     if (e instanceof TreeServerNotConfiguredError) {

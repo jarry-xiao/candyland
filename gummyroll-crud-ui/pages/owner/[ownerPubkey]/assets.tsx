@@ -18,10 +18,14 @@ const OwnerassetsList: NextPage = () => {
     Awaited<ReturnType<typeof getAssetsForOwner>>
   >(["owner", ownerPubkey, "assets"]);
   if (!assets || assets.length === 0) {
-    return <h1>No assets</h1>;
+    return (
+      <div style={{ margin: "20px" }}>
+        <h1>No assets</h1>
+      </div>
+    );
   }
   return (
-    <>
+    <div style={{ margin: "20px" }}>
       <h1>{ownerPubkey}&apos;s assets</h1>
       <ImageList cols={4} gap={16}>
         {assets.map((asset) => (
@@ -30,7 +34,7 @@ const OwnerassetsList: NextPage = () => {
           </ImageListItem>
         ))}
       </ImageList>
-    </>
+    </div>
   );
 };
 

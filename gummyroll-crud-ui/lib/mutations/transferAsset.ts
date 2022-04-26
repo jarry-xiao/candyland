@@ -19,8 +19,10 @@ export default async function transferAsset(
     treeAdmin
   );
   const { proof, root } = await getProofForAsset(treeAccount, nodeIndex);
+  let rootPk = new anchor.web3.PublicKey(root);
+
   await program.methods
-    .transfer(Buffer.from(root, "utf-8").toJSON().data, data, leafIndex)
+    .transfer(Array.from(rootPk.toBytes()), data, leafIndex)
     .accounts({
       authority: treeAdmin,
       authorityPda,

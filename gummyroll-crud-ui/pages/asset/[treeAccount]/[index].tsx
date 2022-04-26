@@ -37,10 +37,13 @@ const AssetDetail: NextPage = () => {
     setIsUndergoingMutation(true);
     try {
       const { treeAccount, treeAdmin } = data;
+      const nodeIndex = parseInt(index, 10);
+      const leafIndex = nodeIndex - (1 << Math.floor(Math.log2(nodeIndex)));
       await removeAsset(
-        new anchor.web3.PublicKey(treeAccount),
-        new anchor.web3.PublicKey(treeAdmin),
-        parseInt(index, 10)
+        new anchor.web3.PublicKey(data.treeAccount),
+        new anchor.web3.PublicKey(data.treeAdmin),
+        nodeIndex,
+        leafIndex, 
       );
       await Promise.all([
         mutate<AssetPayload>(
@@ -122,14 +125,16 @@ const AssetDetail: NextPage = () => {
   }
   const { data: assetData, owner } = data!;
   return (
-    <>
+    <div style={{margin: '20px'}}>
       <h1>
         Asset {treeAccount}/{index} belonging to {owner}
       </h1>
+      <div style={{maxHeight: '600px', maxWidth: '600px', marginBottom: '8px'}}>
       <div className={styles.imageContainer}>
         <div className={styles.imageWrapper}>
           <AssetImage data={assetData} treeAccount={treeAccount} />
         </div>
+      </div>
       </div>
       {anchorWallet ? (
         <>
@@ -151,7 +156,10 @@ const AssetDetail: NextPage = () => {
       ) : null}
       <p>Data</p>
       <BufferData buffer={Buffer.from(assetData)} />
-    </>
+      <p>Asset Text: {assetData}</p>
+       
+      
+    </div>
   );
 };
 
