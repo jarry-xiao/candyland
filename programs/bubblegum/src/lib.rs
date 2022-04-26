@@ -136,7 +136,6 @@ pub struct Redeem<'info> {
     /// CHECK: This account is neither written to nor read from.
     pub authority: UncheckedAccount<'info>,
     pub gummyroll_program: Program<'info, Gummyroll>,
-    /// CHECK: This account is checked in the instruction
     #[account(mut)]
     pub owner: Signer<'info>,
     /// CHECK: This account is chekced in the instruction
@@ -156,7 +155,6 @@ pub struct Redeem<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(_root: [u8; 32], _data_hash: [u8; 32], nonce: u128, _index: u32)]
 pub struct CancelRedeem<'info> {
     #[account(
         seeds = [merkle_roll.key().as_ref()],
@@ -171,7 +169,7 @@ pub struct CancelRedeem<'info> {
     #[account(
         mut,
         close = owner,
-        seeds = [merkle_roll.key().as_ref(), nonce.to_le_bytes().as_ref()],
+        seeds = [merkle_roll.key().as_ref(), voucher.leaf_schema.nonce.to_le_bytes().as_ref()],
         bump
     )]
     pub voucher: Account<'info, Voucher>,
