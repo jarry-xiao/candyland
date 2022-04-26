@@ -275,6 +275,13 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
 ///
 /// This function returns the GeyserPluginPostgres pointer as trait GeyserPlugin.
 pub unsafe extern "C" fn _create_plugin() -> *mut dyn GeyserPlugin {
+    // TODO: Here I have to make the type specific (`RedisMessenger`) instead of generic.
+    // Overall tried to make this plugin code as generic as possible, but somewhere the
+    // actual type needs to be specified.  Another option would be:
+    // let messenger = RedisMessenger::new();
+    // let plulgin = Plerkle::new(messenger);
+    // which is a bit more simple code, but I think we'd rather instantiate the messenger
+    // in the `on_load()` function.
     let plugin = Plerkle::<RedisMessenger>::new();
     let plugin: Box<dyn GeyserPlugin> = Box::new(plugin);
     Box::into_raw(plugin)
