@@ -20,6 +20,9 @@ macro_rules! merkle_roll_depth_size_apply_fn {
     ($max_depth:literal, $max_size:literal, $emit_msg:ident, $id:ident, $bytes:ident, $func:ident, $($arg:tt)*) => {
         if size_of::<MerkleRoll::<$max_depth, $max_size>>() != $bytes.len() {
             msg!("Received account of invalid length");
+            let expected_bytes = size_of::<MerkleRoll::<$max_depth, $max_size>>();
+            let bytes_received = $bytes.len();
+            msg!("Expected: {}, received: {}", expected_bytes, bytes_received);
             None
         } else {
             match MerkleRoll::<$max_depth, $max_size>::load_mut_bytes($bytes) {
@@ -46,6 +49,7 @@ macro_rules! merkle_roll_depth_size_apply_fn {
 macro_rules! merkle_roll_apply_fn {
     ($header:ident, $emit_msg:ident, $id:ident, $bytes:ident, $func:ident, $($arg:tt)*) => {
         match ($header.max_depth, $header.max_buffer_size) {
+            (3, 8) => merkle_roll_depth_size_apply_fn!(3, 8, $emit_msg, $id, $bytes, $func, $($arg)*),
             (14, 64) => merkle_roll_depth_size_apply_fn!(14, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
             (14, 256) => merkle_roll_depth_size_apply_fn!(14, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
             (14, 1024) => merkle_roll_depth_size_apply_fn!(14, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
@@ -519,10 +523,7 @@ pub trait ZeroCopy: Pod {
     }
 }
 
-fn fill_in_proof<const MAX_DEPTH: usize>(
-    proof_vec: Vec<Node>,
-    full_proof: &mut [Node; MAX_DEPTH],
-) {
+fn fill_in_proof<const MAX_DEPTH: usize>(proof_vec: Vec<Node>, full_proof: &mut [Node; MAX_DEPTH]) {
     full_proof[..proof_vec.len()].copy_from_slice(&proof_vec);
 
     for i in proof_vec.len()..MAX_DEPTH {
@@ -720,6 +721,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         msg!("Leaf Index: {}", index);
         let mask: usize = MAX_BUFFER_SIZE - 1;
 
+        // Find root
         for i in 0..self.buffer_size {
             let j = self.active_index.wrapping_sub(i) & mask as u64;
             if self.change_logs[j as usize].root != current_root {
@@ -787,7 +789,9 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             }
         }
         sol_log_compute_units();
+
         let valid_root = recompute(updated_leaf, proof, index) == self.get_change_log().root;
+
         if updated_leaf != leaf || index > self.rightmost_proof.index {
             // If the supplied root was not found in the queue, the instruction should fail if the leaf index changes
             if !use_full_buffer && valid_root && leaf == EMPTY && append_on_conflict {
