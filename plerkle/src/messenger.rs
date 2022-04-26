@@ -1,16 +1,17 @@
-use crate::{error::PlerkleError, programs::gummy_roll::handle_change_log_event};
-use anchor_client::anchor_lang::AnchorDeserialize;
-use log::*;
-use redis::{streams::StreamMaxlen, Commands, Connection, RedisResult, ToRedisArgs};
-use solana_geyser_plugin_interface::geyser_plugin_interface::GeyserPluginError;
-use solana_geyser_plugin_interface::geyser_plugin_interface::{
-    ReplicaAccountInfo, ReplicaTransactionInfo, Result,
-};
-use solana_sdk::{instruction::CompiledInstruction, keccak, pubkey::Pubkey};
-use std::{
-    collections::HashMap,
-    fmt::{Debug, Formatter},
-    ops::Index,
+use {
+    crate::{error::PlerkleError, programs::gummy_roll::handle_change_log_event},
+    anchor_client::anchor_lang::AnchorDeserialize,
+    log::*,
+    redis::{streams::StreamMaxlen, Commands, Connection, RedisResult, ToRedisArgs},
+    solana_geyser_plugin_interface::geyser_plugin_interface::{
+        GeyserPluginError, ReplicaAccountInfo, ReplicaTransactionInfo, Result,
+    },
+    solana_sdk::{instruction::CompiledInstruction, keccak, pubkey::Pubkey},
+    std::{
+        collections::HashMap,
+        fmt::{Debug, Formatter},
+        ops::Index,
+    },
 };
 
 mod program_ids {
