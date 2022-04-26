@@ -45,7 +45,6 @@ pub struct Collection {
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Clone)]
 pub struct MetadataArgs {
-    pub mint: Option<Pubkey>,
     /// The name of the asset
     pub name: String,
     /// The symbol for the asset

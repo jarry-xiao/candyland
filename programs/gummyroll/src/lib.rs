@@ -268,7 +268,6 @@ pub mod gummyroll {
         for node in ctx.remaining_accounts.iter() {
             proof.push(Node::new(node.key().to_bytes()));
         }
-        assert_eq!(proof.len(), header.max_depth as usize);
 
         let id = ctx.accounts.merkle_roll.key();
         // A call is made to MerkleRoll::fill_empty_or_append

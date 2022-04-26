@@ -19,11 +19,13 @@ impl RawLeafSchema {
     }
 
     pub fn to_node(&self) -> Node {
+        let data_hash = keccak::hashv(&[self.data.as_slice()]);
+        msg!("Data Hash: {}", Pubkey::new(data_hash.as_ref()));
         let hashed_leaf = keccak::hashv(&[
             self.owner.as_ref(),
             self.delegate.as_ref(),
             self.nonce.to_le_bytes().as_ref(),
-            keccak::hashv(&[self.data.as_slice()]).as_ref(),
+            data_hash.as_ref(),
         ])
         .to_bytes();
         Node::new(hashed_leaf)

@@ -1,4 +1,5 @@
 import * as anchor from "@project-serum/anchor";
+import { keccak_256 } from "js-sha3";
 import { BN, Provider, Program } from "@project-serum/anchor";
 import { Bubblegum } from "../target/types/bubblegum";
 import { Gummyroll } from "../target/types/gummyroll";
@@ -34,12 +35,16 @@ let GummyrollProgramId;
 describe("bubblegum", () => {
   // Configure the client to use the local cluster.
   let offChainTree: Tree;
+  let treeAuthority: PublicKey;
   let merkleRollKeypair: Keypair;
+  let nonceAccount: PublicKey;
 
   const MAX_SIZE = 64;
   const MAX_DEPTH = 20;
 
   let payer = Keypair.generate();
+  let destination = Keypair.generate();
+  let delegateKey = Keypair.generate();
   let connection = new web3Connection("http://localhost:8899", {
     commitment: "confirmed",
   });
@@ -53,11 +58,29 @@ describe("bubblegum", () => {
   Bubblegum = anchor.workspace.Bubblegum as Program<Bubblegum>;
   GummyrollProgramId = anchor.workspace.Gummyroll.programId;
 
-  async function createTreeOnChain(payer: Keypair): Promise<[Keypair, Tree]> {
+  async function createTreeOnChain(
+    payer: Keypair,
+    destination: Keypair,
+    delegate: Keypair
+  ): Promise<[Keypair, Tree, PublicKey, PublicKey]> {
     const merkleRollKeypair = Keypair.generate();
 
     await Bubblegum.provider.connection.confirmTransaction(
-      await Bubblegum.provider.connection.requestAirdrop(payer.publicKey, 1e10),
+      await Bubblegum.provider.connection.requestAirdrop(payer.publicKey, 2e9),
+      "confirmed"
+    );
+    await Bubblegum.provider.connection.confirmTransaction(
+      await Bubblegum.provider.connection.requestAirdrop(
+        destination.publicKey,
+        2e9
+      ),
+      "confirmed"
+    );
+    await Bubblegum.provider.connection.confirmTransaction(
+      await Bubblegum.provider.connection.requestAirdrop(
+        delegate.publicKey,
+        2e9
+      ),
       "confirmed"
     );
     const requiredSpace = getMerkleRollAccountSize(MAX_DEPTH, MAX_SIZE);
@@ -141,17 +164,211 @@ describe("bubblegum", () => {
       "On chain root does not match root passed in instruction"
     );
 
-    return [merkleRollKeypair, tree];
+    return [merkleRollKeypair, tree, authority, nonce];
   }
 
-  describe("Testing bubblgum", () => {
+  describe("Testing bubblegum", () => {
     beforeEach(async () => {
-      let [computedMerkleRoll, computedOffChainTree] = await createTreeOnChain(
-        payer
-      );
+      let [
+        computedMerkleRoll,
+        computedOffChainTree,
+        computedTreeAuthority,
+        computedNonce,
+      ] = await createTreeOnChain(payer, destination, delegateKey);
       merkleRollKeypair = computedMerkleRoll;
       offChainTree = computedOffChainTree;
+      treeAuthority = computedTreeAuthority;
+      nonceAccount = computedNonce;
     });
-    it("Mint to tree", async () => {});
+    it("Mint to tree", async () => {
+      const metadata = {
+        name: "test",
+        symbol: "test",
+        uri: "www.solana.com",
+        sellerFeeBasisPoints: 0,
+        primarySaleHappened: false,
+        isMutable: false,
+        editionNonce: null,
+        tokenStandard: null,
+        tokenProgramVersion: {
+          original: {},
+        },
+        collections: null,
+        uses: null,
+        creators: [],
+      };
+      let mintIx = await Bubblegum.instruction.mint(metadata, {
+        accounts: {
+          mintAuthority: payer.publicKey,
+          authority: treeAuthority,
+          nonce: nonceAccount,
+          gummyrollProgram: GummyrollProgramId,
+          owner: payer.publicKey,
+          delegate: payer.publicKey,
+          merkleRoll: merkleRollKeypair.publicKey,
+        },
+        signers: [payer],
+      });
+      // Hack to get this to work
+      let buf = Buffer.alloc(2);
+      mintIx.data = Buffer.concat([mintIx.data, buf]);
+      console.log(" - Minting to tree");
+      const mintTx = await Bubblegum.provider.send(
+        new Transaction().add(mintIx),
+        [payer],
+        {
+          skipPreflight: true,
+          commitment: "confirmed",
+        }
+      );
+      const leafHash = Buffer.from(keccak_256.digest(mintIx.data.slice(8)));
+      let merkleRollAccount =
+        await Bubblegum.provider.connection.getAccountInfo(
+          merkleRollKeypair.publicKey
+        );
+      let merkleRoll = decodeMerkleRoll(merkleRollAccount.data);
+      let onChainRoot =
+        merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
+
+      console.log(" - Transferring Ownership");
+      let transferTx = await Bubblegum.rpc.transfer(
+        onChainRoot,
+        leafHash,
+        new BN(0),
+        0,
+        {
+          accounts: {
+            authority: treeAuthority,
+            owner: payer.publicKey,
+            delegate: payer.publicKey,
+            newOwner: destination.publicKey,
+            gummyrollProgram: GummyrollProgramId,
+            merkleRoll: merkleRollKeypair.publicKey,
+          },
+          signers: [payer],
+        }
+      );
+
+      merkleRollAccount = await Bubblegum.provider.connection.getAccountInfo(
+        merkleRollKeypair.publicKey
+      );
+      merkleRoll = decodeMerkleRoll(merkleRollAccount.data);
+      onChainRoot =
+        merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
+
+      console.log(" - Delegating Ownership");
+      let delegateTx = await Bubblegum.rpc.delegate(
+        onChainRoot,
+        leafHash,
+        new BN(0),
+        0,
+        {
+          accounts: {
+            authority: treeAuthority,
+            owner: destination.publicKey,
+            previousDelegate: destination.publicKey,
+            newDelegate: delegateKey.publicKey,
+            gummyrollProgram: GummyrollProgramId,
+            merkleRoll: merkleRollKeypair.publicKey,
+          },
+          signers: [destination],
+        }
+      );
+
+      merkleRollAccount = await Bubblegum.provider.connection.getAccountInfo(
+        merkleRollKeypair.publicKey
+      );
+      merkleRoll = decodeMerkleRoll(merkleRollAccount.data);
+      onChainRoot =
+        merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
+
+      console.log(" - Transferring Ownership (through delegate)");
+      let delTransferIx = await Bubblegum.instruction.transfer(
+        onChainRoot,
+        leafHash,
+        new BN(0),
+        0,
+        {
+          accounts: {
+            authority: treeAuthority,
+            owner: destination.publicKey,
+            delegate: delegateKey.publicKey,
+            newOwner: payer.publicKey,
+            gummyrollProgram: GummyrollProgramId,
+            merkleRoll: merkleRollKeypair.publicKey,
+          },
+          signers: [delegateKey],
+        }
+      );
+      delTransferIx.keys[2].isSigner = true;
+      let delTransferTx = await Bubblegum.provider.send(
+        new Transaction().add(delTransferIx),
+        [delegateKey],
+        {
+          commitment: "confirmed",
+        }
+      );
+
+      merkleRollAccount = await Bubblegum.provider.connection.getAccountInfo(
+        merkleRollKeypair.publicKey
+      );
+      merkleRoll = decodeMerkleRoll(merkleRollAccount.data);
+      onChainRoot =
+        merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
+
+      let [voucher] = await PublicKey.findProgramAddress(
+        [merkleRollKeypair.publicKey.toBuffer(), new BN(0).toBuffer("le", 16)],
+        Bubblegum.programId
+      );
+
+      console.log(" - Redeeming Leaf");
+      let redeemIx = await Bubblegum.instruction.redeem(
+        onChainRoot,
+        leafHash,
+        new BN(0),
+        0,
+        {
+          accounts: {
+            authority: treeAuthority,
+            owner: payer.publicKey,
+            delegate: payer.publicKey,
+            gummyrollProgram: GummyrollProgramId,
+            merkleRoll: merkleRollKeypair.publicKey,
+            voucher: voucher,
+            systemProgram: SystemProgram.programId,
+          },
+          signers: [payer],
+        }
+      );
+      let redeemTx = await Bubblegum.provider.send(
+        new Transaction().add(redeemIx),
+        [payer],
+        {
+          commitment: "confirmed",
+        }
+      );
+      console.log(" - Cancelling redeem (reinserting to tree)");
+      let cancelRedeemIx = await Bubblegum.instruction.cancelRedeem(
+        onChainRoot,
+        {
+          accounts: {
+            authority: treeAuthority,
+            owner: payer.publicKey,
+            delegate: payer.publicKey,
+            gummyrollProgram: GummyrollProgramId,
+            merkleRoll: merkleRollKeypair.publicKey,
+            voucher: voucher,
+          },
+          signers: [payer],
+        }
+      );
+      let cancelRedeemTx = await Bubblegum.provider.send(
+        new Transaction().add(cancelRedeemIx),
+        [payer],
+        {
+          commitment: "confirmed",
+        }
+      );
+    });
   });
 });

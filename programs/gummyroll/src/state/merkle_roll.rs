@@ -202,7 +202,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         index: u32,
     ) -> Option<Node> {
         let mut proof: [Node; MAX_DEPTH] = [Node::default(); MAX_DEPTH];
-        proof.copy_from_slice(&proof_vec[..]);
+        fill_in_proof::<MAX_DEPTH>(proof_vec, &mut proof);
         sol_log_compute_units();
         let root = self.find_and_update_leaf(current_root, EMPTY, leaf, proof, index, true);
         sol_log_compute_units();
