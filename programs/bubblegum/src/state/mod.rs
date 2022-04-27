@@ -16,15 +16,15 @@ pub struct Nonce {
 pub struct Voucher {
     pub leaf_schema: LeafSchema,
     pub index: u32,
-    pub merkle_roll: Pubkey,
+    pub merkle_slab: Pubkey,
 }
 
 impl Voucher {
-    pub fn new(leaf_schema: LeafSchema, index: u32, merkle_roll: Pubkey) -> Self {
+    pub fn new(leaf_schema: LeafSchema, index: u32, merkle_slab: Pubkey) -> Self {
         Self {
             leaf_schema,
             index,
-            merkle_roll,
+            merkle_slab,
         }
     }
 }
