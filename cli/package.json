@@ -1,0 +1,13 @@
+{
+  "name": "cli",
+  "version": "1.0.0",
+  "description": "cli to drive gummyroll",
+  "main": "index.ts",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^9.2.0",
+    "csv-parse": "^5.0.4",
+    "csv-writer": "^1.6.0",
+    "loglevel": "^1.8.0"
+  }
+}
