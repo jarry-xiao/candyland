@@ -1,0 +1,17 @@
+[package]
+name = "messenger"
+description = "Metaplex messenger trait for Geyser plugin producer/consumer patterns."
+version = "0.1.0"
+edition = "2021"
+license = "AGPL3"
+homepage = "https://solana.com/"
+documentation = "https://docs.rs/solana-geyser-plugin-interface"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+solana-geyser-plugin-interface  = { version = "=1.10.3" }
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]

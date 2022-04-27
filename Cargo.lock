@@ -1810,6 +1810,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "messenger"
+version = "0.1.0"
+dependencies = [
+ "solana-geyser-plugin-interface",
+]
+
+[[package]]
 name = "mime"
 version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2209,6 +2216,7 @@ dependencies = [
  "hex",
  "lazy_static",
  "log",
+ "messenger",
  "redis",
  "regex",
  "serde",

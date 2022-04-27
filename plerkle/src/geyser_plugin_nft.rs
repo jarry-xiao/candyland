@@ -1,11 +1,10 @@
 use {
     crate::{
-        accounts_selector::AccountsSelector,
-        error::PlerkleError,
-        messenger::{Messenger, RedisMessenger},
+        accounts_selector::AccountsSelector, error::PlerkleError, redis_messenger::RedisMessenger,
         transaction_selector::TransactionSelector,
     },
     log::*,
+    messenger::Messenger,
     solana_geyser_plugin_interface::geyser_plugin_interface::{
         GeyserPlugin, GeyserPluginError, ReplicaAccountInfoVersions, ReplicaBlockInfoVersions,
         ReplicaTransactionInfoVersions, Result, SlotStatus,
@@ -122,14 +121,6 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
         let result = serde_json::from_str(&contents);
         match result {
             Ok(config) => {
-                // TODO: I used the objects from the Example Postgres Plugin for selecting
-                // accounts and transactions.  I do some additional error handling in case the
-                // config file cannot be read, but otherwise follow the example.  I chose
-                // this because it meets our needs of specifiying program IDs for filtering
-                // (see example-config.json) and having parity with the example may make it
-                // easier for someone to maintain if they already understand the example.
-                // If we instead want to streamline it for program ID only, I can easly simplify
-                // this handling to one program ID selection config item.
                 self.accounts_selector = Some(Self::create_accounts_selector_from_config(&config));
                 self.transaction_selector =
                     Some(Self::create_transaction_selector_from_config(&config));
@@ -142,11 +133,8 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
         }
 
         // Setup messenger.
-        // TODO: if we want Messenger to be a trait, we probably don't want to have it tied to
-        // our json config file.  If we want to instead treat it like the postgres example
-        // code and configure with json, maybe remove the trait and just go back to Messenger
-        // struct.
-        self.messenger = Some(T::new()?);
+        let messenger = T::new()?;
+        self.messenger = Some(messenger);
 
         Ok(())
     }
@@ -158,8 +146,8 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
     fn update_account(
         &mut self,
         account: ReplicaAccountInfoVersions,
-        _slot: u64,
-        _is_startup: bool,
+        slot: u64,
+        is_startup: bool,
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
         match account {
             ReplicaAccountInfoVersions::V0_0_1(account) => {
@@ -174,14 +162,12 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
 
                 // Send account info over messenger.
                 match &mut self.messenger {
-                    None => {
-                        return Err(GeyserPluginError::Custom(Box::new(
-                            PlerkleError::DataStoreConnectionError {
-                                msg: "There is no connection to data store.".to_string(),
-                            },
-                        )));
-                    }
-                    Some(messenger) => messenger.send_account(account),
+                    None => Err(GeyserPluginError::Custom(Box::new(
+                        PlerkleError::DataStoreConnectionError {
+                            msg: "There is no connection to data store.".to_string(),
+                        },
+                    ))),
+                    Some(messenger) => messenger.send_account(account, slot, is_startup),
                 }
             }
         }
@@ -195,17 +181,25 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
 
     fn update_slot_status(
         &mut self,
-        _slot: u64,
-        _parent: Option<u64>,
-        _status: SlotStatus,
+        slot: u64,
+        parent: Option<u64>,
+        status: SlotStatus,
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
-        Ok(())
+        // Send slot status over messenger.
+        match &mut self.messenger {
+            None => Err(GeyserPluginError::Custom(Box::new(
+                PlerkleError::DataStoreConnectionError {
+                    msg: "There is no connection to data store.".to_string(),
+                },
+            ))),
+            Some(messenger) => messenger.send_slot_status(slot, parent, status),
+        }
     }
 
     fn notify_transaction(
         &mut self,
         transaction_info: ReplicaTransactionInfoVersions,
-        _slot: u64,
+        slot: u64,
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
         match transaction_info {
             ReplicaTransactionInfoVersions::V0_0_1(transaction_info) => {
@@ -230,14 +224,12 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
 
                 // Send transaction info over messenger.
                 match &mut self.messenger {
-                    None => {
-                        return Err(GeyserPluginError::Custom(Box::new(
-                            PlerkleError::DataStoreConnectionError {
-                                msg: "There is no connection to data store.".to_string(),
-                            },
-                        )));
-                    }
-                    Some(messenger) => messenger.send_transaction(transaction_info),
+                    None => Err(GeyserPluginError::Custom(Box::new(
+                        PlerkleError::DataStoreConnectionError {
+                            msg: "There is no connection to data store.".to_string(),
+                        },
+                    ))),
+                    Some(messenger) => messenger.send_transaction(transaction_info, slot),
                 }
             }
         }
@@ -248,12 +240,20 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
         blockinfo: ReplicaBlockInfoVersions,
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
         match blockinfo {
-            ReplicaBlockInfoVersions::V0_0_1(block) => {
-                info!("Updating block: {:?}", block);
-                // block.slot
+            ReplicaBlockInfoVersions::V0_0_1(block_info) => {
+                info!("Updating block: {:?}", block_info);
+
+                // Send block info over messenger.
+                match &mut self.messenger {
+                    None => Err(GeyserPluginError::Custom(Box::new(
+                        PlerkleError::DataStoreConnectionError {
+                            msg: "There is no connection to data store.".to_string(),
+                        },
+                    ))),
+                    Some(messenger) => messenger.send_block(block_info),
+                }
             }
         }
-        Ok(())
     }
 
     fn account_data_notifications_enabled(&self) -> bool {
@@ -275,13 +275,6 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
 ///
 /// This function returns the GeyserPluginPostgres pointer as trait GeyserPlugin.
 pub unsafe extern "C" fn _create_plugin() -> *mut dyn GeyserPlugin {
-    // TODO: Here I have to make the type specific (`RedisMessenger`) instead of generic.
-    // Overall tried to make this plugin code as generic as possible, but somewhere the
-    // actual type needs to be specified.  Another option would be:
-    // let messenger = RedisMessenger::new();
-    // let plulgin = Plerkle::new(messenger);
-    // which is a bit more simple code, but I think we'd rather instantiate the messenger
-    // in the `on_load()` function.
     let plugin = Plerkle::<RedisMessenger>::new();
     let plugin: Box<dyn GeyserPlugin> = Box::new(plugin);
     Box::into_raw(plugin)
