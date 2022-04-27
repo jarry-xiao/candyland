@@ -40,7 +40,7 @@ pub struct ChangeLog<const MAX_DEPTH: usize> {
 }
 
 impl<const MAX_DEPTH: usize> ChangeLog<MAX_DEPTH> {
-    pub fn to_event(&self, id: Pubkey, seq: u128) -> ChangeLogEvent {
+    pub fn to_event(&self, id: Pubkey, seq: u128) -> Box<ChangeLogEvent> {
         let path_len = self.path.len() as u32;
         let mut path: Vec<PathNode> = self
             .path
@@ -49,12 +49,12 @@ impl<const MAX_DEPTH: usize> ChangeLog<MAX_DEPTH> {
             .map(|(lvl, n)| PathNode::new(*n, (1 << (path_len - lvl as u32)) + (self.index >> lvl)))
             .collect();
         path.push(PathNode::new(self.root, 1));
-        ChangeLogEvent {
+        Box::new(ChangeLogEvent {
             id,
             path,
             seq,
             index: self.index,
-        }
+        })
     }
 
     pub fn get_leaf(&self) -> Node {

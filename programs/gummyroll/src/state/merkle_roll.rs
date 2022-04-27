@@ -110,8 +110,8 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         Some(root)
     }
 
-    pub fn get_change_log(&self) -> ChangeLog<MAX_DEPTH> {
-        self.change_logs[self.active_index as usize]
+    pub fn get_change_log(&self) -> Box<ChangeLog<MAX_DEPTH>> {
+        Box::new(self.change_logs[self.active_index as usize])
     }
 
     /// Only used to initialize right most path for a completely empty tree
@@ -204,7 +204,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         let mut proof: [Node; MAX_DEPTH] = [Node::default(); MAX_DEPTH];
         fill_in_proof::<MAX_DEPTH>(proof_vec, &mut proof);
         sol_log_compute_units();
-        let root = self.find_and_update_leaf(current_root, EMPTY, leaf, proof, index, true);
+        let root = self.find_and_update_leaf(current_root, EMPTY, leaf, &mut proof, index, true);
         sol_log_compute_units();
         root
     }
@@ -235,7 +235,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
                 current_root,
                 previous_leaf,
                 new_leaf,
-                proof,
+                &mut proof,
                 index,
                 false,
             );
@@ -250,7 +250,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         current_root: Node,
         leaf: Node,
         new_leaf: Node,
-        mut proof: [Node; MAX_DEPTH],
+        proof: &mut [Node; MAX_DEPTH],
         index: u32,
         append_on_conflict: bool,
     ) -> Option<Node> {
@@ -268,7 +268,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             return self.update_and_apply_proof(
                 leaf,
                 new_leaf,
-                &mut proof,
+                proof,
                 index,
                 j,
                 append_on_conflict,
@@ -280,7 +280,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         self.update_and_apply_proof(
             leaf,
             new_leaf,
-            &mut proof,
+            proof,
             index,
             self.active_index.wrapping_sub(self.buffer_size) & mask as u64,
             append_on_conflict,

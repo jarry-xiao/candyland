@@ -1,10 +1,7 @@
 use anchor_lang::{
     emit,
     prelude::*,
-    solana_program::{
-        entrypoint::ProgramResult,
-        program_error::ProgramError, sysvar::rent::Rent,
-    },
+    solana_program::{entrypoint::ProgramResult, program_error::ProgramError, sysvar::rent::Rent},
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use std::mem::size_of;
@@ -12,18 +9,18 @@ use std::mem::size_of;
 pub mod state;
 pub mod utils;
 
-use crate::utils::{ZeroCopy};
 use crate::state::{
-    node::{Node},
-    merkle_roll::{MerkleRoll, MerkleRollHeader}
+    merkle_roll::{MerkleRoll, MerkleRollHeader},
+    node::Node,
 };
+use crate::utils::ZeroCopy;
 
 declare_id!("GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD");
 
 #[derive(Accounts)]
 pub struct Initialize<'info> {
     #[account(zero)]
-    /// CHECK: This account will be zeroed out, and the size will be validated 
+    /// CHECK: This account will be zeroed out, and the size will be validated
     pub merkle_roll: UncheckedAccount<'info>,
     pub authority: Signer<'info>,
     /// CHECK: unsafe
@@ -33,7 +30,7 @@ pub struct Initialize<'info> {
 #[derive(Accounts)]
 pub struct Modify<'info> {
     #[account(mut)]
-    /// CHECK: This account is validated in the instruction 
+    /// CHECK: This account is validated in the instruction
     pub merkle_roll: UncheckedAccount<'info>,
     pub authority: Signer<'info>,
 }
@@ -41,7 +38,7 @@ pub struct Modify<'info> {
 #[derive(Accounts)]
 pub struct Append<'info> {
     #[account(mut)]
-    /// CHECK: This account is validated in the instruction 
+    /// CHECK: This account is validated in the instruction
     pub merkle_roll: UncheckedAccount<'info>,
     pub authority: Signer<'info>,
     pub append_authority: Signer<'info>,
@@ -62,7 +59,7 @@ macro_rules! merkle_roll_depth_size_apply_fn {
                     match merkle_roll.$func($($arg)*) {
                         Some(x) => {
                             if $emit_msg {
-                                emit!(merkle_roll.get_change_log().to_event($id, merkle_roll.sequence_number));
+                                emit!(*merkle_roll.get_change_log().to_event($id, merkle_roll.sequence_number));
                             }
                             Some(x)
                         }
@@ -124,7 +121,7 @@ pub mod gummyroll {
         let (mut header_bytes, roll_bytes) =
             merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
-        let mut header = MerkleRollHeader::try_from_slice(&header_bytes)?;
+        let mut header = Box::new(MerkleRollHeader::try_from_slice(&header_bytes)?);
         header.initialize(
             max_depth,
             max_buffer_size,
@@ -156,7 +153,7 @@ pub mod gummyroll {
         let (mut header_bytes, roll_bytes) =
             merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
-        let mut header = MerkleRollHeader::try_from_slice(&header_bytes)?;
+        let mut header = Box::new(MerkleRollHeader::try_from_slice(&header_bytes)?);
         header.initialize(
             max_depth,
             max_buffer_size,
@@ -203,7 +200,7 @@ pub mod gummyroll {
         let (header_bytes, roll_bytes) =
             merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
-        let header = MerkleRollHeader::try_from_slice(header_bytes)?;
+        let header = Box::new(MerkleRollHeader::try_from_slice(header_bytes)?);
         assert_eq!(header.authority, ctx.accounts.authority.key());
 
         let mut proof = vec![];
@@ -240,7 +237,7 @@ pub mod gummyroll {
         let (header_bytes, roll_bytes) =
             merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
-        let header = MerkleRollHeader::try_from_slice(header_bytes)?;
+        let header = Box::new(MerkleRollHeader::try_from_slice(header_bytes)?);
         assert_eq!(header.authority, ctx.accounts.authority.key());
         assert_eq!(header.append_authority, ctx.accounts.append_authority.key());
 
@@ -265,7 +262,7 @@ pub mod gummyroll {
         let (header_bytes, roll_bytes) =
             merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
-        let header = MerkleRollHeader::try_from_slice(header_bytes)?;
+        let header = Box::new(MerkleRollHeader::try_from_slice(header_bytes)?);
         assert_eq!(header.authority, ctx.accounts.authority.key());
 
         let mut proof = vec![];
