@@ -3,6 +3,7 @@ import {
     PublicKey
 } from '@solana/web3.js';
 import * as borsh from 'borsh';
+import { BN } from '@project-serum/anchor';
 
 
     // maxDepth: number, // u32
@@ -21,9 +22,11 @@ type MerkleRollHeader = {
     maxDepth: number, // u32
     maxBufferSize: number, // u32
     authority: PublicKey,
+    appendAuthority: PublicKey,
 }
 
 type MerkleRoll = {
+    sequenceNumber: BN, // u64
     activeIndex: number, // u64
     bufferSize: number, // u64
     changeLogs: ChangeLog[],
@@ -54,10 +57,12 @@ export function decodeMerkleRoll(buffer: Buffer): OnChainMerkleRoll {
     let header: MerkleRollHeader = {
         maxBufferSize: reader.readU32(),
         maxDepth: reader.readU32(),
-        authority: readPublicKey(reader)
+        authority: readPublicKey(reader),
+        appendAuthority: readPublicKey(reader)
     };
 
     // Decode MerkleRoll
+    let sequenceNumber = reader.readU128();
     let activeIndex = reader.readU64().toNumber();
     let bufferSize = reader.readU64().toNumber();
 
@@ -92,6 +97,7 @@ export function decodeMerkleRoll(buffer: Buffer): OnChainMerkleRoll {
     }
 
     const roll = {
+        sequenceNumber,
         activeIndex,
         bufferSize,
         changeLogs,
@@ -108,9 +114,9 @@ export function decodeMerkleRoll(buffer: Buffer): OnChainMerkleRoll {
 }
 
 export function getMerkleRollAccountSize(maxDepth: number, maxBufferSize: number): number {
-  let headerSize = 8 + 32;
+  let headerSize = 8 + 32 + 32;
   let changeLogSize = (maxDepth * 32 + 32 + 4 + 4) * maxBufferSize;
   let rightMostPathSize = maxDepth * 32 + 32 + 4 + 4;
-  let merkleRollSize = 8 + 8 + changeLogSize + rightMostPathSize;
+  let merkleRollSize = 8 + 8 + 16 + changeLogSize + rightMostPathSize;
   return merkleRollSize + headerSize; 
 }

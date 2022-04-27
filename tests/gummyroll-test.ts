@@ -85,6 +85,7 @@ describe("gummyroll", () => {
           accounts: {
             merkleRoll: merkleRollKeypair.publicKey,
             authority: payer.publicKey,
+            appendAuthority: payer.publicKey,
           },
           signers: [payer],
           remainingAccounts: proof,
@@ -98,6 +99,7 @@ describe("gummyroll", () => {
           accounts: {
             merkleRoll: merkleRollKeypair.publicKey,
             authority: payer.publicKey,
+            appendAuthority: payer.publicKey,
           },
           signers: [payer],
         }
@@ -206,6 +208,7 @@ describe("gummyroll", () => {
           accounts: {
             merkleRoll: merkleRollKeypair.publicKey,
             authority: payer.publicKey,
+            appendAuthority: payer.publicKey,
           },
           signers: [payer],
         }
@@ -391,6 +394,7 @@ describe("gummyroll", () => {
             accounts: {
               merkleRoll: merkleRollKeypair.publicKey,
               authority: payer.publicKey,
+              appendAuthority: payer.publicKey,
             },
             signers: [payer],
           }

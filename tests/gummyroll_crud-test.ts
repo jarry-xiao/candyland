@@ -20,9 +20,6 @@ import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 let Gummyroll;
 // @ts-ignore
 let GummyrollCrud;
-let connection;
-let wallet;
-let payer: Keypair;
 
 describe("Gummyroll CRUD program",  () => {
 
@@ -30,9 +27,9 @@ describe("Gummyroll CRUD program",  () => {
     const MAX_BUFFER_SIZE = 64;
     const requiredSpace = getMerkleRollAccountSize(MAX_DEPTH, MAX_BUFFER_SIZE);
 
-    payer = Keypair.generate();
-    wallet = new NodeWallet(payer)
-    connection = new web3Connection(
+    let payer = Keypair.generate();
+    let wallet = new NodeWallet(payer)
+    let connection = new web3Connection(
         "http://localhost:8899",
         {
             commitment: 'confirmed'
