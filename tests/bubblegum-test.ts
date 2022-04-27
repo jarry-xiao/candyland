@@ -11,20 +11,15 @@ import {
   Connection as web3Connection,
 } from "@solana/web3.js";
 import { assert } from "chai";
-import * as crypto from "crypto";
 
 import {
   buildTree,
-  hash,
-  getProofOfLeaf,
-  updateTree,
   Tree,
 } from "./merkle-tree";
 import {
   decodeMerkleRoll,
   getMerkleRollAccountSize,
 } from "./merkle-roll-serde";
-import { logTx } from "./utils";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 
 // @ts-ignore
