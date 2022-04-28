@@ -47,6 +47,11 @@ export default function SearchBar() {
             </Link>
           ) : null}
           {publicKey ? (
+            <Link href="/batch/create" passHref>
+              <Button variant="primary">Batch Mint</Button>
+            </Link>
+          ) : null}
+          {publicKey ? (
             <>
               <Link
                 href={{

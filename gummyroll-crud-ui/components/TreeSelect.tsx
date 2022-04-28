@@ -1,4 +1,4 @@
-import React, { SyntheticEvent } from "react";
+import React, { SyntheticEvent, useRef, useState } from "react";
 import * as anchor from "@project-serum/anchor";
 import Button from "./Button";
 import useSWRImmutable from "swr/immutable";

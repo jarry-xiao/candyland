@@ -1,5 +1,5 @@
 import * as anchor from "@project-serum/anchor";
-import {BN, TransactionNamespace, InstructionNamespace, Provider, Program} from "@project-serum/anchor";
+import { BN, TransactionNamespace, InstructionNamespace, Provider, Program } from "@project-serum/anchor";
 import { Gummyroll } from "../target/types/gummyroll";
 import {
   Connection,
@@ -32,7 +32,7 @@ describe("gummyroll", () => {
   let wallet;
 
   const MAX_SIZE = 64;
-  const MAX_DEPTH = 20;
+  const MAX_DEPTH = 18;
 
   async function createTreeOnChain(
     payer: Keypair,
@@ -81,6 +81,8 @@ describe("gummyroll", () => {
         root,
         leaf,
         numLeaves - 1,
+        "https://arweave.net/<changelog_db_uri>",
+        "https://arweave.net/<metadata_db_id>",
         {
           accounts: {
             merkleRoll: merkleRollKeypair.publicKey,
@@ -105,7 +107,6 @@ describe("gummyroll", () => {
         }
       ));
     }
-
     await Gummyroll.provider.send(tx, [payer, merkleRollKeypair], {
       commitment: "confirmed",
     });
@@ -177,10 +178,10 @@ describe("gummyroll", () => {
   beforeEach(async () => {
     payer = Keypair.generate();
     connection = new web3Connection(
-        "http://localhost:8899",
-        {
-          commitment: 'confirmed'
-        }
+      "http://localhost:8899",
+      {
+        commitment: 'confirmed'
+      }
     );
     wallet = new NodeWallet(payer)
     anchor.setProvider(new Provider(connection, wallet, { commitment: connection.commitment, skipPreflight: true }));
@@ -240,7 +241,7 @@ describe("gummyroll", () => {
       const index = 0;
 
       const replaceLeafIx = createReplaceIx(previousLeaf, newLeaf, index, offChainTree, merkleRollKeypair.publicKey, payer);
-      assert(replaceLeafIx.keys.length == (2 + 20), `Failed to create proof for ${MAX_DEPTH}`);
+      assert(replaceLeafIx.keys.length == (2 + MAX_DEPTH), `Failed to create proof for ${MAX_DEPTH}`);
 
       const tx = new Transaction().add(replaceLeafIx);
       const txid = await Gummyroll.provider.send(tx, [payer], {
