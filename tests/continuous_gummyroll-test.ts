@@ -24,7 +24,7 @@ export function chunk<T>(arr: T[], size: number): T[][] {
   );
 }
 
-describe.skip("gummyroll-continuous", () => {
+describe("gummyroll-continuous", () => {
   let connection: web3Connection;
   let wallet: NodeWallet;
   let offChainTree: ReturnType<typeof buildTree>;
@@ -60,6 +60,7 @@ describe.skip("gummyroll-continuous", () => {
         accounts: {
           merkleRoll: merkleRollKeypair.publicKey,
           authority: payer.publicKey,
+          appendAuthority: payer.publicKey,
         },
         signers: [payer],
       }
@@ -170,6 +171,7 @@ describe.skip("gummyroll-continuous", () => {
         accounts: {
           merkleRoll: merkleRollKeypair.publicKey,
           authority: payer.publicKey,
+          appendAuthority: payer.publicKey,
         },
         signers: [payer],
       }
@@ -177,7 +179,7 @@ describe.skip("gummyroll-continuous", () => {
   }
 
   it(`${MAX_SIZE} transactions in batches of ${BATCH_SIZE}`, async () => {
-    return;
+
     let indicesToSend = [];
     for (let i = 0; i < MAX_SIZE; i++) {
       indicesToSend.push(i);
@@ -187,8 +189,7 @@ describe.skip("gummyroll-continuous", () => {
     while (indicesToSend.length > 0) {
       let batchesToSend = chunk<number>(indicesToSend, BATCH_SIZE);
       let indicesLeft: number[] = [];
-
-      for (const batch of batchesToSend) {
+      for (const [j, batch] of batchesToSend.entries()) {
         const txIds = [];
         const txIdToIndex: Record<string, number> = {};
         for (const i of batch) {
