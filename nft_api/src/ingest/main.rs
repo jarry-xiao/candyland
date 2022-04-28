@@ -14,7 +14,7 @@ use anchor_client::anchor_lang::prelude::Pubkey;
 use routerify_json_response::{json_failed_resp_with_message, json_success_resp};
 
 
-use gummyroll::{ChangeLogEvent, PathNode};
+use gummyroll::state::change_log::{ChangeLogEvent, PathNode};
 
 
 use sqlx;

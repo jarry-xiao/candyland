@@ -14,10 +14,11 @@ use anchor_client::solana_sdk::pubkey::Pubkey;
 use futures_util::StreamExt;
 use hyper::header::HeaderValue;
 use routerify_json_response::{json_failed_resp, json_failed_resp_with_message, json_success_resp};
-use gummyroll::{ChangeLogEvent, empty_node, PathNode};
 use sqlx;
 use sqlx::{Pool, Postgres};
-use sqlx::postgres::PgPoolOptions;
+use sqlx::postgres::{PgPoolOptions};
+use gummyroll::utils::empty_node;
+use gummyroll::state::change_log::{ChangeLogEvent, PathNode};
 use serde::{Serialize, Deserialize};
 use std::io;
 
