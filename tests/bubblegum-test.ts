@@ -106,7 +106,7 @@ describe("bubblegum", () => {
           treeCreator: payer.publicKey,
           authority: authority,
           gummyrollProgram: GummyrollProgramId,
-          merkleRoll: merkleRollKeypair.publicKey,
+          merkleSlab: merkleRollKeypair.publicKey,
         },
         signers: [payer],
       }
@@ -200,7 +200,7 @@ describe("bubblegum", () => {
           gummyrollProgram: GummyrollProgramId,
           owner: payer.publicKey,
           delegate: payer.publicKey,
-          merkleRoll: merkleRollKeypair.publicKey,
+          merkleSlab: merkleRollKeypair.publicKey,
         },
         signers: [payer],
       });
@@ -238,7 +238,7 @@ describe("bubblegum", () => {
             delegate: payer.publicKey,
             newOwner: destination.publicKey,
             gummyrollProgram: GummyrollProgramId,
-            merkleRoll: merkleRollKeypair.publicKey,
+            merkleSlab: merkleRollKeypair.publicKey,
           },
           signers: [payer],
         }
@@ -264,7 +264,7 @@ describe("bubblegum", () => {
             previousDelegate: destination.publicKey,
             newDelegate: delegateKey.publicKey,
             gummyrollProgram: GummyrollProgramId,
-            merkleRoll: merkleRollKeypair.publicKey,
+            merkleSlab: merkleRollKeypair.publicKey,
           },
           signers: [destination],
         }
@@ -290,7 +290,7 @@ describe("bubblegum", () => {
             delegate: delegateKey.publicKey,
             newOwner: payer.publicKey,
             gummyrollProgram: GummyrollProgramId,
-            merkleRoll: merkleRollKeypair.publicKey,
+            merkleSlab: merkleRollKeypair.publicKey,
           },
           signers: [delegateKey],
         }
@@ -328,7 +328,7 @@ describe("bubblegum", () => {
             owner: payer.publicKey,
             delegate: payer.publicKey,
             gummyrollProgram: GummyrollProgramId,
-            merkleRoll: merkleRollKeypair.publicKey,
+            merkleSlab: merkleRollKeypair.publicKey,
             voucher: voucher,
             systemProgram: SystemProgram.programId,
           },
@@ -351,7 +351,7 @@ describe("bubblegum", () => {
             owner: payer.publicKey,
             delegate: payer.publicKey,
             gummyrollProgram: GummyrollProgramId,
-            merkleRoll: merkleRollKeypair.publicKey,
+            merkleSlab: merkleRollKeypair.publicKey,
             voucher: voucher,
           },
           signers: [payer],

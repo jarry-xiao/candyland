@@ -1,10 +1,8 @@
 [workspace]
 members = [
-    "programs/merkle_wallet",
     "programs/gummyroll",
-    "merkle-accumulator",
+    "programs/gummyroll_crud",
     "plerkle",
     "nft_api",
-    "programs/gummyroll_crud",
     "programs/bubblegum"
 ]

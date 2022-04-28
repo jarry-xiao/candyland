@@ -2,7 +2,14 @@ use anchor_lang::{prelude::*, solana_program::keccak};
 use gummyroll::state::node::Node;
 
 #[event]
-#[derive(Clone, Copy, Default, Debug)]
+pub struct LeafSchemaEvent {
+    pub owner: Pubkey,
+    pub delegate: Pubkey, // Defaults to owner
+    pub nonce: u128,
+    pub data_hash: [u8; 32],
+}
+
+#[derive(AnchorDeserialize, AnchorSerialize, Clone, Copy, Default, Debug)]
 pub struct LeafSchema {
     pub owner: Pubkey,
     pub delegate: Pubkey, // Defaults to owner
@@ -17,6 +24,15 @@ impl LeafSchema {
             delegate,
             nonce,
             data_hash,
+        }
+    }
+
+    pub fn to_event(&self) -> LeafSchemaEvent {
+        LeafSchemaEvent {
+            owner: self.owner,
+            delegate: self.delegate,
+            nonce: self.nonce,
+            data_hash: self.data_hash,
         }
     }
 
