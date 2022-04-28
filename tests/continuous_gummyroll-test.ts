@@ -8,20 +8,48 @@ import {
   SystemProgram,
   Transaction,
   sendAndConfirmTransaction,
+  Connection,
 } from "@solana/web3.js";
 import { assert } from "chai";
+import fetch from "cross-fetch";
 
 import { buildTree, getProofOfLeaf, updateTree, Tree } from "./merkle-tree";
 import { decodeMerkleRoll, getMerkleRollAccountSize } from "./merkle-roll-serde";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 
+const HOST = "<enter here>";
+const TREE_RPC_HOST = HOST;
+const TREE_RPC_PORT = "9090";
+const CONNECTION_URL = `http://${HOST}:8899`;
+
+console.log(`Using RPC: ${CONNECTION_URL}`);
+
 // @ts-ignore
 let Gummyroll;
 
-export function chunk<T>(arr: T[], size: number): T[][] {
+function chunk<T>(arr: T[], size: number): T[][] {
   return Array.from({ length: Math.ceil(arr.length / size) }, (_: any, i: number) =>
     arr.slice(i * size, i * size + size)
   );
+}
+
+type NodeView = {
+  hash: string,
+  level: number,
+  index: number
+}
+
+async function getProofOfLeafFromServer(treeId: PublicKey, i: number): Promise<any[]> {
+  let object = await fetch(
+    `http://${TREE_RPC_HOST}:${TREE_RPC_PORT}/proof/${treeId.toString()}/${i}`,
+    {
+      method: "GET",
+    }
+  ).then(resp => resp.json());
+
+  const nodes = object.data as NodeView[];
+  console.log("Retrieved object:", nodes);
+  return nodes;
 }
 
 describe("gummyroll-continuous", () => {
@@ -35,7 +63,7 @@ describe("gummyroll-continuous", () => {
   const MAX_SIZE = 1024;
   const MAX_DEPTH = 20;
   // This is hardware dependent... if too large, then majority of tx's will fail to confirm
-  const BATCH_SIZE = 12;
+  const BATCH_SIZE = 25;
 
   async function createEmptyTreeOnChain(
     payer: Keypair
@@ -69,6 +97,7 @@ describe("gummyroll-continuous", () => {
     const tx = new Transaction().add(allocAccountIx).add(initGummyrollIx);
     let txid = await Gummyroll.provider.send(tx, [payer, merkleRollKeypair], {
       commitment: "confirmed",
+      skipPreflight: true,
     });
     return merkleRollKeypair
   }
@@ -82,7 +111,7 @@ describe("gummyroll-continuous", () => {
   beforeEach(async () => {
     payer = Keypair.generate();
     connection = new web3Connection(
-      "http://localhost:8899",
+      CONNECTION_URL,
       {
         commitment: 'confirmed'
       }
@@ -90,6 +119,7 @@ describe("gummyroll-continuous", () => {
     wallet = new NodeWallet(payer)
     anchor.setProvider(new Provider(connection, wallet, { commitment: connection.commitment, skipPreflight: true }));
     Gummyroll = anchor.workspace.Gummyroll as Program<Gummyroll>;
+    console.log(Gummyroll.programId.toString());
     await Gummyroll.provider.connection.confirmTransaction(
       await Gummyroll.provider.connection.requestAirdrop(payer.publicKey, 1e10),
       "confirmed"
@@ -123,10 +153,11 @@ describe("gummyroll-continuous", () => {
   });
 
   // Will be used in future test
-  function createReplaceIx(tree: Tree, merkleRollKeypair: Keypair, payer: Keypair, i: number) {
+  async function createReplaceIx(tree: Tree, merkleRollKeypair: Keypair, payer: Keypair, i: number) {
     /// Empty nodes are special, so we have to create non-zero leaf for index 0
     let newLeaf = Buffer.alloc(32, Buffer.from(Uint8Array.from([1 + i])));
-    let nodeProof = getProofOfLeaf(tree, i).map((node) => { return { pubkey: new PublicKey(node.node), isSigner: false, isWritable: false } });
+    const nodes = await getProofOfLeafFromServer(merkleRollKeypair.publicKey, i);
+    const nodeProof = nodes.map((nodeView) => { return { pubkey: new PublicKey(nodeView.hash), isSigner: false, isWritable: false } });
     const replaceLeafIx = Gummyroll.instruction.replaceLeaf(
       { inner: Array.from(tree.root) },
       { inner: Array.from(tree.leaves[i].node) },
@@ -178,14 +209,16 @@ describe("gummyroll-continuous", () => {
     );
   }
 
-  it(`${MAX_SIZE} transactions in batches of ${BATCH_SIZE}`, async () => {
+  it(`${MAX_SIZE} leaves replaced in batches of ${BATCH_SIZE}`, async () => {
 
     let indicesToSend = [];
-    for (let i = 0; i < MAX_SIZE; i++) {
+    const NUM_TO_SEND = 50;
+    for (let i = 0; i < NUM_TO_SEND; i++) {
       indicesToSend.push(i);
     };
     const indicesToSync = indicesToSend;
 
+    let numCompleted = 0;
     while (indicesToSend.length > 0) {
       let batchesToSend = chunk<number>(indicesToSend, BATCH_SIZE);
       let indicesLeft: number[] = [];
@@ -193,12 +226,10 @@ describe("gummyroll-continuous", () => {
         const txIds = [];
         const txIdToIndex: Record<string, number> = {};
         for (const i of batch) {
-          const tx = new Transaction().add(createReplaceIx(offChainTree, merkleRollKeypair, payer, i));
+          const tx = new Transaction().add(await createReplaceIx(offChainTree, merkleRollKeypair, payer, i));
 
           tx.feePayer = payer.publicKey;
-          tx.recentBlockhash = (
-            await connection.getLatestBlockhash('singleGossip')
-          ).blockhash;
+          tx.recentBlockhash = (await connection.getLatestBlockhash('singleGossip')).blockhash;
 
           await wallet.signTransaction(tx);
           const rawTx = tx.serialize();
@@ -231,13 +262,16 @@ describe("gummyroll-continuous", () => {
           return confirmation;
         }));
 
+        numCompleted += batchToConfirm.length - txsToReplay.length;
+        console.log("Successfully completed: ", numCompleted);
+
         indicesLeft = indicesLeft.concat(txsToReplay);
       }
 
       indicesToSend = indicesLeft;
     }
 
-    // Sync off-chain tree
+    // Create expected off-chain tree state
     for (const i of indicesToSync) {
       updateTree(offChainTree, Buffer.alloc(32, Buffer.from(Uint8Array.from([1 + i]))), i);
     }
