@@ -2,9 +2,11 @@ use {
     crate::{error::PlerkleError, programs::gummy_roll::handle_change_log_event},
     anchor_client::anchor_lang::AnchorDeserialize,
     log::*,
+    messenger::Messenger,
     redis::{streams::StreamMaxlen, Commands, Connection, RedisResult, ToRedisArgs},
     solana_geyser_plugin_interface::geyser_plugin_interface::{
-        GeyserPluginError, ReplicaAccountInfo, ReplicaTransactionInfo, Result,
+        GeyserPluginError, ReplicaAccountInfo, ReplicaBlockInfo, ReplicaTransactionInfo, Result,
+        SlotStatus,
     },
     solana_sdk::{instruction::CompiledInstruction, keccak, pubkey::Pubkey},
     std::{
@@ -29,17 +31,6 @@ mod program_ids {
     pubkeys!(gummy_roll, "GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD");
     pubkeys!(token, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
     pubkeys!(a_token, "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
-}
-
-pub trait Messenger {
-    fn new() -> Result<Self>
-    where
-        Self: Sized;
-
-    fn send_account(&self, account: &ReplicaAccountInfo) -> Result<()>;
-    fn send_transaction(&mut self, transaction_info: &ReplicaTransactionInfo) -> Result<()>;
-    fn recv_account(&self) -> Result<()>;
-    fn recv_transaction(&self) -> Result<()>;
 }
 
 #[derive(Default)]
@@ -131,11 +122,29 @@ impl Messenger for RedisMessenger {
         })
     }
 
-    fn send_account(&self, _account: &ReplicaAccountInfo) -> Result<()> {
+    fn send_account(
+        &self,
+        _account: &ReplicaAccountInfo,
+        _slot: u64,
+        _is_startup: bool,
+    ) -> Result<()> {
         Ok(())
     }
 
-    fn send_transaction(&mut self, transaction_info: &ReplicaTransactionInfo) -> Result<()> {
+    fn send_slot_status(
+        &self,
+        _slot: u64,
+        _parent: Option<u64>,
+        _status: SlotStatus,
+    ) -> Result<()> {
+        Ok(())
+    }
+
+    fn send_transaction(
+        &mut self,
+        transaction_info: &ReplicaTransactionInfo,
+        _slot: u64,
+    ) -> Result<()> {
         // Handle log parsing.
         let keys = transaction_info.transaction.message().account_keys();
         if keys.iter().any(|v| v == &program_ids::gummy_roll()) {
@@ -284,11 +293,23 @@ impl Messenger for RedisMessenger {
         Ok(())
     }
 
+    fn send_block(&mut self, _block_info: &ReplicaBlockInfo) -> Result<()> {
+        Ok(())
+    }
+
     fn recv_account(&self) -> Result<()> {
         Ok(())
     }
 
+    fn recv_slot_status(&self) -> Result<()> {
+        Ok(())
+    }
+
     fn recv_transaction(&self) -> Result<()> {
+        Ok(())
+    }
+
+    fn recv_block(&self) -> Result<()> {
         Ok(())
     }
 }
