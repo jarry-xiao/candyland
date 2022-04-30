@@ -9,7 +9,7 @@ services:
       - api
       - redis
     restart: always
-    image: merkle-wallet_api
+    image: candyland_api
   api:
     volumes:
       - ./target/debug/api:/bin/api
