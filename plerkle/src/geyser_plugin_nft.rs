@@ -9,7 +9,9 @@ use {
         GeyserPlugin, GeyserPluginError, ReplicaAccountInfoVersions, ReplicaBlockInfoVersions,
         ReplicaTransactionInfoVersions, Result, SlotStatus,
     },
-    solana_sdk::{message::AccountKeys, pubkey::Pubkey},
+    solana_sdk::{
+        pubkey::Pubkey
+    },
     std::{
         fmt::{Debug, Formatter},
         fs::File,
@@ -83,10 +85,10 @@ impl<T: Messenger + Default> Plerkle<T> {
     }
 
     // Currently not used but may want later.
-    pub fn _txn_contains_program<'b>(keys: AccountKeys, program: &Pubkey) -> bool {
+    pub fn _txn_contains_program<'b>(keys: Vec<&Pubkey>, program: &Pubkey) -> bool {
         keys.iter()
             .find(|p| {
-                let d = *p;
+                let d = **p;
                 d.eq(program)
             })
             .is_some()
@@ -214,7 +216,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
                 if let Some(transaction_selector) = &self.transaction_selector {
                     if !transaction_selector.is_transaction_selected(
                         transaction_info.is_vote,
-                        Box::new(transaction_info.transaction.message().account_keys().iter()),
+                        Box::new(transaction_info.transaction.message().account_keys_iter()),
                     ) {
                         return Ok(());
                     }

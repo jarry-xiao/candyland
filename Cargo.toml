@@ -1,9 +1,12 @@
 [workspace]
 members = [
-    "programs/gummyroll",
-    "programs/gummyroll_crud",
     "plerkle",
     "nft_api",
-    "programs/bubblegum",
     "messenger"
+]
+exclude = [
+    "programs/bubblegum",
+    "programs/gummyroll",
+    "programs/gummyroll_crud",
+    "programs/",
 ]

@@ -12,6 +12,7 @@ use {
     std::{
         collections::HashMap,
         fmt::{Debug, Formatter},
+        slice::SliceIndex,
         ops::Index,
     },
 };
@@ -53,22 +54,22 @@ impl RedisMessenger {
             .clone()
             .inner_instructions;
         let outer_instructions = transaction_info.transaction.message().instructions();
-        let keys = transaction_info.transaction.message().account_keys();
+        let keys: Vec<&Pubkey> = transaction_info.transaction.message().account_keys_iter().collect();
         let mut ordered_ixs: Vec<(Pubkey, CompiledInstruction)> = vec![];
         if inner_ixs.is_some() {
             let inner_ix_list = inner_ixs.as_ref().unwrap().as_slice();
             for inner in inner_ix_list {
                 let outer = outer_instructions.get(inner.index as usize).unwrap();
-                let program_id = keys.index(outer.program_id_index as usize);
+                let program_id = *keys.index(outer.program_id_index as usize);
                 ordered_ixs.push((*program_id, outer.to_owned()));
                 for inner_ix_instance in &inner.instructions {
-                    let inner_program_id = keys.index(inner_ix_instance.program_id_index as usize);
+                    let inner_program_id = *keys.index(inner_ix_instance.program_id_index as usize);
                     ordered_ixs.push((*inner_program_id, inner_ix_instance.to_owned()));
                 }
             }
         } else {
             for instruction in outer_instructions {
-                let program_id = keys.index(instruction.program_id_index as usize);
+                let program_id = *keys.index(instruction.program_id_index as usize);
                 ordered_ixs.push((*program_id, instruction.to_owned()));
             }
         }
@@ -146,8 +147,8 @@ impl Messenger for RedisMessenger {
         _slot: u64,
     ) -> Result<()> {
         // Handle log parsing.
-        let keys = transaction_info.transaction.message().account_keys();
-        if keys.iter().any(|v| v == &program_ids::gummy_roll()) {
+        let keys: Vec<&Pubkey> = transaction_info.transaction.message().account_keys_iter().collect();
+        if keys.iter().any(|v| **v == program_ids::gummy_roll()) {
             let maxlen = StreamMaxlen::Approx(55000);
             let change_log_event = handle_change_log_event(&transaction_info);
             if change_log_event.is_ok() {

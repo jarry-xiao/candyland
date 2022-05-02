@@ -16,18 +16,18 @@ crate-type = ["cdylib", "rlib"]
 redis = {version = "0.21.5", features = ["streams"]}
 log = "0.4.11"
 async-trait = "0.1.53"
-solana-sdk = { version = "=1.10.3" }
-solana-transaction-status = { version = "=1.10.3" }
+solana-sdk = { version = "=1.9.13" }
+solana-transaction-status = { version = "=1.9.13" }
 thiserror = "1.0.30"
 regex = "1.5.5"
 base64 = "0.13.0"
 lazy_static = "1.4.0"
-solana-geyser-plugin-interface  = { version = "=1.10.3" }
-solana-logger = { version = "=1.10.3" }
-solana-measure = { version = "=1.10.3" }
-solana-metrics = { version = "=1.10.3" }
-solana-runtime = { version = "=1.10.3" }
-anchor-client = "0.22.1"
+solana-geyser-plugin-interface  = { version = "=1.9.13" }
+solana-logger = { version = "=1.9.13" }
+solana-measure = { version = "=1.9.13" }
+solana-metrics = { version = "=1.9.13" }
+solana-runtime = { version = "=1.9.13" }
+anchor-client = "=0.24.1"
 gummyroll={path= "../programs/gummyroll", features = ["no-entrypoint"]}
 gummyroll-crud={path= "../programs/gummyroll_crud", features = ["no-entrypoint"]}
 bs58 = "0.4.0"
@@ -37,6 +37,10 @@ serde_derive = "1.0.103"
 serde_json = "1.0.74"
 hex = "0.4.3"
 messenger={path= "../messenger"}
+
+[dependencies.num-integer]
+version = "0.1.44"
+default-features = false
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

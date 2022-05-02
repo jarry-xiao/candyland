@@ -16,6 +16,6 @@ cpi = ["no-entrypoint"]
 default = []
 
 [dependencies]
-anchor-lang = "0.22.1"
+anchor-lang = "0.24.1"
 gummyroll = { path = "../gummyroll", features = ["cpi"] }
 bytemuck = "1.8.0"

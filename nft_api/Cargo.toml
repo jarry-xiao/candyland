@@ -22,7 +22,7 @@ routerify-json-response = "3"
 redis = {version = "0.21.5", features = ["aio", "tokio-comp", "streams"]}
 futures-util = "0.3.0"
 hyper = "0.14"
-anchor-client="0.22.1"
+anchor-client="0.24.1"
 base64 = "0.13.0"
 thiserror = "1.0.30"
 tokio = { version = "1.17.0", features = ["full"] }
@@ -31,3 +31,7 @@ sqlx = {version = "0.5.11", features = ["runtime-tokio-rustls","postgres"] }
 tokio-postgres = "0.7.5"
 serde = "1.0.136"
 bs58="0.4.0"
+
+[dependencies.num-integer]
+version = "0.1.44"
+default-features = false
