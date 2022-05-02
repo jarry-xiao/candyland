@@ -22,7 +22,7 @@ routerify-json-response = "3"
 redis = {version = "0.21.5", features = ["aio", "tokio-comp", "streams"]}
 futures-util = "0.3.0"
 hyper = "0.14"
-anchor-client="0.24.1"
+anchor-client = { path = "../deps/anchor/client" }
 base64 = "0.13.0"
 thiserror = "1.0.30"
 tokio = { version = "1.17.0", features = ["full"] }

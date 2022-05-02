@@ -5,6 +5,7 @@ members = [
     "messenger"
 ]
 exclude = [
+    "deps",
     "programs/bubblegum",
     "programs/gummyroll",
     "programs/gummyroll_crud",
