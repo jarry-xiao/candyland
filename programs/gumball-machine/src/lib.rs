@@ -1,3 +1,4 @@
+#![feature(generic_const_exprs)]
 use anchor_lang::prelude::*;
 pub mod state;
 pub mod utils;
