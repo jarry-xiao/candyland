@@ -166,7 +166,7 @@ async fn handler_get_assets_for_owner(req: Request<Body>) -> Result<Response<Bod
 async fn handle_get_tree(req: Request<Body>) -> Result<Response<Body>, routerify_json_response::Error> {
     let db: &Pool<Postgres> = req.data::<Pool<Postgres>>().unwrap();
     let tree_id = decode_b58_param(req.param("tree_id").unwrap()).unwrap();
-    let results = sqlx::query_as::<_, NodeDAO>("select distinct on (node_idx), node_index, level, hash, seq from cl_items where tree = $1 order by seq, node_idx, level desc")
+    let results = sqlx::query_as::<_, NodeDAO>("select distinct on (node_idx) node_idx, level, hash, seq from cl_items where tree = $1 order by node_idx, seq, level desc")
         .bind(tree_id)
         .fetch_all(db).await;
     if results.is_err() {

@@ -57,4 +57,5 @@ args=(
   --geyser-plugin-config accountsdb-plugin-config.json
 )
 # shellcheck disable=SC2086
+echo "${args[@]}" $SOLANA_RUN_SH_VALIDATOR_ARGS
 solana-test-validator "${args[@]}" $SOLANA_RUN_SH_VALIDATOR_ARGS
