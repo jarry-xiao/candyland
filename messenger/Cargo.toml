@@ -11,7 +11,7 @@ documentation = "https://docs.rs/solana-geyser-plugin-interface"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-solana-geyser-plugin-interface  = { version = "=1.10.3" }
+solana-geyser-plugin-interface  = { version = "=1.10.10" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
