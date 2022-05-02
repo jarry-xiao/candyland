@@ -15,8 +15,6 @@ no-log-ix-name = []
 cpi = ["no-entrypoint"]
 default = []
 [dependencies]
-# anchor-spl = {version = "0.24.2"}
-# anchor-spl = {version = "0.24.2"}
 anchor-lang = { path="../../deps/anchor/lang" }
 anchor-spl = { path="../../deps/anchor/spl" }
 
