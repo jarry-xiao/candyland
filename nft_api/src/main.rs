@@ -178,13 +178,11 @@ async fn handle_get_tree(req: Request<Body>) -> Result<Response<Body>, routerify
 async fn handle_get_root(req: Request<Body>) -> Result<Response<Body>, routerify_json_response::Error> {
     let db: &Pool<Postgres> = req.data::<Pool<Postgres>>().unwrap();
     let tree_id = decode_b58_param(req.param("tree_id").unwrap()).unwrap();
-    let result = sqlx::query_as::<_, Root>("select hash from cl_items where node_idx = 1 AND tree = $1 order by seq desc limit 1")
-        .bind(tree_id)
-        .fetch_one(db).await;
+    let result = get_root(&db, &tree_id).await;
     if result.is_err() {
         return json_failed_resp_with_message(StatusCode::INTERNAL_SERVER_ERROR, result.err().unwrap().to_string());
     }
-    json_success_resp(&encode_root(result.unwrap()))
+    json_success_resp(&result.unwrap())
 }
 
 async fn handle_get_proof(req: Request<Body>) -> Result<Response<Body>, routerify_json_response::Error> {
@@ -210,6 +208,7 @@ async fn handle_get_asset_proof(req: Request<Body>) -> Result<Response<Body>, ro
     let tree_id2 = tree_id.as_slice().to_vec(); // WHY RUST
     let index = req.param("index").unwrap().parse::<i64>().unwrap();
 
+    let root_result = get_root(db, &tree_id).await;
     let result = get_asset(db, tree_id, index).await;
     let proof: Result<Vec<String>, ApiError> = get_proof(db, tree_id2, index).await.map(|p| {
         p.iter().map(|node| {
@@ -217,17 +216,25 @@ async fn handle_get_asset_proof(req: Request<Body>) -> Result<Response<Body>, ro
         })
             .collect()
     });
-    let asset_proof = result.and_then(|n| {
-        proof.map(|p| {
-            AssetProof {
-                hash: n.hash,
-                root: p.last().unwrap().clone(),
-                proof: p,
-            }
-        })
+
+    let string: String;
+    if result.is_err() {
+        println!("Could not find asset...\n");
+        let empty_leaf = empty_node(0).inner.to_vec();
+        string = bs58::encode(empty_leaf).into_string();
+    } else  {
+        string = result.unwrap().hash.clone();
+    }
+    let asset_proof = proof.map(|p| {
+        AssetProof {
+            hash: string,
+            root: root_result.unwrap().to_string(),
+            proof: p,
+        }
     });
 
     if asset_proof.is_err() {
+        println!("Asset proof is error :/ \n");
         return if let ApiError::ResponseError { status, msg } = asset_proof.err().unwrap() {
             json_failed_resp_with_message(status, msg)
         } else {
@@ -237,6 +244,19 @@ async fn handle_get_asset_proof(req: Request<Body>) -> Result<Response<Body>, ro
     json_success_resp(&asset_proof.unwrap())
 }
 
+
+async fn get_root(db: &Pool<Postgres>, tree_id: &Vec<u8>) -> Result<String, ApiError> {
+    let result = sqlx::query_as::<_, Root>("select hash from cl_items where node_idx = 1 AND tree = $1 order by seq desc limit 1")
+        .bind(tree_id)
+        .fetch_one(db).await;
+
+    result.map(|r| bs58::encode(r.hash).into_string()).map_err(|e| {
+        return ApiError::ResponseError {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            msg: e.to_string(),
+        };
+    })
+}
 
 async fn get_asset(db: &Pool<Postgres>, tree_id: Vec<u8>, index: i64) -> Result<AssetView, ApiError> {
     let result = sqlx::query_as::<_, AssetDAO>(r#"
@@ -265,7 +285,7 @@ async fn get_proof(db: &Pool<Postgres>, tree_id: Vec<u8>, index: i64) -> Result<
     let expected_proof_size = nodes.len();
     let results = sqlx::query_as::<_, NodeDAO>(r#"
     select distinct on (node_idx) node_idx, hash, level, max(seq) as seq
-    from cl_items where node_idx = ANY ($1) and tree = $2
+    from cl_items where node_idx = ANY ($1) and tree = $2 and node_idx > 1
     group by seq, node_idx, level, hash
     order by node_idx desc, seq desc
     "#
@@ -283,7 +303,11 @@ async fn get_proof(db: &Pool<Postgres>, tree_id: Vec<u8>, index: i64) -> Result<
     }
     if nodes_from_db.len() != expected_proof_size {
         for returned in nodes_from_db.iter() {
-            final_node_list[returned.level as usize] = node_to_view(returned.to_owned());
+            let node_view = node_to_view(returned.to_owned());
+            println!("Node from db: {} {} {}", &node_view.level, &node_view.hash, &node_view.index);
+            if returned.level < final_node_list.len().try_into().unwrap() {
+                final_node_list[returned.level as usize] = node_view;
+            }
         }
         for (i, (n, nin)) in final_node_list.iter_mut().zip(nodes).enumerate() {
             if *n == NodeView::default() {
@@ -303,7 +327,6 @@ fn get_required_nodes_for_proof(index: i64) -> Vec<i64> {
         if idx % 2 == 0 { indexes.push(idx + 1) } else { indexes.push(idx - 1) }
         idx >>= 1
     }
-    indexes.push(1);
     println!("nodes {:?}", indexes);
     return indexes;
 }
