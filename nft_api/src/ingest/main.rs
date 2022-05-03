@@ -2,27 +2,24 @@ extern crate core;
 
 use hyper::{Body, Client, Request, Response, Server, StatusCode};
 // Import the routerify prelude traits.
-use futures_util::future::{join3};
+use futures_util::future::join3;
 use redis::streams::{StreamId, StreamKey, StreamReadOptions, StreamReadReply};
 use redis::{Commands, Value};
 use routerify::prelude::*;
 use routerify::{Middleware, Router, RouterService};
 
-
-use std::{net::SocketAddr, thread};
 use anchor_client::anchor_lang::prelude::Pubkey;
 use routerify_json_response::{json_failed_resp_with_message, json_success_resp};
-
+use std::{net::SocketAddr, thread};
 
 use gummyroll::state::change_log::{ChangeLogEvent, PathNode};
 
-
-use sqlx;
-use sqlx::{Pool, Postgres};
-use sqlx::postgres::PgPoolOptions;
-use tokio::task;
 use nft_api_lib::error::*;
 use nft_api_lib::events::handle_event;
+use sqlx;
+use sqlx::postgres::PgPoolOptions;
+use sqlx::{Pool, Postgres};
+use tokio::task;
 
 #[derive(Default)]
 struct AppEvent {
@@ -40,7 +37,8 @@ const SET_OWNERSHIP_APPSQL: &str = r#"INSERT INTO app_specific_ownership (tree_i
                             DO UPDATE SET authority = excluded.authority"#;
 const GET_APPSQL: &str = "SELECT revision FROM app_specific WHERE msg = $1 AND tree_id = $2";
 const DEL_APPSQL: &str = "DELETE FROM app_specific WHERE leaf = $1 AND tree_id = $2";
-const SET_CLSQL_ITEM: &str = "INSERT INTO cl_items (tree, seq, level, hash, node_idx) VALUES ($1,$2,$3,$4,$5)";
+const SET_CLSQL_ITEM: &str =
+    "INSERT INTO cl_items (tree, seq, level, hash, node_idx) VALUES ($1,$2,$3,$4,$5)";
 
 #[derive(sqlx::FromRow, Clone, Debug)]
 struct AppSpecificRev {
@@ -65,9 +63,8 @@ pub async fn cl_service(ids: &Vec<StreamId>, pool: &Pool<Postgres>) -> String {
             if !raw_str.is_ok() {
                 continue;
             }
-            let change_log_res = raw_str.map_err(|_serr| {
-                ApiError::ChangeLogEventMalformed
-            })
+            let change_log_res = raw_str
+                .map_err(|_serr| ApiError::ChangeLogEventMalformed)
                 .and_then(|o| {
                     let d: Result<ChangeLogEvent, ApiError> = handle_event(o);
                     d
@@ -91,7 +88,8 @@ pub async fn cl_service(ids: &Vec<StreamId>, pool: &Pool<Postgres>) -> String {
                             .bind(&i)
                             .bind(&p.node.inner.as_ref())
                             .bind(&(p.index as i64))
-                            .execute(pool).await;
+                            .execute(pool)
+                            .await;
                         if f.is_err() {
                             println!("Error {:?}", f.err().unwrap());
                         }
@@ -116,7 +114,10 @@ pub async fn cl_service(ids: &Vec<StreamId>, pool: &Pool<Postgres>) -> String {
     last_id
 }
 
-pub async fn structured_program_event_service(ids: &Vec<StreamId>, pool: &Pool<Postgres>) -> String {
+pub async fn structured_program_event_service(
+    ids: &Vec<StreamId>,
+    pool: &Pool<Postgres>,
+) -> String {
     let mut last_id = "".to_string();
     for StreamId { id, map } in ids {
         let mut app_event = AppEvent::default();
@@ -174,7 +175,9 @@ pub async fn structured_program_event_service(ids: &Vec<StreamId>, pool: &Pool<P
                 .bind(&bs58::decode(&app_event.owner).into_vec().unwrap())
                 .bind(&bs58::decode(&app_event.tree_id).into_vec().unwrap())
                 .bind(&pid)
-                .execute(pool).await.unwrap();
+                .execute(pool)
+                .await
+                .unwrap();
         } else if app_event.op == "tran" {
             match new_owner {
                 Some(x) => {
@@ -184,7 +187,9 @@ pub async fn structured_program_event_service(ids: &Vec<StreamId>, pool: &Pool<P
                         .bind(&bs58::decode(&x).into_vec().unwrap())
                         .bind(&bs58::decode(&app_event.tree_id).into_vec().unwrap())
                         .bind(&pid)
-                        .execute(pool).await.unwrap();
+                        .execute(pool)
+                        .await
+                        .unwrap();
                 }
                 None => {
                     println!("Received Transfer op with no new_owner");
@@ -195,13 +200,17 @@ pub async fn structured_program_event_service(ids: &Vec<StreamId>, pool: &Pool<P
             sqlx::query(DEL_APPSQL)
                 .bind(&bs58::decode(&app_event.leaf).into_vec().unwrap())
                 .bind(&bs58::decode(&app_event.tree_id).into_vec().unwrap())
-                .execute(pool).await.unwrap();
+                .execute(pool)
+                .await
+                .unwrap();
         } else if app_event.op == "create" {
             sqlx::query(SET_OWNERSHIP_APPSQL)
                 .bind(&bs58::decode(&app_event.tree_id).into_vec().unwrap())
                 .bind(&bs58::decode(&app_event.authority).into_vec().unwrap())
                 .bind(&pid)
-                .execute(pool).await.unwrap();
+                .execute(pool)
+                .await
+                .unwrap();
         }
         last_id = id.clone();
     }
@@ -217,7 +226,9 @@ async fn main() {
     let client = redis::Client::open("redis://redis/").unwrap();
     let pool = PgPoolOptions::new()
         .max_connections(5)
-        .connect("postgres://solana:solana@db/solana").await.unwrap();
+        .connect("postgres://solana:solana@db/solana")
+        .await
+        .unwrap();
     let mut cl_last_id: String = ">".to_string();
     let mut gm_last_id: String = ">".to_string();
     let conn_res = client.get_connection();
@@ -231,8 +242,13 @@ async fn main() {
         }
     }
     loop {
-        let opts = StreamReadOptions::default().block(1000).count(100000).group(group_name, "lelelelle");
-        let srr: StreamReadReply = conn.xread_options(streams.as_slice(), &[&cl_last_id, &gm_last_id], &opts).unwrap();
+        let opts = StreamReadOptions::default()
+            .block(1000)
+            .count(100000)
+            .group(group_name, "lelelelle");
+        let srr: StreamReadReply = conn
+            .xread_options(streams.as_slice(), &[&cl_last_id, &gm_last_id], &opts)
+            .unwrap();
         for StreamKey { key, ids } in srr.keys {
             println!("{}", key);
             if key == "GM_CL" {

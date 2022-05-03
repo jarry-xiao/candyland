@@ -1,10 +1,10 @@
-
+use crate::error::ApiError;
 use anchor_client::anchor_lang;
 use base64;
-use crate::error::{ApiError};
 
-
-pub fn handle_event<T: anchor_lang::Event + anchor_lang::AnchorDeserialize>(data: String) -> Result<T, ApiError>{
+pub fn handle_event<T: anchor_lang::Event + anchor_lang::AnchorDeserialize>(
+    data: String,
+) -> Result<T, ApiError> {
     let borsh_bytes = match base64::decode(&data) {
         Ok(borsh_bytes) => borsh_bytes,
         _ => {
@@ -25,5 +25,5 @@ pub fn handle_event<T: anchor_lang::Event + anchor_lang::AnchorDeserialize>(data
 
     let e: T = anchor_lang::AnchorDeserialize::deserialize(&mut slice)
         .map_err(|_| ApiError::ChangeLogEventMalformed)?;
-       Ok(e)
+    Ok(e)
 }

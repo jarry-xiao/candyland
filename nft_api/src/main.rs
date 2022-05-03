@@ -1,32 +1,32 @@
-use hyper::{Body, header, Request, Response, Server, StatusCode};
+use hyper::{header, Body, Request, Response, Server, StatusCode};
 // Import the routerify prelude traits.
-use futures_util::future::{join3};
+use anchor_client::solana_sdk::pubkey::Pubkey;
+use futures_util::future::join3;
+use futures_util::StreamExt;
+use gummyroll::state::change_log::{ChangeLogEvent, PathNode};
+use gummyroll::utils::empty_node;
+use hyper::header::HeaderValue;
 use redis::streams::{StreamId, StreamKey, StreamReadOptions, StreamReadReply};
 use redis::{Commands, Value};
 use routerify::prelude::*;
 use routerify::{Middleware, RequestInfo, Router, RouterService};
-use std::{net::SocketAddr};
+use routerify_json_response::{json_failed_resp, json_failed_resp_with_message, json_success_resp};
+use serde::{Deserialize, Serialize};
+use sqlx;
+use sqlx::postgres::PgPoolOptions;
+use sqlx::{Pool, Postgres};
 use std::borrow::Borrow;
 use std::convert::Infallible;
+use std::io;
+use std::net::SocketAddr;
 use std::ops::Index;
 use std::str::FromStr;
-use anchor_client::solana_sdk::pubkey::Pubkey;
-use futures_util::StreamExt;
-use hyper::header::HeaderValue;
-use routerify_json_response::{json_failed_resp, json_failed_resp_with_message, json_success_resp};
-use sqlx;
-use sqlx::{Pool, Postgres};
-use sqlx::postgres::{PgPoolOptions};
-use gummyroll::utils::empty_node;
-use gummyroll::state::change_log::{ChangeLogEvent, PathNode};
-use serde::{Serialize, Deserialize};
-use std::io;
 
-mod events;
 mod error;
+mod events;
 
-use events::handle_event;
 use error::ApiError;
+use events::handle_event;
 use tokio::{join, task};
 
 async fn logger(req: Request<Body>) -> Result<Request<Body>, routerify_json_response::Error> {
@@ -72,6 +72,10 @@ struct Root {
     pub hash: Vec<u8>,
 }
 
+#[derive(sqlx::FromRow)]
+struct Level {
+    pub level: u32,
+}
 
 #[derive(Serialize, Default, Clone, PartialEq)]
 struct NodeView {
@@ -111,7 +115,6 @@ fn asset_list_to_view(items: Vec<AssetDAO>) -> Vec<AssetView> {
     view
 }
 
-
 fn asset_to_view(r: AssetDAO) -> AssetView {
     AssetView {
         index: r.index,
@@ -127,22 +130,30 @@ fn encode_root(root: Root) -> String {
     bs58::encode(root.hash).into_string()
 }
 
-
-async fn handle_get_asset(req: Request<Body>) -> Result<Response<Body>, routerify_json_response::Error> {
+/// Takes in an index from leaf-space
+async fn handle_get_asset(
+    req: Request<Body>,
+) -> Result<Response<Body>, routerify_json_response::Error> {
     let db: &Pool<Postgres> = req.data::<Pool<Postgres>>().unwrap();
     let tree_id = decode_b58_param(req.param("tree_id").unwrap()).unwrap();
     let index = req.param("index").unwrap().parse::<i64>().unwrap();
 
-    let result = get_asset(db, tree_id, index).await;
+    let tree_height = get_height(db, &tree_id).await.unwrap();
+    let leaf_index = 2i64.pow(tree_height) - 1 + index;
+    let result = get_asset(db, &tree_id, leaf_index).await;
     if result.is_err() {
-        return json_failed_resp_with_message(StatusCode::INTERNAL_SERVER_ERROR, result.err().unwrap().to_string());
+        return json_failed_resp_with_message(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            result.err().unwrap().to_string(),
+        );
     }
     let asset = result.unwrap();
     json_success_resp(&asset)
 }
 
-
-async fn handler_get_assets_for_owner(req: Request<Body>) -> Result<Response<Body>, routerify_json_response::Error> {
+async fn handler_get_assets_for_owner(
+    req: Request<Body>,
+) -> Result<Response<Body>, routerify_json_response::Error> {
     let db: &Pool<Postgres> = req.data::<Pool<Postgres>>().unwrap();
     let owner = decode_b58_param(req.param("owner").unwrap()).unwrap();
 
@@ -157,43 +168,55 @@ async fn handler_get_assets_for_owner(req: Request<Body>) -> Result<Response<Bod
         .bind(owner)
         .fetch_all(db).await;
     if results.is_err() {
-        return json_failed_resp_with_message(StatusCode::INTERNAL_SERVER_ERROR, results.err().unwrap().to_string());
+        return json_failed_resp_with_message(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            results.err().unwrap().to_string(),
+        );
     }
     let assets = results.unwrap();
     json_success_resp(&asset_list_to_view(assets))
 }
 
-async fn handle_get_tree(req: Request<Body>) -> Result<Response<Body>, routerify_json_response::Error> {
+async fn handle_get_tree(
+    req: Request<Body>,
+) -> Result<Response<Body>, routerify_json_response::Error> {
     let db: &Pool<Postgres> = req.data::<Pool<Postgres>>().unwrap();
     let tree_id = decode_b58_param(req.param("tree_id").unwrap()).unwrap();
-    let results = sqlx::query_as::<_, NodeDAO>("select distinct on (node_idx), node_index, level, hash, seq from cl_items where tree = $1 order by seq, node_idx, level desc")
+    let results = sqlx::query_as::<_, NodeDAO>("select distinct on (node_idx) node_idx, level, hash, seq from cl_items where tree = $1 order by node_idx, seq, level desc")
         .bind(tree_id)
         .fetch_all(db).await;
     if results.is_err() {
-        return json_failed_resp_with_message(StatusCode::INTERNAL_SERVER_ERROR, results.err().unwrap().to_string());
+        return json_failed_resp_with_message(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            results.err().unwrap().to_string(),
+        );
     }
     json_success_resp(&node_list_to_view(results.unwrap()))
 }
 
-async fn handle_get_root(req: Request<Body>) -> Result<Response<Body>, routerify_json_response::Error> {
+async fn handle_get_root(
+    req: Request<Body>,
+) -> Result<Response<Body>, routerify_json_response::Error> {
     let db: &Pool<Postgres> = req.data::<Pool<Postgres>>().unwrap();
     let tree_id = decode_b58_param(req.param("tree_id").unwrap()).unwrap();
-    let result = sqlx::query_as::<_, Root>("select hash from cl_items where node_idx = 1 AND tree = $1 order by seq desc limit 1")
-        .bind(tree_id)
-        .fetch_one(db).await;
+    let result = get_root(&db, &tree_id).await;
     if result.is_err() {
-        return json_failed_resp_with_message(StatusCode::INTERNAL_SERVER_ERROR, result.err().unwrap().to_string());
+        return json_failed_resp_with_message(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            result.err().unwrap().to_string(),
+        );
     }
-    json_success_resp(&encode_root(result.unwrap()))
+    json_success_resp(&result.unwrap())
 }
 
-async fn handle_get_proof(req: Request<Body>) -> Result<Response<Body>, routerify_json_response::Error> {
+async fn handle_get_proof(
+    req: Request<Body>,
+) -> Result<Response<Body>, routerify_json_response::Error> {
     let db: &Pool<Postgres> = req.data::<Pool<Postgres>>().unwrap();
     let tree_id = decode_b58_param(req.param("tree_id").unwrap()).unwrap();
     let index = req.param("index").unwrap().parse::<i64>().unwrap();
 
-
-    let proof = get_proof(db, tree_id, index).await;
+    let proof = get_proof(db, &tree_id, index).await;
     if proof.is_err() {
         return if let ApiError::ResponseError { status, msg } = proof.err().unwrap() {
             json_failed_resp_with_message(status, msg)
@@ -204,30 +227,39 @@ async fn handle_get_proof(req: Request<Body>) -> Result<Response<Body>, routerif
     json_success_resp(&proof.unwrap())
 }
 
-async fn handle_get_asset_proof(req: Request<Body>) -> Result<Response<Body>, routerify_json_response::Error> {
+async fn handle_get_asset_proof(
+    req: Request<Body>,
+) -> Result<Response<Body>, routerify_json_response::Error> {
     let db: &Pool<Postgres> = req.data::<Pool<Postgres>>().unwrap();
     let tree_id = decode_b58_param(req.param("tree_id").unwrap()).unwrap();
-    let tree_id2 = tree_id.as_slice().to_vec(); // WHY RUST
+
     let index = req.param("index").unwrap().parse::<i64>().unwrap();
 
-    let result = get_asset(db, tree_id, index).await;
-    let proof: Result<Vec<String>, ApiError> = get_proof(db, tree_id2, index).await.map(|p| {
-        p.iter().map(|node| {
-            node.hash.clone()
-        })
-            .collect()
-    });
-    let asset_proof = result.and_then(|n| {
-        proof.map(|p| {
-            AssetProof {
-                hash: n.hash,
-                root: p.last().unwrap().clone(),
-                proof: p,
-            }
-        })
+    let tree_height = get_height(db, &tree_id).await.unwrap();
+    let leaf_index = 2i64.pow(tree_height) - 1 + index;
+
+    let root_result = get_root(db, &tree_id).await;
+    let result = get_asset(db, &tree_id, leaf_index).await;
+    let proof: Result<Vec<String>, ApiError> = get_proof(db, &tree_id, leaf_index)
+        .await
+        .map(|p| p.iter().map(|node| node.hash.clone()).collect());
+
+    let string: String;
+    if result.is_err() {
+        println!("Could not find asset...\n");
+        let empty_leaf = empty_node(0).inner.to_vec();
+        string = bs58::encode(empty_leaf).into_string();
+    } else {
+        string = result.unwrap().hash.clone();
+    }
+    let asset_proof = proof.map(|p| AssetProof {
+        hash: string,
+        root: root_result.unwrap().to_string(),
+        proof: p,
     });
 
     if asset_proof.is_err() {
+        println!("Asset proof is error :/ \n");
         return if let ApiError::ResponseError { status, msg } = asset_proof.err().unwrap() {
             json_failed_resp_with_message(status, msg)
         } else {
@@ -237,8 +269,43 @@ async fn handle_get_asset_proof(req: Request<Body>) -> Result<Response<Body>, ro
     json_success_resp(&asset_proof.unwrap())
 }
 
+async fn get_height(db: &Pool<Postgres>, tree_id: &Vec<u8>) -> Result<u32, ApiError> {
+    let result = sqlx::query_as::<_, Level>(
+        "select level from cl_items where node_idx = 1 AND tree = $1 order by seq desc limit 1",
+    )
+    .bind(tree_id)
+    .fetch_one(db)
+    .await;
 
-async fn get_asset(db: &Pool<Postgres>, tree_id: Vec<u8>, index: i64) -> Result<AssetView, ApiError> {
+    result
+        .map(|r| r.level)
+        .map_err(|e| ApiError::ResponseError {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            msg: e.to_string(),
+        })
+}
+
+async fn get_root(db: &Pool<Postgres>, tree_id: &Vec<u8>) -> Result<String, ApiError> {
+    let result = sqlx::query_as::<_, Root>(
+        "select hash from cl_items where node_idx = 1 AND tree = $1 order by seq desc limit 1",
+    )
+    .bind(tree_id)
+    .fetch_one(db)
+    .await;
+
+    result
+        .map(|r| bs58::encode(r.hash).into_string())
+        .map_err(|e| ApiError::ResponseError {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            msg: e.to_string(),
+        })
+}
+
+async fn get_asset(
+    db: &Pool<Postgres>,
+    tree_id: &Vec<u8>,
+    index: i64,
+) -> Result<AssetView, ApiError> {
     let result = sqlx::query_as::<_, AssetDAO>(r#"
     select a.msg as data, c.node_idx as index, a.owner, a.tree_id as tree , aso.authority as admin, a.leaf as hash, max(seq) as seq from app_specific as a
             join cl_items as c on c.tree = a.tree_id and c.hash = a.leaf
@@ -252,27 +319,33 @@ async fn get_asset(db: &Pool<Postgres>, tree_id: Vec<u8>, index: i64) -> Result<
         .bind(&tree_id)
         .bind(&index)
         .fetch_one(db).await;
-    result.map(asset_to_view).map_err(|e| {
-        return ApiError::ResponseError {
+    result
+        .map(asset_to_view)
+        .map_err(|e| ApiError::ResponseError {
             status: StatusCode::INTERNAL_SERVER_ERROR,
             msg: e.to_string(),
-        };
-    })
+        })
 }
 
-async fn get_proof(db: &Pool<Postgres>, tree_id: Vec<u8>, index: i64) -> Result<Vec<NodeView>, ApiError> {
+async fn get_proof(
+    db: &Pool<Postgres>,
+    tree_id: &Vec<u8>,
+    index: i64,
+) -> Result<Vec<NodeView>, ApiError> {
     let nodes = get_required_nodes_for_proof(index);
     let expected_proof_size = nodes.len();
-    let results = sqlx::query_as::<_, NodeDAO>(r#"
+    let results = sqlx::query_as::<_, NodeDAO>(
+        r#"
     select distinct on (node_idx) node_idx, hash, level, max(seq) as seq
-    from cl_items where node_idx = ANY ($1) and tree = $2
+    from cl_items where node_idx = ANY ($1) and tree = $2 and node_idx > 1
     group by seq, node_idx, level, hash
     order by node_idx desc, seq desc
-    "#
+    "#,
     )
-        .bind(&nodes.as_slice())
-        .bind(&tree_id)
-        .fetch_all(db).await;
+    .bind(&nodes.as_slice())
+    .bind(&tree_id)
+    .fetch_all(db)
+    .await;
     let nodes_from_db = results.unwrap();
     let mut final_node_list: Vec<NodeView> = vec![NodeView::default(); expected_proof_size];
     if nodes_from_db.len() > expected_proof_size {
@@ -283,7 +356,14 @@ async fn get_proof(db: &Pool<Postgres>, tree_id: Vec<u8>, index: i64) -> Result<
     }
     if nodes_from_db.len() != expected_proof_size {
         for returned in nodes_from_db.iter() {
-            final_node_list[returned.level as usize] = node_to_view(returned.to_owned());
+            let node_view = node_to_view(returned.to_owned());
+            println!(
+                "Node from db: {} {} {}",
+                &node_view.level, &node_view.hash, &node_view.index
+            );
+            if returned.level < final_node_list.len().try_into().unwrap() {
+                final_node_list[returned.level as usize] = node_view;
+            }
         }
         for (i, (n, nin)) in final_node_list.iter_mut().zip(nodes).enumerate() {
             if *n == NodeView::default() {
@@ -300,10 +380,13 @@ fn get_required_nodes_for_proof(index: i64) -> Vec<i64> {
     let mut indexes = vec![];
     let mut idx = index;
     while idx > 1 {
-        if idx % 2 == 0 { indexes.push(idx + 1) } else { indexes.push(idx - 1) }
+        if idx % 2 == 0 {
+            indexes.push(idx + 1)
+        } else {
+            indexes.push(idx - 1)
+        }
         idx >>= 1
     }
-    indexes.push(1);
     println!("nodes {:?}", indexes);
     return indexes;
 }
@@ -315,8 +398,6 @@ fn decode_b58_param(param: &String) -> Result<Vec<u8>, ApiError> {
     })?;
     Ok(pub_key.to_bytes().to_vec())
 }
-
-
 
 fn make_empty_node(lvl: i64, node_index: i64) -> NodeDAO {
     NodeDAO {
@@ -332,10 +413,22 @@ fn router(db: Pool<Postgres>) -> Router<Body, routerify_json_response::Error> {
         .middleware(Middleware::pre(logger))
         .middleware(Middleware::post(|mut res| async move {
             let headers = res.headers_mut();
-            headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, HeaderValue::from_static("*"));
-            headers.insert(header::ACCESS_CONTROL_ALLOW_METHODS, HeaderValue::from_static("*"));
-            headers.insert(header::ACCESS_CONTROL_ALLOW_HEADERS, HeaderValue::from_static("*"));
-            headers.insert(header::ACCESS_CONTROL_EXPOSE_HEADERS, HeaderValue::from_static("*"));
+            headers.insert(
+                header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                HeaderValue::from_static("*"),
+            );
+            headers.insert(
+                header::ACCESS_CONTROL_ALLOW_METHODS,
+                HeaderValue::from_static("*"),
+            );
+            headers.insert(
+                header::ACCESS_CONTROL_ALLOW_HEADERS,
+                HeaderValue::from_static("*"),
+            );
+            headers.insert(
+                header::ACCESS_CONTROL_EXPOSE_HEADERS,
+                HeaderValue::from_static("*"),
+            );
             Ok(res)
         }))
         .data(db)
@@ -362,7 +455,9 @@ struct AppEvent {
 async fn main() {
     let main_pool = PgPoolOptions::new()
         .max_connections(5)
-        .connect("postgres://solana:solana@db/solana").await.unwrap();
+        .connect("postgres://solana:solana@db/solana")
+        .await
+        .unwrap();
     let router = router(main_pool);
     // Create a Service from the router above to handle incoming requests.
     let service = RouterService::new(router).unwrap();

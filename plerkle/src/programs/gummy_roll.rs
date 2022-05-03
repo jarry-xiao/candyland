@@ -10,7 +10,7 @@ pub fn handle_change_log_event(
 ) -> Result<Vec<String>, GeyserPluginError> {
     lazy_static! {
         static ref CLRE: Regex = Regex::new(
-            r"Program log: ((?:[A-Za-z\d+/]{4})*(?:[A-Za-z\d+/]{3}=|[A-Za-z\d+/]{2}==)?$)"
+            r"Program data: ((?:[A-Za-z\d+/]{4})*(?:[A-Za-z\d+/]{3}=|[A-Za-z\d+/]{2}==)?$)"
         )
         .unwrap();
     }
@@ -26,11 +26,15 @@ pub fn handle_change_log_event(
                 b64raw.map(|raw| events.push((raw).parse().unwrap()));
             }
             if events.is_empty() {
+                println!("No events captured!");
                 err
             } else {
                 Ok(events)
             }
         }
-        None => err,
+        None => {
+            println!("Some plerkle error outside of event parsing");
+            err
+        }
     }
 }

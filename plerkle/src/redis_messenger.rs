@@ -148,6 +148,7 @@ impl Messenger for RedisMessenger {
         // Handle log parsing.
         let keys = transaction_info.transaction.message().account_keys();
         if keys.iter().any(|v| v == &program_ids::gummy_roll()) {
+            println!("Found GM CL event");
             let maxlen = StreamMaxlen::Approx(55000);
             let change_log_event = handle_change_log_event(&transaction_info);
             if change_log_event.is_ok() {
@@ -164,6 +165,8 @@ impl Messenger for RedisMessenger {
                         info!("Data Sent")
                     }
                 });
+            } else {
+                println!("Could not handle change log event");
             }
         }
 
