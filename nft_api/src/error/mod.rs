@@ -8,10 +8,5 @@ pub enum ApiError {
     #[error("Parameter Invalid")]
     ParameterInvalid,
     #[error("Request Error {status:?}, reason {msg:?} ")]
-    ResponseError{
-        status: StatusCode,
-        msg: String
-
-    }
-
+    ResponseError { status: StatusCode, msg: String },
 }
