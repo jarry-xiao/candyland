@@ -74,7 +74,7 @@ struct Root {
 
 #[derive(sqlx::FromRow)]
 struct Level {
-    pub level: u32,
+    pub level: i64,
 }
 
 #[derive(Serialize, Default, Clone, PartialEq)]
@@ -126,8 +126,8 @@ fn asset_to_view(r: AssetDAO) -> AssetView {
     }
 }
 
-fn encode_root(root: Root) -> String {
-    bs58::encode(root.hash).into_string()
+fn node_idx_to_leaf_idx(index: i64, tree_height: u32) -> i64 {
+    index + 2i64.pow(tree_height)
 }
 
 /// Takes in an index from leaf-space
@@ -139,7 +139,7 @@ async fn handle_get_asset(
     let index = req.param("index").unwrap().parse::<i64>().unwrap();
 
     let tree_height = get_height(db, &tree_id).await.unwrap();
-    let leaf_index = 2i64.pow(tree_height) - 1 + index;
+    let leaf_index = node_idx_to_leaf_idx(index, tree_height);
     let result = get_asset(db, &tree_id, leaf_index).await;
     if result.is_err() {
         return json_failed_resp_with_message(
@@ -236,7 +236,7 @@ async fn handle_get_asset_proof(
     let index = req.param("index").unwrap().parse::<i64>().unwrap();
 
     let tree_height = get_height(db, &tree_id).await.unwrap();
-    let leaf_index = 2i64.pow(tree_height) - 1 + index;
+    let leaf_index = node_idx_to_leaf_idx(index, tree_height);
 
     let root_result = get_root(db, &tree_id).await;
     let result = get_asset(db, &tree_id, leaf_index).await;
@@ -278,7 +278,7 @@ async fn get_height(db: &Pool<Postgres>, tree_id: &Vec<u8>) -> Result<u32, ApiEr
     .await;
 
     result
-        .map(|r| r.level)
+        .map(|r| r.level as u32)
         .map_err(|e| ApiError::ResponseError {
             status: StatusCode::INTERNAL_SERVER_ERROR,
             msg: e.to_string(),
