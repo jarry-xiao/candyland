@@ -2,6 +2,8 @@
     "compilerOptions": {
         "target": "es2019",
         "moduleResolution": "node",
+        "resolveJsonModule": true,
+        "allowSyntheticDefaultImports": true,
         "lib": ["dom", "es2019"]
     }
 }

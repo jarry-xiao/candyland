@@ -2,10 +2,9 @@ import log from 'loglevel';
 import * as fs from 'fs';
 import { parse } from 'csv-parse/sync';
 import { Buffer } from 'buffer';
-import { bfs, hash } from '../tests/merkle-tree';
-import { PublicKey } from '@solana/web3.js';
+import { PublicKey, Keypair, Connection } from '@solana/web3.js';
 import { createArrayCsvWriter } from 'csv-writer';
-import { Tree } from '../tests/merkle-tree';
+import { bfs, hash, Tree } from '../../tests/merkle-tree';
 
 type LeafSchema = {
     leafIndex: string,
@@ -140,4 +139,22 @@ export function writeHashes(messages: Buffer[], outFile: string) {
     });
     log.debug("Records", records);
     writer.writeRecords(records as any[]);
+}
+
+export function loadWalletKey(keypair: string): Keypair {
+    if (!keypair || keypair == '') {
+        throw new Error('Keypair is required!');
+    }
+    keypair = keypair.replace("~", process.env.HOME);
+    const loaded = Keypair.fromSecretKey(
+        new Uint8Array(JSON.parse(fs.readFileSync(keypair).toString())),
+    );
+    return loaded;
+}
+
+export async function confirmTxOrThrow(connection: Connection, txId: string) {
+    const result = await connection.confirmTransaction(txId, "confirmed");
+    if (result.value.err) {
+        throw new Error(`Failed to execute transaction: ${result.value.err.toString()}`);
+    }
 }
