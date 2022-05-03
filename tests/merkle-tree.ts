@@ -1,6 +1,8 @@
 import { BN } from "@project-serum/anchor";
 import { keccak_256 } from "js-sha3";
 import * as Collections from 'typescript-collections';
+import { PublicKey } from "@solana/web3.js";
+import { fetch } from 'cross-fetch';
 
 const MAX_DEPTH = 20;
 let CACHE_EMPTY_NODE = new Map<number, Buffer>();
@@ -237,4 +239,49 @@ export function hashLeaves(leaves: Buffer[]): Buffer {
         nodes = next_nodes
     }
     return nodes[0];
+}
+
+
+export type AssetProof = {
+    root: string,
+    hash: string,
+    proof: string[],
+}
+
+export type NodeView = {
+    hash: string,
+    level: number,
+    index: number
+}
+
+// Very annoying, since last element in proof is actually root
+export async function getProofOfLeafFromServer(endpoint: string, treeId: PublicKey, i: number): Promise<NodeView[]> {
+    const url = `${endpoint}/proof/${treeId.toString()}/${i}`;
+    let object = await fetch(
+        url,
+        {
+            method: "GET",
+        }
+    ).then(resp => resp.json());
+
+    return object.data as NodeView[];
+}
+
+export async function getProofOfAssetFromServer(endpoint: string, treeId: PublicKey, i: number): Promise<AssetProof> {
+    const url = `${endpoint}/assets/${treeId.toString()}/${i}/proof`;
+    let object = await fetch(
+        url,
+        {
+            method: "GET",
+        }
+    ).then(resp => resp.json())
+        .catch((e) => console.log(e));
+
+    return object.data as AssetProof;
+}
+
+export async function getRootFromServer(endpoint: string, treeId: PublicKey): Promise<string> {
+    const url = `${endpoint}/root/${treeId.toString()}`;
+    let object = await fetch(url, { method: "GET", }).then(resp => resp.json());
+    return object.data as string;
 }
