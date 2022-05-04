@@ -5,7 +5,7 @@ import { program } from 'commander';
 import log from 'loglevel';
 
 import { PublicKey } from '@solana/web3.js';
-import { getProvider, initEmptyTree, appendMessage, removeMessage, showProof, transferMessageOwner } from './helpers/crud';
+import { getProvider, initEmptyTree, appendMessage, removeMessage, showProof, showAssets, transferMessageOwner } from './helpers/crud';
 import { loadWalletKey } from './helpers/utils';
 
 program.version('0.0.1');
@@ -212,6 +212,20 @@ createCommand("showProof")
     .action(async (directory, cmd) => {
         const { index, tree, proofUrl } = cmd.opts();
         await showProof(proofUrl, tree, index);
+    })
+
+createCommand("showAssets")
+    .option(
+        "-o, --owner <string>",
+        "Asset owner",
+    )
+    .option(
+        "-p, --proof-url <string>",
+        "Proof url",
+    )
+    .action(async (directory, cmd) => {
+        const { owner, proofUrl } = cmd.opts();
+        await showAssets(proofUrl, owner);
     })
 
 program.parse(process.argv);

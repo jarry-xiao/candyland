@@ -16,6 +16,7 @@ import { Program, Provider } from '@project-serum/anchor';
 import NodeWallet from '@project-serum/anchor/dist/cjs/nodewallet';
 import { GUMMYROLL_PROGRAM_ID, GUMMYROLL_CRUD_PROGRAM_ID } from './constants';
 import { confirmTxOrThrow } from './utils';
+import fetch from 'cross-fetch';
 
 export async function getProvider(endpoint: string, payer: Keypair) {
     console.log(endpoint);
@@ -163,6 +164,38 @@ export async function showProof(
     proofInfo.proof.map((node, index) => {
         console.log(`${index}: ${new PublicKey(node).toString()}`)
     });
+}
+
+type Asset = {
+    data: string,
+    index: number,
+    owner: string,
+    treeAccount: string,
+    treeAdmin: string,
+    hash: string,
+}
+
+function logAsset(asset: Asset) {
+    log.info(`"${asset.data}`);
+    log.info(`  ${asset.index}: ${asset.hash}`);
+    log.info(`  Tree: ${asset.treeAccount}`);
+    log.info(`  Tree admin: ${asset.treeAdmin}`);
+    log.info(`  Asset owner: ${asset.owner}`);
+}
+
+async function getAssetsFromServer(proofUrl: string, owner: string): Promise<Asset[]> {
+    const response = await fetch(`${proofUrl}/owner/${owner}/assets`, { method: "GET" }).then(resp => resp.json())
+    return response.data as Asset[]
+}
+
+export async function showAssets(
+    proofUrl: string,
+    owner: string,
+) {
+    const assets = await getAssetsFromServer(proofUrl, owner);
+    log.info("Found assets:")
+    log.info("--------------")
+    assets.map((asset) => logAsset(asset));
 }
 
 export async function removeMessage(
