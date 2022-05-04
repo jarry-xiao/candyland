@@ -2,12 +2,12 @@
 members = [
     "plerkle",
     "nft_api",
+    "programs/bubblegum",
+    "programs/gummyroll",
+    "programs/gummyroll_crud",
     "messenger"
 ]
 exclude = [
     "deps",
-    "programs/bubblegum",
-    "programs/gummyroll",
-    "programs/gummyroll_crud",
     "programs/",
 ]

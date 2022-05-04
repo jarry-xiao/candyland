@@ -194,7 +194,6 @@ pub struct CancelRedeem<'info> {
 
 #[derive(Accounts)]
 pub struct Decompress<'info> {
-    pub owner: Signer<'info>,
     #[account(
         mut,
         close = owner,
@@ -202,24 +201,26 @@ pub struct Decompress<'info> {
         bump
     )]
     pub voucher: Account<'info, Voucher>,
+    #[account(mut)]
+    pub owner: Signer<'info>,
     /// CHECK: versioning is handled in the instruction
     #[account(mut)]
-    pub token_account: AccountInfo<'info>,
+    pub token_account: UncheckedAccount<'info>,
     /// CHECK: versioning is handled in the instruction
     #[account(mut)]
-    pub mint: AccountInfo<'info>,
+    pub mint: UncheckedAccount<'info>,
     /// CHECK:
     #[account(
         seeds=[mint.key().as_ref()],
         bump,
     )]
-    pub mint_authority: AccountInfo<'info>,
+    pub mint_authority: UncheckedAccount<'info>,
     /// CHECK:
     #[account(mut)]
-    pub metadata: AccountInfo<'info>,
+    pub metadata: UncheckedAccount<'info>,
     /// CHECK: Initialized in Token Metadata Program
     #[account(mut)]
-    pub master_edition: AccountInfo<'info>,
+    pub master_edition: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
     pub sysvar_rent: Sysvar<'info, Rent>,
     /// CHECK:
@@ -479,7 +480,7 @@ pub mod bubblegum {
                         ],
                     )?;
                     invoke(
-                        &spl_token::instruction::initialize_mint(
+                        &spl_token::instruction::initialize_mint2(
                             &spl_token::id(),
                             &ctx.accounts.mint.key(),
                             &ctx.accounts.mint_authority.key(),
@@ -488,7 +489,6 @@ pub mod bubblegum {
                         )?,
                         &[
                             ctx.accounts.token_program.to_account_info(),
-                            ctx.accounts.mint_authority.to_account_info(),
                             ctx.accounts.mint.to_account_info(),
                         ],
                     )?;
@@ -568,7 +568,11 @@ pub mod bubblegum {
                 metadata.name.clone(),
                 metadata.symbol.clone(),
                 metadata.uri.clone(),
-                Some(metadata.creators.iter().map(|c| c.adapt()).collect()),
+                if metadata.creators.len() > 0 {
+                    Some(metadata.creators.iter().map(|c| c.adapt()).collect())
+                } else {
+                    None
+                },
                 metadata.seller_fee_basis_points,
                 true,
                 metadata.is_mutable,

@@ -369,7 +369,6 @@ describe("bubblegum", () => {
           commitment: "confirmed",
         }
       );
-      await logTx(Bubblegum.provider, cancelRedeemTx);
 
       console.log(" - Decompressing leaf");
       redeemIx = await Bubblegum.instruction.redeem(
@@ -397,10 +396,8 @@ describe("bubblegum", () => {
           commitment: "confirmed",
         }
       );
-      await logTx(Bubblegum.provider, redeemTx);
 
       let voucherData = await Bubblegum.account.voucher.fetch(voucher);
-      console.log(voucherData);
 
       let tokenMint = Keypair.generate();
       let [mintAuthority] = await PublicKey.findProgramAddress(
@@ -409,40 +406,36 @@ describe("bubblegum", () => {
       );
 
       const getMetadata = async (
-        mint: anchor.web3.PublicKey,
+        mint: anchor.web3.PublicKey
       ): Promise<anchor.web3.PublicKey> => {
         return (
           await anchor.web3.PublicKey.findProgramAddress(
-            [
-              Buffer.from('metadata'),
-              PROGRAM_ID.toBuffer(),
-              mint.toBuffer(),
-            ],
-            PROGRAM_ID,
+            [Buffer.from("metadata"), PROGRAM_ID.toBuffer(), mint.toBuffer()],
+            PROGRAM_ID
           )
         )[0];
       };
-      
+
       const getMasterEdition = async (
-        mint: anchor.web3.PublicKey,
+        mint: anchor.web3.PublicKey
       ): Promise<anchor.web3.PublicKey> => {
         return (
           await anchor.web3.PublicKey.findProgramAddress(
             [
-              Buffer.from('metadata'),
+              Buffer.from("metadata"),
               PROGRAM_ID.toBuffer(),
               mint.toBuffer(),
-              Buffer.from('edition'),
+              Buffer.from("edition"),
             ],
-            PROGRAM_ID,
+            PROGRAM_ID
           )
         )[0];
       };
 
       let decompressIx = await Bubblegum.instruction.decompress(metadata, {
         accounts: {
-          owner: payer.publicKey,
           voucher: voucher,
+          owner: payer.publicKey,
           tokenAccount: await getAssociatedTokenAddress(
             tokenMint.publicKey,
             payer.publicKey
@@ -472,7 +465,6 @@ describe("bubblegum", () => {
         }
       );
 
-      await logTx(Bubblegum.provider, decompressTx);
     });
   });
 });
