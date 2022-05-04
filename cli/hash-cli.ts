@@ -2,7 +2,7 @@ import { Keypair, PublicKey } from '@solana/web3.js';
 import { program } from 'commander';
 import log from 'loglevel';
 import { buildTree } from '../tests/merkle-tree';
-import { writeHashes, loadMessages, hashMessages, loadLeaves, writeTree, writeMetadata } from './utils';
+import { writeHashes, loadMessages, hashMessages, loadLeaves, writeTree, writeMetadata } from './helpers/utils';
 
 program.version('0.0.1');
 log.setLevel('DEBUG');
