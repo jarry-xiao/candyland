@@ -3,24 +3,29 @@ import { keccak_256 } from "js-sha3";
 import { BN, Provider, Program } from "@project-serum/anchor";
 import { Bubblegum } from "../target/types/bubblegum";
 import { Gummyroll } from "../target/types/gummyroll";
+import { PROGRAM_ID } from "@metaplex-foundation/mpl-token-metadata";
 import {
   PublicKey,
   Keypair,
   SystemProgram,
   Transaction,
   Connection as web3Connection,
+  SYSVAR_RENT_PUBKEY,
 } from "@solana/web3.js";
 import { assert } from "chai";
 
-import {
-  buildTree,
-  Tree,
-} from "./merkle-tree";
+import { buildTree, Tree } from "./merkle-tree";
 import {
   decodeMerkleRoll,
   getMerkleRollAccountSize,
 } from "./merkle-roll-serde";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
+import { getAssociatedTokenAddress } from "../deps/solana-program-library/token/js/src";
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+} from "@solana/spl-token";
+import { logTx } from "./utils";
 
 // @ts-ignore
 let Bubblegum;
@@ -364,6 +369,110 @@ describe("bubblegum", () => {
           commitment: "confirmed",
         }
       );
+      await logTx(Bubblegum.provider, cancelRedeemTx);
+
+      console.log(" - Decompressing leaf");
+      redeemIx = await Bubblegum.instruction.redeem(
+        onChainRoot,
+        leafHash,
+        new BN(0),
+        0,
+        {
+          accounts: {
+            authority: treeAuthority,
+            owner: payer.publicKey,
+            delegate: payer.publicKey,
+            gummyrollProgram: GummyrollProgramId,
+            merkleSlab: merkleRollKeypair.publicKey,
+            voucher: voucher,
+            systemProgram: SystemProgram.programId,
+          },
+          signers: [payer],
+        }
+      );
+      redeemTx = await Bubblegum.provider.send(
+        new Transaction().add(redeemIx),
+        [payer],
+        {
+          commitment: "confirmed",
+        }
+      );
+      await logTx(Bubblegum.provider, redeemTx);
+
+      let voucherData = await Bubblegum.account.voucher.fetch(voucher);
+      console.log(voucherData);
+
+      let tokenMint = Keypair.generate();
+      let [mintAuthority] = await PublicKey.findProgramAddress(
+        [tokenMint.publicKey.toBuffer()],
+        Bubblegum.programId
+      );
+
+      const getMetadata = async (
+        mint: anchor.web3.PublicKey,
+      ): Promise<anchor.web3.PublicKey> => {
+        return (
+          await anchor.web3.PublicKey.findProgramAddress(
+            [
+              Buffer.from('metadata'),
+              PROGRAM_ID.toBuffer(),
+              mint.toBuffer(),
+            ],
+            PROGRAM_ID,
+          )
+        )[0];
+      };
+      
+      const getMasterEdition = async (
+        mint: anchor.web3.PublicKey,
+      ): Promise<anchor.web3.PublicKey> => {
+        return (
+          await anchor.web3.PublicKey.findProgramAddress(
+            [
+              Buffer.from('metadata'),
+              PROGRAM_ID.toBuffer(),
+              mint.toBuffer(),
+              Buffer.from('edition'),
+            ],
+            PROGRAM_ID,
+          )
+        )[0];
+      };
+
+      let decompressIx = await Bubblegum.instruction.decompress(metadata, {
+        accounts: {
+          owner: payer.publicKey,
+          voucher: voucher,
+          tokenAccount: await getAssociatedTokenAddress(
+            tokenMint.publicKey,
+            payer.publicKey
+          ),
+          mint: tokenMint.publicKey,
+          mintAuthority: mintAuthority,
+          metadata: await getMetadata(tokenMint.publicKey),
+          masterEdition: await getMasterEdition(tokenMint.publicKey),
+          systemProgram: SystemProgram.programId,
+          sysvarRent: SYSVAR_RENT_PUBKEY,
+          tokenMetadataProgram: PROGRAM_ID,
+          tokenProgram: TOKEN_PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        },
+        signers: [payer],
+      });
+
+      // Hack to get this to work
+      buf = Buffer.alloc(2);
+      decompressIx.data = Buffer.concat([decompressIx.data, buf]);
+      decompressIx.keys[3].isSigner = true;
+      let decompressTx = await Bubblegum.provider.send(
+        new Transaction().add(decompressIx),
+        [payer, tokenMint],
+        {
+          commitment: "confirmed",
+        }
+      );
+
+      await logTx(Bubblegum.provider, decompressTx);
     });
   });
 });
