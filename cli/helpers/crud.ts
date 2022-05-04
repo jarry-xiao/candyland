@@ -8,7 +8,7 @@ import {
 import {
     getMerkleRollAccountSize
 } from '../../tests/merkle-roll-serde';
-import { hash, getProofOfAssetFromServer, getRootFromServer } from '../../tests/merkle-tree';
+import { hash, getProofOfAssetFromServer, getRootFromServer, checkProof } from '../../tests/merkle-tree';
 import { Gummyroll, IDL as GUMMYROLL_IDL } from '../../target/types/gummyroll';
 import { GummyrollCrud, IDL as GUMMYROLL_CRUD_IDL } from '../../target/types/gummyroll_crud';
 import log from 'loglevel';
@@ -238,6 +238,10 @@ export async function transferMessageOwner(
 
     const proofInfo = await getProofOfAssetFromServer(proofUrl, treeAddress, index);
 
+    if (!checkProof(index, proofInfo.root, proofInfo.hash, proofInfo.proof)) {
+        throw new Error("Hash did not match!")
+    }
+
     const root = new PublicKey(proofInfo.root).toBuffer();
     const leafHash = getLeafHash(owner, message);
 
@@ -260,15 +264,9 @@ export async function transferMessageOwner(
     );
     const signers = [treeAdminKeypair];
 
-    const bleh = [237, 14, 89, 190, 201, 41, 240, 137, 59, 85, 51, 244, 56, 145, 251, 130, 177, 180, 16, 195, 233, 162, 157, 203, 219, 234, 183, 96, 82, 79, 234, 224]
-    const onChainLeaf = Buffer.from(Uint8Array.from(bleh));
-
-    console.log("Found:", new PublicKey(onChainLeaf).toString());
-    console.log("Expected:", new PublicKey(onChainLeaf).toString());
-    console.log("Calculated:", new PublicKey(leafHash).toString());
-
+    log.info("Submitting transfer");
     log.info(`${owner.toString()} -> ${newOwner.toString()}: "${message}"`)
-    const removeIx = gummyrollCrud.instruction.transfer(
+    const transferIx = gummyrollCrud.instruction.transfer(
         Array.from(root),
         Buffer.from(message),
         index,
@@ -285,7 +283,7 @@ export async function transferMessageOwner(
             remainingAccounts: nodeProof,
         }
     );
-    const tx = new Transaction().add(removeIx);
+    const tx = new Transaction().add(transferIx);
     const transferTxId = await gummyrollCrud.provider.send(tx, signers, {
         commitment: "confirmed",
         skipPreflight: true,

@@ -5,15 +5,15 @@ import {
     SystemProgram,
     PublicKey, Connection as web3Connection,
 } from "@solana/web3.js";
-import {assert, expect} from "chai";
-import {Gummyroll} from "../target/types/gummyroll";
-import {GummyrollCrud} from "../target/types/gummyroll_crud";
-import {Program, Provider} from "@project-serum/anchor";
+import { assert, expect } from "chai";
+import { Gummyroll } from "../target/types/gummyroll";
+import { GummyrollCrud } from "../target/types/gummyroll_crud";
+import { Program, Provider } from "@project-serum/anchor";
 import {
     decodeMerkleRoll,
     getMerkleRollAccountSize,
 } from "./merkle-roll-serde";
-import {buildTree, getProofOfLeaf, hash, updateTree} from "./merkle-tree";
+import { buildTree, getProofOfLeaf, hash, updateTree } from "./merkle-tree";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 
 // @ts-ignore
@@ -21,7 +21,7 @@ let Gummyroll;
 // @ts-ignore
 let GummyrollCrud;
 
-describe("Gummyroll CRUD program",  () => {
+describe("Gummyroll CRUD program", () => {
 
     const MAX_DEPTH = 14;
     const MAX_BUFFER_SIZE = 64;
@@ -35,7 +35,7 @@ describe("Gummyroll CRUD program",  () => {
             commitment: 'confirmed'
         }
     );
-    anchor.setProvider(new Provider(connection, wallet, {commitment: connection.commitment, skipPreflight: true}));
+    anchor.setProvider(new Provider(connection, wallet, { commitment: connection.commitment, skipPreflight: true }));
 
     Gummyroll = anchor.workspace.Gummyroll as Program<Gummyroll>;
     GummyrollCrud = anchor.workspace.GummyrollCrud as Program<GummyrollCrud>;
@@ -220,7 +220,7 @@ describe("Gummyroll CRUD program",  () => {
             const attackerKeypair = Keypair.generate();
             try {
                 await appendAsset(treeKeypair.publicKey, treeAdminKeypair, "Fake NFT", {
-                    overrides: {signer: attackerKeypair},
+                    overrides: { signer: attackerKeypair },
                 });
                 assert(
                     false,
@@ -296,7 +296,7 @@ describe("Gummyroll CRUD program",  () => {
                 treeAddress,
                 treeAdmin
             );
-            const proofPubkeys = getProofOfLeaf(tree, index).map(({node}) => ({
+            const proofPubkeys = getProofOfLeaf(tree).map(({ node }) => ({
                 pubkey: new PublicKey(node),
                 isSigner: false,
                 isWritable: false,
@@ -305,7 +305,7 @@ describe("Gummyroll CRUD program",  () => {
             const transferIx = GummyrollCrud.instruction.transfer(
                 Buffer.from(tree.root, 0, 32),
                 Buffer.from(config.overrides?.message ?? message),
-                0,
+                index,
                 {
                     accounts: {
                         authority: treeAdmin,
@@ -377,7 +377,7 @@ describe("Gummyroll CRUD program",  () => {
                     newOwnerPubkey,
                     0,
                     {
-                        overrides: {message: "mOdIfIeD mEsSaGe"},
+                        overrides: { message: "mOdIfIeD mEsSaGe" },
                     }
                 );
                 assert(
@@ -416,7 +416,7 @@ describe("Gummyroll CRUD program",  () => {
                     thiefKeypair.publicKey,
                     0,
                     {
-                        overrides: {signer: thiefKeypair},
+                        overrides: { signer: thiefKeypair },
                     }
                 );
                 assert(
@@ -436,7 +436,7 @@ describe("Gummyroll CRUD program",  () => {
             index: number,
             config: { overrides?: { leafHash?: Buffer; signer?: Keypair } } = {}
         ) {
-            const proofPubkeys = getProofOfLeaf(tree, index).map(({node}) => ({
+            const proofPubkeys = getProofOfLeaf(tree, index).map(({ node }) => ({
                 pubkey: new PublicKey(node),
                 isSigner: false,
                 isWritable: false,
@@ -505,7 +505,7 @@ describe("Gummyroll CRUD program",  () => {
             );
             try {
                 await removeAsset(treeKeypair.publicKey, treeAdminKeypair, 0, {
-                    overrides: {leafHash: Buffer.alloc(32, 0)},
+                    overrides: { leafHash: Buffer.alloc(32, 0) },
                 });
                 assert(
                     false,
@@ -537,7 +537,7 @@ describe("Gummyroll CRUD program",  () => {
             );
             try {
                 await removeAsset(treeKeypair.publicKey, treeAdminKeypair, 0, {
-                    overrides: {signer: attackerKeypair},
+                    overrides: { signer: attackerKeypair },
                 });
                 assert(
                     false,

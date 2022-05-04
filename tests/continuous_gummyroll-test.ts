@@ -10,11 +10,11 @@ import {
 } from "@solana/web3.js";
 import { assert } from "chai";
 
-import { buildTree, getProofOfLeaf, updateTree, Tree, getProofOfAssetFromServer } from "./merkle-tree";
+import { buildTree, getProofOfLeaf, updateTree, Tree, getProofOfAssetFromServer, checkProof } from "./merkle-tree";
 import { decodeMerkleRoll, getMerkleRollAccountSize } from "./merkle-roll-serde";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 
-const HOST = "<add here>";
+const HOST = "<undefined>";
 const TREE_RPC_HOST = HOST;
 const CONNECTION_URL = `http://${HOST}:8899`;
 const TREE_RPC_PORT = "9090";
@@ -137,6 +137,8 @@ describe("gummyroll-continuous", () => {
     let newLeaf = Buffer.alloc(32, Buffer.from(Uint8Array.from([1 + leafIdx])));
 
     const assetProof = await getProofOfAssetFromServer(PROOF_URL, merkleRollKeypair.publicKey, leafIdx);
+    checkProof(leafIdx, assetProof.root, assetProof.hash, assetProof.proof);
+
     const nodeProof = assetProof.proof.map((node) => { return { pubkey: new PublicKey(node), isSigner: false, isWritable: false } });
     const replaceLeafIx = Gummyroll.instruction.replaceLeaf(
       { inner: Array.from(new PublicKey(assetProof.root).toBuffer()) },
@@ -153,40 +155,6 @@ describe("gummyroll-continuous", () => {
       }
     );
     return replaceLeafIx;
-  }
-
-  function createInsertOrAppendIx(tree: Tree, merkleRollKeypair: Keypair, payer: Keypair, i: number) {
-    /// Empty nodes are special, so we have to create non-zero leaf for index 0
-    let newLeaf = Buffer.alloc(32, Buffer.from(Uint8Array.from([1 + i])));
-    let nodeProof = getProofOfLeaf(tree, i).map((node) => { return { pubkey: new PublicKey(node.node), isSigner: false, isWritable: false } });
-    return Gummyroll.instruction.insertOrAppend(
-      { inner: Array.from(tree.root) },
-      { inner: Array.from(newLeaf) },
-      i,
-      {
-        accounts: {
-          merkleRoll: merkleRollKeypair.publicKey,
-          authority: payer.publicKey,
-        },
-        signers: [payer],
-        remainingAccounts: nodeProof,
-      }
-    );
-  }
-
-  function createAppend(merkleRollKeypair: Keypair, payer: Keypair, i: number) {
-    let newLeaf = Buffer.alloc(32, Buffer.from(Uint8Array.from([1 + i])));
-    return Gummyroll.instruction.append(
-      { inner: Array.from(newLeaf) },
-      {
-        accounts: {
-          merkleRoll: merkleRollKeypair.publicKey,
-          authority: payer.publicKey,
-          appendAuthority: payer.publicKey,
-        },
-        signers: [payer],
-      }
-    );
   }
 
   it(`${MAX_SIZE} leaves replaced in batches of ${BATCH_SIZE}`, async () => {

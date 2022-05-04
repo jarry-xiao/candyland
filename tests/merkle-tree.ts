@@ -285,3 +285,22 @@ export async function getRootFromServer(endpoint: string, treeId: PublicKey): Pr
     let object = await fetch(url, { method: "GET", }).then(resp => resp.json());
     return object.data as string;
 }
+
+export function checkProof(index: number, root: string, leaf: string, proof: string[], verbose = false) {
+    let node = new PublicKey(leaf).toBuffer();
+    for (let i = 0; i < proof.length; i++) {
+        if ((index >> i) % 2 === 0) {
+            node = hash(node, new PublicKey(proof[i]).toBuffer());
+        } else {
+            node = hash(new PublicKey(proof[i]).toBuffer(), node);
+        }
+        if (verbose) console.log(`${new PublicKey(node).toString()}`)
+    }
+    const rehashed = new PublicKey(node).toString()
+    const received = new PublicKey(root).toString();
+    if (verbose) console.log(`\n${rehashed}\n${received}`)
+    if (rehashed !== received) {
+        throw new Error("Roots don't match!!!")
+    }
+    return rehashed === received;
+}
