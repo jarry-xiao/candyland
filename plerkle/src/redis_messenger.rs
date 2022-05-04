@@ -1,6 +1,16 @@
 use {
-    crate::{error::PlerkleError, programs::gummy_roll::handle_change_log_event},
+    crate::{
+        account_info_generated::account_info::{AccountInfo, AccountInfoArgs, root_as_account_info},
+        block_info_generated,
+        error::PlerkleError,
+        programs::gummy_roll::handle_change_log_event,
+        slot_status_info_generated::slot_status_info::{self, SlotStatusInfo, SlotStatusInfoArgs},
+        transaction_info_generated::transaction_info::{
+            self, TransactionInfo, TransactionInfoArgs,
+        },
+    },
     anchor_client::anchor_lang::AnchorDeserialize,
+    flatbuffers::FlatBufferBuilder,
     log::*,
     messenger::Messenger,
     redis::{streams::StreamMaxlen, Commands, Connection, RedisResult, ToRedisArgs},
@@ -8,6 +18,7 @@ use {
         GeyserPluginError, ReplicaAccountInfo, ReplicaBlockInfo, ReplicaTransactionInfo, Result,
         SlotStatus,
     },
+    solana_runtime::bank::RewardType,
     solana_sdk::{instruction::CompiledInstruction, keccak, pubkey::Pubkey},
     std::{
         collections::HashMap,
@@ -124,179 +135,252 @@ impl Messenger for RedisMessenger {
 
     fn send_account(
         &self,
-        _account: &ReplicaAccountInfo,
-        _slot: u64,
-        _is_startup: bool,
+        account: &ReplicaAccountInfo,
+        slot: u64,
+        is_startup: bool,
     ) -> Result<()> {
+        let mut builder = FlatBufferBuilder::new();
+
+        let pubkey = builder.create_vector(account.pubkey);
+        let owner = builder.create_vector(account.owner);
+        let data = builder.create_vector(account.data);
+
+        let account_info = AccountInfo::create(
+            &mut builder,
+            &AccountInfoArgs {
+                pubkey: Some(pubkey),
+                lamports: account.lamports,
+                owner: Some(owner),
+                executable: account.executable,
+                rent_epoch: account.rent_epoch,
+                data: Some(data),
+                write_version: account.write_version,
+                slot,
+                is_startup,
+            },
+        );
+
+        builder.finish(account_info, None);
+        let _serialized_data = builder.finished_data();
+
         Ok(())
     }
 
-    fn send_slot_status(
-        &self,
-        _slot: u64,
-        _parent: Option<u64>,
-        _status: SlotStatus,
-    ) -> Result<()> {
+    fn send_slot_status(&self, slot: u64, parent: Option<u64>, status: SlotStatus) -> Result<()> {
+        let mut builder = FlatBufferBuilder::new();
+
+        let status = match status {
+            SlotStatus::Confirmed => slot_status_info::Status::Confirmed,
+            SlotStatus::Processed => slot_status_info::Status::Processed,
+            SlotStatus::Rooted => slot_status_info::Status::Rooted,
+        };
+
+        let slot_status = SlotStatusInfo::create(
+            &mut builder,
+            &SlotStatusInfoArgs {
+                slot,
+                parent,
+                status,
+            },
+        );
+
+        builder.finish(slot_status, None);
+        let _serialized_data = builder.finished_data();
+
         Ok(())
     }
 
     fn send_transaction(
         &mut self,
         transaction_info: &ReplicaTransactionInfo,
-        _slot: u64,
+        slot: u64,
     ) -> Result<()> {
-        // Handle log parsing.
-        let keys = transaction_info.transaction.message().account_keys();
-        if keys.iter().any(|v| v == &program_ids::gummy_roll()) {
-            println!("Found GM CL event");
-            let maxlen = StreamMaxlen::Approx(55000);
-            let change_log_event = handle_change_log_event(&transaction_info);
-            if change_log_event.is_ok() {
-                change_log_event.unwrap().iter().for_each(|ev| {
-                    let res: RedisResult<()> = self.connection.as_mut().unwrap().xadd_maxlen(
-                        "GM_CL",
-                        maxlen,
-                        "*",
-                        &[("data", ev)],
-                    );
-                    if res.is_err() {
-                        error!("{}", res.err().unwrap());
-                    } else {
-                        info!("Data Sent")
-                    }
-                });
-            } else {
-                println!("Could not handle change log event");
+        let mut builder = FlatBufferBuilder::new();
+
+        // Flatten and serialize account keys.
+        let account_keys = transaction_info.transaction.message().account_keys();
+        let account_keys_len = account_keys.len();
+
+        let account_keys = if account_keys_len > 0 {
+            let mut account_keys_fb_vec = Vec::with_capacity(account_keys_len);
+            for key in account_keys.iter() {
+                account_keys_fb_vec.push(transaction_info::Pubkey::new(&key.to_bytes()));
             }
-        }
+            Some(builder.create_vector(&account_keys_fb_vec))
+        } else {
+            None
+        };
 
-        // Handle Instruction Parsing
-        let instructions = Self::order_instructions(&transaction_info);
+        // Serialize log messages.
+        let log_messages = if let Some(log_messages) = transaction_info
+            .transaction_status_meta
+            .log_messages
+            .as_ref()
+        {
+            let mut log_messages_fb_vec = Vec::with_capacity(log_messages.len());
+            for message in log_messages {
+                log_messages_fb_vec.push(builder.create_string(&message));
+            }
+            Some(builder.create_vector(&log_messages_fb_vec))
+        } else {
+            None
+        };
 
-        for program_instruction in instructions {
-            match program_instruction {
-                (program, instruction) if program == program_ids::gummy_roll_crud() => {
-                    let maxlen = StreamMaxlen::Approx(5000);
-                    let _message = match gummyroll_crud::get_instruction_type(&instruction.data) {
-                        gummyroll_crud::InstructionName::CreateTree => {
-                            warn!("yo yo yo yo");
-                            let tree_id = keys.index(instruction.accounts[3] as usize);
-                            let auth = keys.index(instruction.accounts[0] as usize);
-                            let res: RedisResult<()> =
-                                self.connection.as_mut().unwrap().xadd_maxlen(
-                                    "GMC_OP",
-                                    maxlen,
-                                    "*",
-                                    &[
-                                        ("op", "create"),
-                                        ("tree_id", &*tree_id.to_string()),
-                                        ("authority", &*auth.to_string()),
-                                    ],
-                                );
-                            if res.is_err() {
-                                error!("{}", res.err().unwrap());
-                            } else {
-                                info!("Data Sent")
-                            }
-                        }
-                        gummyroll_crud::InstructionName::Add => {
-                            let data = instruction.data[8..].to_owned();
-                            let data_buf = &mut data.as_slice();
-                            let add: gummyroll_crud::instruction::Add =
-                                gummyroll_crud::instruction::Add::deserialize(data_buf).unwrap();
-                            let tree_id = keys.index(instruction.accounts[3] as usize);
-                            let owner = keys.index(instruction.accounts[0] as usize);
-                            let hex_message = hex::encode(&add.message);
-                            let leaf = keccak::hashv(&[&owner.to_bytes(), add.message.as_slice()]);
-                            let res: RedisResult<()> =
-                                self.connection.as_mut().unwrap().xadd_maxlen(
-                                    "GMC_OP",
-                                    maxlen,
-                                    "*",
-                                    &[
-                                        ("op", "add"),
-                                        ("tree_id", &*tree_id.to_string()),
-                                        ("leaf", &*leaf.to_string()),
-                                        ("msg", &*hex_message),
-                                        ("owner", &*owner.to_string()),
-                                    ],
-                                );
-                            if res.is_err() {
-                                error!("{}", res.err().unwrap());
-                            } else {
-                                info!("Data Sent")
-                            }
-                        }
-                        gummyroll_crud::InstructionName::Transfer => {
-                            let data = instruction.data[8..].to_owned();
-                            let data_buf = &mut data.as_slice();
-                            let add: gummyroll_crud::instruction::Transfer =
-                                gummyroll_crud::instruction::Transfer::deserialize(data_buf)
-                                    .unwrap();
-                            let tree_id = keys.index(instruction.accounts[3] as usize);
-                            let owner = keys.index(instruction.accounts[4] as usize);
-                            let new_owner = keys.index(instruction.accounts[5] as usize);
-                            let hex_message = hex::encode(&add.message);
-                            let leaf =
-                                keccak::hashv(&[&new_owner.to_bytes(), add.message.as_slice()]);
-                            let res: RedisResult<()> =
-                                self.connection.as_mut().unwrap().xadd_maxlen(
-                                    "GMC_OP",
-                                    maxlen,
-                                    "*",
-                                    &[
-                                        ("op", "tran"),
-                                        ("tree_id", &*tree_id.to_string()),
-                                        ("leaf", &*leaf.to_string()),
-                                        ("msg", &*hex_message),
-                                        ("owner", &*owner.to_string()),
-                                        ("new_owner", &*new_owner.to_string()),
-                                    ],
-                                );
-                            if res.is_err() {
-                                error!("{}", res.err().unwrap());
-                            } else {
-                                info!("Data Sent")
-                            }
-                        }
-                        gummyroll_crud::InstructionName::Remove => {
-                            let data = instruction.data[8..].to_owned();
-                            let data_buf = &mut data.as_slice();
-                            let remove: gummyroll_crud::instruction::Remove =
-                                gummyroll_crud::instruction::Remove::deserialize(data_buf).unwrap();
-                            let tree_id = keys.index(instruction.accounts[3] as usize);
-                            let owner = keys.index(instruction.accounts[0] as usize);
-                            let leaf = bs58::encode(&remove.leaf_hash).into_string();
-                            let res: RedisResult<()> =
-                                self.connection.as_mut().unwrap().xadd_maxlen(
-                                    "GMC_OP",
-                                    maxlen,
-                                    "*",
-                                    &[
-                                        ("op", "rm"),
-                                        ("tree_id", &*tree_id.to_string()),
-                                        ("leaf", &*leaf.to_string()),
-                                        ("msg", ""),
-                                        ("owner", &*owner.to_string()),
-                                    ],
-                                );
-                            if res.is_err() {
-                                error!("{}", res.err().unwrap());
-                            } else {
-                                info!("Data Sent")
-                            }
-                        }
-                        _ => {}
-                    };
+        // Serialize inner instructions.
+        let inner_instructions = if let Some(inner_instructions_vec) = transaction_info
+            .transaction_status_meta
+            .inner_instructions
+            .as_ref()
+        {
+            let mut overall_fb_vec = Vec::with_capacity(inner_instructions_vec.len());
+            for inner_instructions in inner_instructions_vec.iter() {
+                let index = inner_instructions.index;
+                let mut instructions_fb_vec =
+                    Vec::with_capacity(inner_instructions.instructions.len());
+                for compiled_instruction in inner_instructions.instructions.iter() {
+                    let program_id_index = compiled_instruction.program_id_index;
+                    let accounts = Some(builder.create_vector(&compiled_instruction.accounts));
+                    let data = Some(builder.create_vector(&compiled_instruction.data));
+                    instructions_fb_vec.push(transaction_info::CompiledInstruction::create(
+                        &mut builder,
+                        &transaction_info::CompiledInstructionArgs {
+                            program_id_index,
+                            accounts,
+                            data,
+                        },
+                    ));
                 }
-                _ => {}
-            };
+
+                let instructions = Some(builder.create_vector(&instructions_fb_vec));
+                overall_fb_vec.push(transaction_info::InnerInstructions::create(
+                    &mut builder,
+                    &transaction_info::InnerInstructionsArgs {
+                        index,
+                        instructions,
+                    },
+                ))
+            }
+
+            Some(builder.create_vector(&overall_fb_vec))
+        } else {
+            None
+        };
+
+        // Serialize outer instructions.
+        let outer_instructions = transaction_info.transaction.message().instructions();
+        let outer_instructions = if outer_instructions.len() > 0 {
+            let mut instructions_fb_vec = Vec::with_capacity(outer_instructions.len());
+            for compiled_instruction in outer_instructions.iter() {
+                let program_id_index = compiled_instruction.program_id_index;
+                let accounts = Some(builder.create_vector(&compiled_instruction.accounts));
+                let data = Some(builder.create_vector(&compiled_instruction.data));
+                instructions_fb_vec.push(transaction_info::CompiledInstruction::create(
+                    &mut builder,
+                    &transaction_info::CompiledInstructionArgs {
+                        program_id_index,
+                        accounts,
+                        data,
+                    },
+                ));
+            }
+            Some(builder.create_vector(&instructions_fb_vec))
+        } else {
+            None
+        };
+
+        // Serialize everything into Transaction Info.
+        let transaction_info = TransactionInfo::create(
+            &mut builder,
+            &TransactionInfoArgs {
+                is_vote: transaction_info.is_vote,
+                account_keys,
+                log_messages,
+                inner_instructions,
+                outer_instructions,
+                slot,
+            },
+        );
+
+        builder.finish(transaction_info, None);
+        let serialized_data = builder.finished_data();
+
+        // Put serialized data into Redis.
+        let res: RedisResult<()> = self.connection.as_mut().unwrap().xadd_maxlen(
+            "TX",
+            StreamMaxlen::Approx(55000),
+            "*",
+            &[("data", serialized_data)],
+        );
+        if res.is_err() {
+            error!("{}", res.err().unwrap());
+        } else {
+            info!("Data Sent");
         }
 
         Ok(())
     }
 
-    fn send_block(&mut self, _block_info: &ReplicaBlockInfo) -> Result<()> {
+    fn send_block(&mut self, block_info: &ReplicaBlockInfo) -> Result<()> {
+        let mut builder = FlatBufferBuilder::new();
+
+        let blockhash = Some(builder.create_string(&block_info.blockhash));
+        let rewards = if block_info.rewards.len() > 0 {
+            let mut rewards_fb_vec = Vec::with_capacity(block_info.rewards.len());
+            for reward in block_info.rewards.iter() {
+                let pubkey = Some(builder.create_vector(reward.pubkey.as_bytes()));
+                let lamports = reward.lamports;
+                let post_balance = reward.post_balance;
+
+                let reward_type = if let Some(reward) = reward.reward_type {
+                    match reward {
+                        RewardType::Fee => Some(block_info_generated::block_info::RewardType::Fee),
+                        RewardType::Rent => {
+                            Some(block_info_generated::block_info::RewardType::Rent)
+                        }
+                        RewardType::Staking => {
+                            Some(block_info_generated::block_info::RewardType::Staking)
+                        }
+                        RewardType::Voting => {
+                            Some(block_info_generated::block_info::RewardType::Voting)
+                        }
+                    }
+                } else {
+                    None
+                };
+
+                let commission = reward.commission;
+
+                rewards_fb_vec.push(block_info_generated::block_info::Reward::create(
+                    &mut builder,
+                    &block_info_generated::block_info::RewardArgs {
+                        pubkey,
+                        lamports,
+                        post_balance,
+                        reward_type,
+                        commission,
+                    },
+                ));
+            }
+            Some(builder.create_vector(&rewards_fb_vec))
+        } else {
+            None
+        };
+
+        let block_info = block_info_generated::block_info::BlockInfo::create(
+            &mut builder,
+            &block_info_generated::block_info::BlockInfoArgs {
+                slot: block_info.slot,
+                blockhash,
+                rewards,
+                block_time: block_info.block_time,
+                block_height: block_info.block_height,
+            },
+        );
+
+        builder.finish(block_info, None);
+
+        let _serialized_data = builder.finished_data();
+
         Ok(())
     }
 

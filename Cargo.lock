@@ -1133,6 +1133,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "flatbuffers"
+version = "2.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86b428b715fdbdd1c364b84573b5fdc0f84f8e423661b9f398735278bc7f2b6a"
+dependencies = [
+ "bitflags",
+ "smallvec",
+ "thiserror",
+]
+
+[[package]]
 name = "flate2"
 version = "1.0.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2251,6 +2262,7 @@ dependencies = [
  "base64 0.13.0",
  "bs58 0.4.0",
  "bytemuck",
+ "flatbuffers",
  "gummyroll",
  "gummyroll-crud",
  "hex",
