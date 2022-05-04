@@ -55,6 +55,7 @@ struct AssetDAO {
     pub tree: Vec<u8>,
     pub admin: Vec<u8>,
     pub hash: Vec<u8>,
+    pub level: i64
 }
 
 #[derive(Serialize)]
@@ -117,7 +118,7 @@ fn asset_list_to_view(items: Vec<AssetDAO>) -> Vec<AssetView> {
 
 fn asset_to_view(r: AssetDAO) -> AssetView {
     AssetView {
-        index: r.index,
+        index: node_idx_to_leaf_idx(r.index, r.level as u32),
         treeAccount: bs58::encode(r.tree).into_string(),
         owner: bs58::encode(r.owner).into_string().to_string(),
         treeAdmin: bs58::encode(r.admin).into_string().to_string(),
@@ -126,8 +127,12 @@ fn asset_to_view(r: AssetDAO) -> AssetView {
     }
 }
 
-fn node_idx_to_leaf_idx(index: i64, tree_height: u32) -> i64 {
+fn leaf_idx_to_node_idx(index: i64, tree_height: u32) -> i64 {
     index + 2i64.pow(tree_height)
+}
+
+fn node_idx_to_leaf_idx(index: i64, tree_height: u32) -> i64 {
+    index - 2i64.pow(tree_height)
 }
 
 /// Takes in an index from leaf-space
@@ -136,11 +141,11 @@ async fn handle_get_asset(
 ) -> Result<Response<Body>, routerify_json_response::Error> {
     let db: &Pool<Postgres> = req.data::<Pool<Postgres>>().unwrap();
     let tree_id = decode_b58_param(req.param("tree_id").unwrap()).unwrap();
-    let index = req.param("index").unwrap().parse::<i64>().unwrap();
+    let leaf_idx = req.param("index").unwrap().parse::<i64>().unwrap();
 
     let tree_height = get_height(db, &tree_id).await.unwrap();
-    let leaf_index = node_idx_to_leaf_idx(index, tree_height);
-    let result = get_asset(db, &tree_id, leaf_index).await;
+    let node_idx = leaf_idx_to_node_idx(leaf_idx, tree_height);
+    let result = get_asset(db, &tree_id, node_idx).await;
     if result.is_err() {
         return json_failed_resp_with_message(
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -158,11 +163,12 @@ async fn handler_get_assets_for_owner(
     let owner = decode_b58_param(req.param("owner").unwrap()).unwrap();
 
     let results = sqlx::query_as::<_, AssetDAO>(r#"
-    select a.msg as data, c.node_idx as index, a.owner, a.tree_id as tree , aso.authority as admin, a.leaf as hash, max(seq) as seq from app_specific as a
+    select a.msg as data, c.node_idx as index, a.owner, a.tree_id as tree , aso.authority as admin, a.leaf as hash, max(c.seq) as seq, c2.level as level from app_specific as a
     join cl_items as c on c.tree = a.tree_id and c.hash = a.leaf
     join app_specific_ownership aso on a.tree_id = aso.tree_id
-    where a.owner = $1
-    group by c.node_idx, a.msg, a.owner, a.tree_id, aso.authority, a.leaf
+    join cl_items as c2 on c2.tree = c.tree
+    where a.owner = $1 and c2.node_idx = 1
+    group by c.node_idx, a.msg, a.owner, a.tree_id, aso.authority, a.leaf, c2.level
     order by seq"#
     )
         .bind(owner)
@@ -233,14 +239,14 @@ async fn handle_get_asset_proof(
     let db: &Pool<Postgres> = req.data::<Pool<Postgres>>().unwrap();
     let tree_id = decode_b58_param(req.param("tree_id").unwrap()).unwrap();
 
-    let index = req.param("index").unwrap().parse::<i64>().unwrap();
+    let leaf_idx = req.param("index").unwrap().parse::<i64>().unwrap();
 
     let tree_height = get_height(db, &tree_id).await.unwrap();
-    let leaf_index = node_idx_to_leaf_idx(index, tree_height);
+    let node_idx = leaf_idx_to_node_idx(leaf_idx, tree_height);
 
     let root_result = get_root(db, &tree_id).await;
-    let result = get_asset(db, &tree_id, leaf_index).await;
-    let proof: Result<Vec<String>, ApiError> = get_proof(db, &tree_id, leaf_index)
+    let result = get_asset(db, &tree_id, node_idx).await;
+    let proof: Result<Vec<String>, ApiError> = get_proof(db, &tree_id, node_idx)
         .await
         .map(|p| p.iter().map(|node| node.hash.clone()).collect());
 
@@ -304,20 +310,21 @@ async fn get_root(db: &Pool<Postgres>, tree_id: &Vec<u8>) -> Result<String, ApiE
 async fn get_asset(
     db: &Pool<Postgres>,
     tree_id: &Vec<u8>,
-    index: i64,
+    node_idx: i64,
 ) -> Result<AssetView, ApiError> {
     let result = sqlx::query_as::<_, AssetDAO>(r#"
-    select a.msg as data, c.node_idx as index, a.owner, a.tree_id as tree , aso.authority as admin, a.leaf as hash, max(seq) as seq from app_specific as a
+    select a.msg as data, c.node_idx as index, a.owner, a.tree_id as tree , aso.authority as admin, a.leaf as hash, max(c.seq) as seq, c2.level as level from app_specific as a
             join cl_items as c on c.tree = a.tree_id and c.hash = a.leaf
             join app_specific_ownership aso on a.tree_id = aso.tree_id
-    where a.tree_id = $1 AND c.node_idx = $2
-    group by c.node_idx, a.msg, a.owner, a.tree_id, aso.authority, a.leaf
+            join cl_items as c2 on c2.tree = c.tree
+    where a.tree_id = $1 AND c.node_idx = $2 and c2.node_idx = 1
+    group by c.node_idx, a.msg, a.owner, a.tree_id, aso.authority, a.leaf, c2.level
     order by seq
     limit 1
     "#
     )
         .bind(&tree_id)
-        .bind(&index)
+        .bind(&node_idx)
         .fetch_one(db).await;
     result
         .map(asset_to_view)
