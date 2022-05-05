@@ -179,8 +179,8 @@ pub mod gummyroll_crud {
             Node::new(root),
             Node::new(leaf),
             index,
-            str::from_utf8(changelog_db_uri).unwrap(),
-            str::from_utf8(metadata_db_uri).unwrap(),
+            std::str::from_utf8(&changelog_db_uri).unwrap().to_string(),
+            std::str::from_utf8(&metadata_db_uri).unwrap().to_string(),
         )
     }
 
