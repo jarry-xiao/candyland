@@ -148,8 +148,8 @@ pub mod gummyroll_crud {
         root: [u8; 32],
         leaf: [u8; 32],
         index: u32,
-        changelog_db_uri: String,
-        metadata_db_uri: String,
+        changelog_db_uri: Vec<u8>,
+        metadata_db_uri: Vec<u8>,
     ) -> Result<()> {
         let merkle_roll = ctx.accounts.merkle_roll.to_account_info();
         let authority = ctx.accounts.authority.to_account_info();
@@ -179,8 +179,8 @@ pub mod gummyroll_crud {
             Node::new(root),
             Node::new(leaf),
             index,
-            changelog_db_uri,
-            metadata_db_uri,
+            str::from_utf8(changelog_db_uri).unwrap(),
+            str::from_utf8(metadata_db_uri).unwrap(),
         )
     }
 

@@ -123,8 +123,8 @@ export async function batchInitTree(
     const createTreeIx = gummyrollCrud.instruction.createTreeWithRoot(
         maxDepth,
         maxBufferSize,
-        { inner: proofInfo.root },
-        { inner: proofInfo.leaf },
+        proofInfo.root,
+        proofInfo.leaf,
         proofInfo.index,
         changeLogDbUri,
         metadataDbUri,
