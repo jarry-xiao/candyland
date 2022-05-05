@@ -5,6 +5,7 @@ mod error;
 pub mod geyser_plugin_nft;
 mod programs;
 mod redis_messenger;
+mod serializer;
 mod slot_status_info_generated;
 mod transaction_info_generated;
 pub mod transaction_selector;

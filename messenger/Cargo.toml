@@ -1,6 +1,6 @@
 [package]
 name = "messenger"
-description = "Metaplex messenger trait for Geyser plugin producer/consumer patterns."
+description = "Metaplex Messenger trait for Geyser plugin producer/consumer patterns."
 version = "0.1.0"
 edition = "2021"
 license = "AGPL3"

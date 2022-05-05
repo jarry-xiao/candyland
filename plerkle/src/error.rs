@@ -16,4 +16,7 @@ pub enum PlerkleError {
 
     #[error("Unable to Send Event to Stream ({msg})")]
     EventStreamError { msg: String },
+
+    #[error("Unable to Deserialize data ({msg})")]
+    DeserializationError { msg: String },
 }
