@@ -24,6 +24,8 @@ pub struct ChangeLogEvent {
     pub seq: u128,
     /// Bitmap of node parity (used when hashing)
     pub index: u32,
+    pub changelog_db_uri: Option<String>,
+    pub metadata_db_uri: Option<String>
 }
 
 #[derive(Copy, Clone, PartialEq)]
@@ -40,7 +42,13 @@ pub struct ChangeLog<const MAX_DEPTH: usize> {
 }
 
 impl<const MAX_DEPTH: usize> ChangeLog<MAX_DEPTH> {
-    pub fn to_event(&self, id: Pubkey, seq: u128) -> Box<ChangeLogEvent> {
+    pub fn to_event(
+        &self, 
+        id: Pubkey, 
+        seq: u128, 
+        changelog_db_uri: Option<String>,
+        metadata_db_uri: Option<String>,
+    ) -> Box<ChangeLogEvent> {
         let path_len = self.path.len() as u32;
         let mut path: Vec<PathNode> = self
             .path
@@ -54,6 +62,8 @@ impl<const MAX_DEPTH: usize> ChangeLog<MAX_DEPTH> {
             path,
             seq,
             index: self.index,
+            changelog_db_uri,
+            metadata_db_uri,
         })
     }
 

@@ -59,7 +59,7 @@ macro_rules! merkle_roll_depth_size_apply_fn {
                     match merkle_roll.$func($($arg)*) {
                         Some(x) => {
                             if $emit_msg {
-                                emit!(merkle_roll.get_change_log().to_event($id, $changelog_uri, $metadata_uri));
+                                emit!(*merkle_roll.get_change_log().to_event($id, merkle_roll.sequence_number, $changelog_uri, $metadata_uri));
                             }
                             Some(x)
                         }

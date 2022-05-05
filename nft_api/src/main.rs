@@ -6,8 +6,8 @@ use futures_util::StreamExt;
 use gummyroll::state::change_log::{ChangeLogEvent, PathNode};
 use gummyroll::utils::empty_node;
 use hyper::header::HeaderValue;
-use redis::streams::{StreamId, StreamKey, StreamReadOptions, StreamReadReply};
-use redis::{Commands, Value};
+use redis::streams::{StreamId, StreamKey, StreamReadOptions, StreamReadReply, StreamMaxlen};
+use redis::{Commands, Value, RedisResult};
 use routerify::prelude::*;
 use routerify::{Middleware, RequestInfo, Router, RouterService};
 use routerify_json_response::{json_failed_resp, json_failed_resp_with_message, json_success_resp};
@@ -28,6 +28,13 @@ mod events;
 use error::ApiError;
 use events::handle_event;
 use tokio::{join, task};
+
+async fn logger(req: Request<Body>) -> Result<Request<Body>, routerify_json_response::Error> {
+    println!(
+        "{} {} {}",
+        req.remote_addr(),
+        req.method(),
+        req.uri().path()
     );
     Ok(req)
 }

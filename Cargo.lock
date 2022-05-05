@@ -223,7 +223,7 @@ version = "0.24.2"
 dependencies = [
  "anchor-lang",
  "solana-program",
- "spl-associated-token-account",
+ "spl-associated-token-account 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "spl-token 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -816,6 +816,28 @@ checksum = "b1d1a86f49236c215f271d40892d5fc950490551400b02ef360692c29815c714"
 dependencies = [
  "generic-array",
  "subtle",
+]
+
+[[package]]
+name = "csv"
+version = "1.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22813a6dc45b335f9bade10bf7271dc477e81113e89eb251a0bc2a8a81c536e1"
+dependencies = [
+ "bstr",
+ "csv-core",
+ "itoa 0.4.8",
+ "ryu",
+ "serde",
+]
+
+[[package]]
+name = "csv-core"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b2466559f260f48ad25fe6317b3c8dac77b5bdb5763ac7d9d6103530663bc90"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]
@@ -1934,6 +1956,55 @@ dependencies = [
  "solana-program",
  "spl-token 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
+]
+
+[[package]]
+name = "mpl-token-metadata"
+version = "1.2.5"
+source = "git+https://github.com/jarry-xiao/metaplex-program-library?rev=7e2810a#7e2810afa008b53601f4ef515aa5361756a69ae8"
+dependencies = [
+ "arrayref",
+ "borsh",
+ "mpl-token-vault",
+ "num-derive",
+ "num-traits",
+ "solana-program",
+ "spl-associated-token-account 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spl-token 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spl-token-2022 0.2.0 (git+https://github.com/solana-labs/solana-program-library?rev=7f3cad3)",
+ "thiserror",
+]
+
+[[package]]
+name = "mpl-token-vault"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ade4ef15bc06a6033076c4ff28cba9b42521df5ec61211d6f419415ace2746a"
+dependencies = [
+ "borsh",
+ "num-derive",
+ "num-traits",
+ "solana-program",
+ "spl-token 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "thiserror",
+]
+
+[[package]]
+name = "native-tls"
+version = "0.2.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd7e2f3618557f980e0b17e8856252eee3c97fa12c54dff0ca290fb6266ca4a9"
+dependencies = [
+ "lazy_static",
+ "libc",
+ "log",
+ "openssl",
+ "openssl-probe",
+ "openssl-sys",
+ "schannel",
+ "security-framework",
+ "security-framework-sys",
+ "tempfile",
 ]
 
 [[package]]
@@ -3295,7 +3366,7 @@ dependencies = [
  "solana-metrics",
  "solana-sdk",
  "solana-version",
- "spl-memo",
+ "spl-memo 3.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
  "tokio",
 ]
@@ -3901,6 +3972,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "spl-memo"
+version = "3.0.1"
+source = "git+https://github.com/solana-labs/solana-program-library#731a1363b15703b63a26323fb398fed1565b55e3"
+dependencies = [
+ "solana-program",
+]
+
+[[package]]
 name = "spl-token"
 version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3920,6 +3999,20 @@ version = "3.3.0"
 source = "git+https://github.com/solana-labs/solana-program-library?rev=7f3cad3#7f3cad3d11997211639ac2801c3529ae10e56974"
 dependencies = [
  "arrayref",
+ "num-derive",
+ "num-traits",
+ "num_enum",
+ "solana-program",
+ "thiserror",
+]
+
+[[package]]
+name = "spl-token"
+version = "3.3.0"
+source = "git+https://github.com/solana-labs/solana-program-library#731a1363b15703b63a26323fb398fed1565b55e3"
+dependencies = [
+ "arrayref",
+ "bytemuck",
  "num-derive",
  "num-traits",
  "num_enum",
@@ -4296,6 +4389,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-native-tls"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f7d995660bd2b7f8c1568414c1126076c13fbb725c40112dc0120b78eb9b717b"
+dependencies = [
+ "native-tls",
+ "tokio",
+]
+
 name = "tokio-postgres"
 version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"

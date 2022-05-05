@@ -167,6 +167,7 @@ pub mod gummyroll_crud {
             gummyroll_program,
             gummyroll::cpi::accounts::Initialize {
                 authority: authority_pda.clone(),
+                append_authority: authority_pda.clone(),
                 merkle_roll,
             },
             authority_pda_signer,

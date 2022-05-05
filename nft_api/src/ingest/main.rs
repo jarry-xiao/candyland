@@ -4,13 +4,12 @@ use hyper::{Body, Client, Request, Response, Server, StatusCode};
 // Import the routerify prelude traits.
 use futures_util::future::join3;
 use redis::streams::{StreamId, StreamKey, StreamReadOptions, StreamReadReply};
-use redis::{Commands, Value};
+use redis::{Commands, Value, RedisResult};
 use routerify::prelude::*;
 use routerify::{Middleware, Router, RouterService};
 
 use anchor_client::anchor_lang::prelude::Pubkey;
 use routerify_json_response::{json_failed_resp_with_message, json_success_resp};
-use std::{net::SocketAddr, thread};
 
 use gummyroll::state::change_log::{ChangeLogEvent, PathNode};
 
@@ -21,7 +20,7 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::{Pool, Postgres};
 use tokio::task;
 
-use std::io::{Write};
+use std::io::Write;
 use std::fs::File;
 use reqwest;
 use csv;
@@ -490,7 +489,7 @@ async fn main() {
             .count(100000)
             .group(group_name, "lelelelle");
         let srr: StreamReadReply = conn
-            .xread_options(streams.as_slice(), &[&cl_last_id, &gm_last_id], &opts)
+            .xread_options(streams.as_slice(), &[&cl_init_last_id, &cl_last_id, &gm_last_id], &opts)
             .unwrap();
         for StreamKey { key, ids } in srr.keys {
             println!("{}", key);
