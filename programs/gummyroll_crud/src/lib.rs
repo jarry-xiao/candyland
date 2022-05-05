@@ -141,8 +141,8 @@ pub mod gummyroll_crud {
         gummyroll::cpi::init_empty_gummyroll(cpi_ctx, max_depth, max_buffer_size)
     }
 
-    pub fn create_tree_with_root(
-        ctx: Context<CreateTree>,
+    pub fn create_tree_with_root<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, CreateTree>,
         max_depth: u32,
         max_buffer_size: u32,
         root: [u8; 32],
@@ -151,8 +151,8 @@ pub mod gummyroll_crud {
         changelog_db_uri: Vec<u8>,
         metadata_db_uri: Vec<u8>,
     ) -> Result<()> {
-        let merkle_roll = ctx.accounts.merkle_roll.to_account_info();
         let authority = ctx.accounts.authority.to_account_info();
+        let merkle_roll = ctx.accounts.merkle_roll.clone().to_account_info();
         let gummyroll_program = ctx.accounts.gummyroll_program.to_account_info();
         let authority_pda = ctx.accounts.authority_pda.to_account_info();
         let authority_pda_bump_seed = &[*ctx.bumps.get("authority_pda").unwrap()];
@@ -171,7 +171,9 @@ pub mod gummyroll_crud {
                 merkle_roll,
             },
             authority_pda_signer,
-        );
+        )
+        .with_remaining_accounts(ctx.remaining_accounts.to_vec());
+
         gummyroll::cpi::init_gummyroll_with_root(
             cpi_ctx,
             max_depth,
