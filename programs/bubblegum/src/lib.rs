@@ -1,12 +1,23 @@
-use anchor_lang::{prelude::*, solana_program::keccak};
+use anchor_lang::{
+    prelude::*,
+    solana_program::{
+        keccak,
+        program::{invoke, invoke_signed},
+        program_error::ProgramError,
+        program_pack::Pack,
+        system_instruction,
+    },
+};
 use gummyroll::{program::Gummyroll, state::node::Node};
+use spl_token::state::Mint as SplMint;
 
 pub mod state;
 pub mod utils;
 
+use crate::state::metaplex_anchor::MplTokenMetadata;
 use crate::state::{
     leaf_schema::LeafSchema,
-    metaplex_adapter::MetadataArgs,
+    metaplex_adapter::{MetadataArgs, TokenProgramVersion},
     metaplex_anchor::{MasterEdition, TokenMetadata},
     Nonce, Voucher,
 };
@@ -183,34 +194,37 @@ pub struct CancelRedeem<'info> {
 
 #[derive(Accounts)]
 pub struct Decompress<'info> {
-    /// CHECK: This account is not read
-    pub merkle_slab: UncheckedAccount<'info>,
-    /// CHECK: This account is checked in the instruction
-    pub owner: UncheckedAccount<'info>,
-    /// CHECK: This account is chekced in the instruction
-    pub delegate: UncheckedAccount<'info>,
     #[account(
         mut,
-        close = payer,
+        close = owner,
         seeds = [voucher.merkle_slab.as_ref(), voucher.leaf_schema.nonce.to_le_bytes().as_ref()],
         bump
     )]
     pub voucher: Account<'info, Voucher>,
+    #[account(mut)]
+    pub owner: Signer<'info>,
     /// CHECK: versioning is handled in the instruction
     #[account(mut)]
-    pub token_account: AccountInfo<'info>,
+    pub token_account: UncheckedAccount<'info>,
     /// CHECK: versioning is handled in the instruction
     #[account(mut)]
-    pub mint: AccountInfo<'info>,
-    #[account(mut)]
-    pub metadata: Box<Account<'info, TokenMetadata>>,
-    #[account(mut)]
-    pub master_edition: Box<Account<'info, MasterEdition>>,
-    #[account(mut)]
-    pub payer: Signer<'info>,
-    pub system_program: Program<'info, System>,
+    pub mint: UncheckedAccount<'info>,
     /// CHECK:
-    pub token_metadata_program: UncheckedAccount<'info>,
+    #[account(
+        seeds=[mint.key().as_ref()],
+        bump,
+    )]
+    pub mint_authority: UncheckedAccount<'info>,
+    /// CHECK:
+    #[account(mut)]
+    pub metadata: UncheckedAccount<'info>,
+    /// CHECK: Initialized in Token Metadata Program
+    #[account(mut)]
+    pub master_edition: UncheckedAccount<'info>,
+    pub system_program: Program<'info, System>,
+    pub sysvar_rent: Sysvar<'info, Rent>,
+    /// CHECK:
+    pub token_metadata_program: Program<'info, MplTokenMetadata>,
     /// CHECK: versioning is handled in the instruction
     pub token_program: UncheckedAccount<'info>,
     /// CHECK:
@@ -444,8 +458,158 @@ pub mod bubblegum {
         )
     }
 
-    pub fn decompress(_ctx: Context<Decompress>, _metadata: MetadataArgs) -> Result<()> {
-        // TODO
+    pub fn decompress(ctx: Context<Decompress>, metadata: MetadataArgs) -> Result<()> {
+        // Allocate and create mint
+        let data_hash = keccak::hashv(&[metadata.try_to_vec()?.as_slice()]).to_bytes();
+        assert_eq!(ctx.accounts.voucher.leaf_schema.data_hash, data_hash);
+        match metadata.token_program_version {
+            TokenProgramVersion::Original => {
+                if ctx.accounts.mint.data_is_empty() {
+                    invoke(
+                        &system_instruction::create_account(
+                            &ctx.accounts.owner.key(),
+                            &ctx.accounts.mint.key(),
+                            Rent::get()?.minimum_balance(SplMint::LEN),
+                            SplMint::LEN as u64,
+                            &spl_token::id(),
+                        ),
+                        &[
+                            ctx.accounts.owner.to_account_info(),
+                            ctx.accounts.mint.to_account_info(),
+                            ctx.accounts.system_program.to_account_info(),
+                        ],
+                    )?;
+                    invoke(
+                        &spl_token::instruction::initialize_mint2(
+                            &spl_token::id(),
+                            &ctx.accounts.mint.key(),
+                            &ctx.accounts.mint_authority.key(),
+                            None,
+                            0,
+                        )?,
+                        &[
+                            ctx.accounts.token_program.to_account_info(),
+                            ctx.accounts.mint.to_account_info(),
+                        ],
+                    )?;
+                }
+                invoke(
+                    &spl_associated_token_account::instruction::create_associated_token_account(
+                        &ctx.accounts.owner.key(),
+                        &ctx.accounts.owner.key(),
+                        &ctx.accounts.mint.key(),
+                    ),
+                    &[
+                        ctx.accounts.owner.to_account_info(),
+                        ctx.accounts.mint.to_account_info(),
+                        ctx.accounts.token_account.to_account_info(),
+                        ctx.accounts.token_program.to_account_info(),
+                        ctx.accounts.associated_token_program.to_account_info(),
+                        ctx.accounts.system_program.to_account_info(),
+                        ctx.accounts.sysvar_rent.to_account_info(),
+                    ],
+                )?;
+                invoke_signed(
+                    &spl_token::instruction::mint_to(
+                        &spl_token::id(),
+                        &ctx.accounts.mint.key(),
+                        &ctx.accounts.token_account.key(),
+                        &ctx.accounts.mint_authority.key(),
+                        &[],
+                        1,
+                    )?,
+                    &[
+                        ctx.accounts.mint.to_account_info(),
+                        ctx.accounts.token_account.to_account_info(),
+                        ctx.accounts.mint_authority.to_account_info(),
+                        ctx.accounts.token_program.to_account_info(),
+                    ],
+                    &[&[
+                        ctx.accounts.mint.key().as_ref(),
+                        &[ctx.bumps["mint_authority"]],
+                    ]],
+                )?;
+            }
+            TokenProgramVersion::Token2022 => return Err(ProgramError::InvalidArgument.into()),
+        }
+
+        let metadata_infos = vec![
+            ctx.accounts.metadata.to_account_info(),
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.mint_authority.to_account_info(),
+            ctx.accounts.owner.to_account_info(),
+            ctx.accounts.token_metadata_program.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+            ctx.accounts.sysvar_rent.to_account_info(),
+        ];
+
+        let master_edition_infos = vec![
+            ctx.accounts.master_edition.to_account_info(),
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.mint_authority.to_account_info(),
+            ctx.accounts.owner.to_account_info(),
+            ctx.accounts.metadata.to_account_info(),
+            ctx.accounts.token_metadata_program.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+            ctx.accounts.sysvar_rent.to_account_info(),
+        ];
+
+        msg!("Creating metadata!");
+        invoke_signed(
+            &mpl_token_metadata::instruction::create_metadata_accounts_v2(
+                ctx.accounts.token_metadata_program.key(),
+                ctx.accounts.metadata.key(),
+                ctx.accounts.mint.key(),
+                ctx.accounts.mint_authority.key(),
+                ctx.accounts.owner.key(),
+                ctx.accounts.mint_authority.key(),
+                metadata.name.clone(),
+                metadata.symbol.clone(),
+                metadata.uri.clone(),
+                if metadata.creators.len() > 0 {
+                    Some(metadata.creators.iter().map(|c| c.adapt()).collect())
+                } else {
+                    None
+                },
+                metadata.seller_fee_basis_points,
+                true,
+                metadata.is_mutable,
+                match metadata.collection {
+                    Some(c) => Some(c.adapt()),
+                    None => None,
+                },
+                match metadata.uses {
+                    Some(u) => Some(u.adapt()),
+                    None => None,
+                },
+            ),
+            metadata_infos.as_slice(),
+            &[&[
+                ctx.accounts.mint.key().as_ref(),
+                &[ctx.bumps["mint_authority"]],
+            ]],
+        )?;
+
+        msg!("Creating master edition!");
+        invoke_signed(
+            &mpl_token_metadata::instruction::create_master_edition_v3(
+                ctx.accounts.token_metadata_program.key(),
+                ctx.accounts.master_edition.key(),
+                ctx.accounts.mint.key(),
+                ctx.accounts.mint_authority.key(),
+                ctx.accounts.mint_authority.key(),
+                ctx.accounts.metadata.key(),
+                ctx.accounts.owner.key(),
+                Some(0),
+            ),
+            master_edition_infos.as_slice(),
+            &[&[
+                ctx.accounts.mint.key().as_ref(),
+                &[ctx.bumps["mint_authority"]],
+            ]],
+        )?;
         Ok(())
     }
 

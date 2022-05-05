@@ -14,6 +14,16 @@ pub struct Creator {
     pub share: u8,
 }
 
+impl Creator {
+    pub fn adapt(&self) -> mpl_token_metadata::state::Creator {
+        mpl_token_metadata::state::Creator {
+            address: self.address,
+            verified: self.verified,
+            share: self.share,
+        }
+    }
+}
+
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Debug, Clone)]
 pub enum TokenStandard {
     NonFungible,  // This is a master edition
@@ -36,11 +46,35 @@ pub struct Uses { // 17 bytes + Option byte
     pub total: u64, //8
 }
 
+impl Uses {
+    pub fn adapt(&self) -> mpl_token_metadata::state::Uses {
+        mpl_token_metadata::state::Uses {
+            use_method: match self.use_method {
+                UseMethod::Burn => mpl_token_metadata::state::UseMethod::Burn,
+                UseMethod::Multiple => mpl_token_metadata::state::UseMethod::Multiple,
+                UseMethod::Single => mpl_token_metadata::state::UseMethod::Single,
+            },
+            remaining: self.remaining,
+            total: self.total,
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Debug, Clone)]
 pub struct Collection {
     pub verified: bool,
     pub key: Pubkey,
+}
+
+
+impl Collection {
+    pub fn adapt(&self) -> mpl_token_metadata::state::Collection {
+        mpl_token_metadata::state::Collection {
+            verified: self.verified,
+            key: self.key,
+        }
+    }
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Clone)]
