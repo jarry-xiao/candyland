@@ -17,6 +17,8 @@ import NodeWallet from '@project-serum/anchor/dist/cjs/nodewallet';
 import { GUMMYROLL_PROGRAM_ID, GUMMYROLL_CRUD_PROGRAM_ID } from './constants';
 import { confirmTxOrThrow } from './utils';
 import fetch from 'cross-fetch';
+import { join } from 'path';
+import { readFileSync, existsSync } from 'fs';
 
 export async function getProvider(endpoint: string, payer: Keypair) {
     console.log(endpoint);
@@ -60,6 +62,97 @@ async function getTreeAuthorityPDA(
     );
 }
 
+type ProofInfo = {
+    root: Buffer,
+    leaf: Buffer,
+    proof: Buffer[],
+    index: number
+}
+
+export function loadBatchInfoFromDir(dir: string): {
+    metadataDbUri: string,
+    changeLogDbUri: string,
+    proofInfo: ProofInfo
+} {
+    const uploadFname = join(dir, "upload.json");
+    if (!existsSync(uploadFname)) {
+        throw new Error("😢 No upload json found, cannot load changelog and metadata db uris")
+    }
+
+    const uploadInfo = JSON.parse(readFileSync(uploadFname).toString());
+
+    return {
+        metadataDbUri: uploadInfo['metadataUri'] as string,
+        changeLogDbUri: uploadInfo['changelogUri'] as string,
+        proofInfo: JSON.parse(readFileSync(join(dir, "proof.json")).toString()) as ProofInfo
+    }
+}
+
+export async function batchInitTree(
+    provider: Provider,
+    treeAdminKeypair: Keypair,
+    maxDepth: number,
+    maxBufferSize: number,
+    metadataDbUri: string,
+    changeLogDbUri: string,
+    proofInfo: ProofInfo
+): Promise<PublicKey> {
+    const treeKeypair = Keypair.generate();
+    const requiredSpace = getMerkleRollAccountSize(maxDepth, maxBufferSize);
+
+    const gummyroll = await loadGummyroll(provider);
+    const gummyrollCrud = await loadGummyrollCrud(provider);
+
+    const allocGummyrollAccountIx = SystemProgram.createAccount({
+        fromPubkey: treeAdminKeypair.publicKey,
+        newAccountPubkey: treeKeypair.publicKey,
+        lamports:
+            await gummyroll.provider.connection.getMinimumBalanceForRentExemption(
+                requiredSpace
+            ),
+        space: requiredSpace,
+        programId: gummyroll.programId,
+    });
+
+    const [treeAuthorityPDA] = await getTreeAuthorityPDA(
+        gummyrollCrud,
+        treeKeypair.publicKey,
+        treeAdminKeypair.publicKey
+    );
+
+    const createTreeIx = gummyrollCrud.instruction.createTreeWithRoot(
+        maxDepth,
+        maxBufferSize,
+        { inner: proofInfo.root },
+        { inner: proofInfo.leaf },
+        proofInfo.index,
+        changeLogDbUri,
+        metadataDbUri,
+        {
+            accounts: {
+                authority: treeAdminKeypair.publicKey,
+                authorityPda: treeAuthorityPDA,
+                gummyrollProgram: gummyroll.programId,
+                merkleRoll: treeKeypair.publicKey,
+            },
+            signers: [treeAdminKeypair],
+        }
+    );
+
+    const tx = new Transaction().add(allocGummyrollAccountIx).add(createTreeIx);
+    const createTreeTxId = await gummyroll.provider.send(
+        tx,
+        [treeAdminKeypair, treeKeypair],
+        {
+            commitment: "confirmed",
+        }
+    );
+    log.info("Sent batch init transaction:", createTreeTxId);
+
+    await confirmTxOrThrow(gummyroll.provider.connection, createTreeTxId);
+    return treeKeypair.publicKey;
+}
+
 export async function initEmptyTree(
     provider: Provider,
     treeAdminKeypair: Keypair,
@@ -89,7 +182,7 @@ export async function initEmptyTree(
         treeAdminKeypair.publicKey
     );
 
-    const createTreeTx = gummyrollCrud.instruction.createTree(
+    const createTreeIx = gummyrollCrud.instruction.createTree(
         maxDepth,
         maxBufferSize,
         {
@@ -103,7 +196,7 @@ export async function initEmptyTree(
         }
     );
 
-    const tx = new Transaction().add(allocGummyrollAccountIx).add(createTreeTx);
+    const tx = new Transaction().add(allocGummyrollAccountIx).add(createTreeIx);
     const createTreeTxId = await gummyroll.provider.send(
         tx,
         [treeAdminKeypair, treeKeypair],
