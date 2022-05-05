@@ -48,3 +48,7 @@ I would have loved to use `arloader`, but honestly it doesn't work all the time.
 cargo install arloader
 arloader upload outfile.csv --with-sol --sol-keypair-path ~/.config/solana/id.json --ar-default-keypair
 ```
+
+Example Arweave Links:
+- changelog.csv "https://arweave.net/iju1AE9qcdKEmGvKXEO41MyHBoeIMh8RQoIsEQDzLu8"
+- metadata.csv "https://arweave.net/_1X1bOx0dNhPhbckZ8HsI4ApOXHF8gGV5idnAs5XRXI"

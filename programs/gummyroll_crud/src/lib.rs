@@ -145,11 +145,11 @@ pub mod gummyroll_crud {
         ctx: Context<CreateTree>,
         max_depth: u32,
         max_buffer_size: u32,
-        root: Node,
-        leaf: Node,
+        root: [u8; 32],
+        leaf: [u8; 32],
         index: u32,
-        changelog_db_uri: String,
-        metadata_db_uri: String,
+        changelog_db_uri: Vec<u8>,
+        metadata_db_uri: Vec<u8>,
     ) -> Result<()> {
         let merkle_roll = ctx.accounts.merkle_roll.to_account_info();
         let authority = ctx.accounts.authority.to_account_info();
@@ -176,11 +176,11 @@ pub mod gummyroll_crud {
             cpi_ctx,
             max_depth,
             max_buffer_size,
-            root,
-            leaf,
+            Node::new(root),
+            Node::new(leaf),
             index,
-            changelog_db_uri,
-            metadata_db_uri,
+            str::from_utf8(changelog_db_uri).unwrap(),
+            str::from_utf8(metadata_db_uri).unwrap(),
         )
     }
 
