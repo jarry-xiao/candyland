@@ -65,8 +65,19 @@ async function getTreeAuthorityPDA(
 type ProofInfo = {
     root: Buffer,
     leaf: Buffer,
-    proof: Buffer[],
+    proof: PublicKey[],
     index: number
+}
+
+function loadProofInfo(fname: string): ProofInfo {
+    const proofInfo = JSON.parse(readFileSync(fname).toString()) as ProofInfo
+    return {
+        root: new PublicKey(proofInfo.root).toBuffer(),
+        leaf: new PublicKey(proofInfo.leaf).toBuffer(),
+        proof: proofInfo.proof.map((nodeStr) => new PublicKey(nodeStr)),
+        index: proofInfo.index
+    }
+
 }
 
 export function loadBatchInfoFromDir(dir: string): {
@@ -78,13 +89,12 @@ export function loadBatchInfoFromDir(dir: string): {
     if (!existsSync(uploadFname)) {
         throw new Error("😢 No upload json found, cannot load changelog and metadata db uris")
     }
-
     const uploadInfo = JSON.parse(readFileSync(uploadFname).toString());
 
     return {
         metadataDbUri: uploadInfo['metadataUri'] as string,
         changeLogDbUri: uploadInfo['changelogUri'] as string,
-        proofInfo: JSON.parse(readFileSync(join(dir, "proof.json")).toString()) as ProofInfo
+        proofInfo: loadProofInfo(join(dir, "proof.json"))
     }
 }
 
@@ -120,14 +130,23 @@ export async function batchInitTree(
         treeAdminKeypair.publicKey
     );
 
+    console.log({
+        maxDepth,
+        maxBufferSize,
+        root: proofInfo.root,
+        leaf: proofInfo.leaf,
+        index: proofInfo.index,
+        changeLogDbUri,
+        metadataDbUri,
+    });
     const createTreeIx = gummyrollCrud.instruction.createTreeWithRoot(
         maxDepth,
         maxBufferSize,
         proofInfo.root,
         proofInfo.leaf,
         proofInfo.index,
-        changeLogDbUri,
-        metadataDbUri,
+        Buffer.from(changeLogDbUri),
+        Buffer.from(metadataDbUri),
         {
             accounts: {
                 authority: treeAdminKeypair.publicKey,
@@ -136,6 +155,13 @@ export async function batchInitTree(
                 merkleRoll: treeKeypair.publicKey,
             },
             signers: [treeAdminKeypair],
+            remainingAccounts: proofInfo.proof.map((pubkey) => {
+                return {
+                    pubkey,
+                    isSigner: false,
+                    isWritable: false
+                }
+            }),
         }
     );
 

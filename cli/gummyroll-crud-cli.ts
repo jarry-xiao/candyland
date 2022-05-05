@@ -113,12 +113,12 @@ createCommand("batchTree")
     .option(
         "-d, --max-depth <number>",
         'Max depth of tree',
-        '14'
+        "14"
     )
     .option(
         "-b, --max-buffer <number>",
         'Maximum # of roots stored (for concurrency)',
-        '1024'
+        "1024"
     )
     .option(
         "-m, --metadata-uri <string>",
@@ -129,7 +129,7 @@ createCommand("batchTree")
         "URI to changelog csv file"
     )
     .option(
-        "-d, --dir <string>",
+        "-m, --dir <string>",
         "Directory to draw metadata from",
         "tree-0"
     )
@@ -148,8 +148,8 @@ createCommand("batchTree")
         const tree = await batchInitTree(
             provider,
             treeAuthority,
-            maxDepth,
-            maxBuffer,
+            Number(maxDepth),
+            Number(maxBuffer),
             metadataDbUri,
             changeLogDbUri,
             proofInfo
