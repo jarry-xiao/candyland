@@ -583,7 +583,7 @@ pub mod bubblegum {
                 match metadata.uses {
                     Some(u) => Some(u.adapt()),
                     None => None,
-                }
+                },
             ),
             metadata_infos.as_slice(),
             &[&[
