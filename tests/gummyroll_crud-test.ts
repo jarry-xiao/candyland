@@ -296,7 +296,7 @@ describe("Gummyroll CRUD program", () => {
                 treeAddress,
                 treeAdmin
             );
-            const proofPubkeys = getProofOfLeaf(tree).map(({ node }) => ({
+            const proofPubkeys = getProofOfLeaf(tree, index).map(({ node }) => ({
                 pubkey: new PublicKey(node),
                 isSigner: false,
                 isWritable: false,
