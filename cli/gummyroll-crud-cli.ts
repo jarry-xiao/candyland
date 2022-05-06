@@ -91,7 +91,7 @@ program
 
         // Create metadata.csv
         const messages = loadMessages(inputFile);
-        writeMetadata(messages, outDir);
+        writeMetadata(messages, maxDepth, outDir);
 
         // Create changelog.csv
         const hashes = hashMessages(messages);
@@ -150,8 +150,8 @@ createCommand("batchTree")
             treeAuthority,
             Number(maxDepth),
             Number(maxBuffer),
-            metadataDbUri,
             changeLogDbUri,
+            metadataDbUri,
             proofInfo
         );
 

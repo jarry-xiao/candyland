@@ -81,8 +81,8 @@ function loadProofInfo(fname: string): ProofInfo {
 }
 
 export function loadBatchInfoFromDir(dir: string): {
-    metadataDbUri: string,
     changeLogDbUri: string,
+    metadataDbUri: string,
     proofInfo: ProofInfo
 } {
     const uploadFname = join(dir, "upload.json");
@@ -103,8 +103,8 @@ export async function batchInitTree(
     treeAdminKeypair: Keypair,
     maxDepth: number,
     maxBufferSize: number,
-    metadataDbUri: string,
     changeLogDbUri: string,
+    metadataDbUri: string,
     proofInfo: ProofInfo
 ): Promise<PublicKey> {
     const treeKeypair = Keypair.generate();
@@ -133,13 +133,14 @@ export async function batchInitTree(
     console.log({
         maxDepth,
         maxBufferSize,
-        root: proofInfo.root,
-        leaf: proofInfo.leaf,
+        // root: proofInfo.root,
+        // leaf: proofInfo.leaf,
         index: proofInfo.index,
+        // proof: proofInfo.proof.map((node) => node.toString()),
         changeLogDbUri,
         metadataDbUri,
     });
-    const createTreeIx = gummyrollCrud.instruction.createTreeWithRoot(
+    const batchTreeIx = gummyrollCrud.instruction.createTreeWithRoot(
         maxDepth,
         maxBufferSize,
         proofInfo.root,
@@ -164,18 +165,20 @@ export async function batchInitTree(
             }),
         }
     );
+    console.log("Discriminant", Uint8Array.from(batchTreeIx.data.slice(0, 8)));
 
-    const tx = new Transaction().add(allocGummyrollAccountIx).add(createTreeIx);
-    const createTreeTxId = await gummyroll.provider.send(
+    const tx = new Transaction().add(allocGummyrollAccountIx).add(batchTreeIx);
+    const batchTreeTxId = await gummyroll.provider.send(
         tx,
         [treeAdminKeypair, treeKeypair],
         {
             commitment: "confirmed",
+            skipPreflight: true,
         }
     );
-    log.info("Sent batch init transaction:", createTreeTxId);
+    log.info("Sent batch init transaction:", batchTreeTxId);
 
-    await confirmTxOrThrow(gummyroll.provider.connection, createTreeTxId);
+    await confirmTxOrThrow(gummyroll.provider.connection, batchTreeTxId);
     return treeKeypair.publicKey;
 }
 

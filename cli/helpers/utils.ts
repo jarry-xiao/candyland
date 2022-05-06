@@ -74,7 +74,6 @@ export function writeTree(tree: Tree, outDir: string, fname: string = "changelog
         header: ['node_idx', 'seq', 'level', 'hash']
     });
 
-    log.debug("doing bfs on a tree");
     const records = bfs(tree, (treeNode, idx) => {
         return [
             (idx + 1).toString(),
@@ -84,20 +83,21 @@ export function writeTree(tree: Tree, outDir: string, fname: string = "changelog
         ]
     });
 
-    log.debug(records[0], records[records.length - 1]);
     writer.writeRecords(records);
     log.debug("Wrote tree csv to:", outFile);
 }
 
-export function writeMetadata(messages: OwnedMessage[], outDir: string, fname: string = "metadata.csv") {
+export function writeMetadata(messages: OwnedMessage[], maxDepth: number, outDir: string, fname: string = "metadata.csv") {
     const outFile = join(outDir, fname);
     const writer = createArrayCsvWriter({
         path: outFile,
-        header: ["msg", "owner", "leaf", "revision"]
+        header: ["node_idx", "msg", "owner", "leaf", "revision"]
     });
 
-    const records = messages.map((ownedMessage) => {
+    const offset = 2 ** maxDepth;
+    const records = messages.map((ownedMessage, idx) => {
         return [
+            offset + idx,
             ownedMessage.message,
             ownedMessage.owner,
             new PublicKey(hashOwnedMessage(ownedMessage)).toString(),
