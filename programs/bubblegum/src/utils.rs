@@ -24,13 +24,7 @@ pub fn replace_leaf<'info>(
         authority_pda_signer,
     )
     .with_remaining_accounts(remaining_accounts.to_vec());
-    gummyroll::cpi::replace_leaf(
-        cpi_ctx,
-        root_node,
-        previous_leaf,
-        new_leaf,
-        index,
-    )
+    gummyroll::cpi::replace_leaf(cpi_ctx, root_node, previous_leaf, new_leaf, index)
 }
 
 pub fn append_leaf<'info>(
@@ -78,10 +72,5 @@ pub fn insert_or_append_leaf<'info>(
         authority_pda_signer,
     )
     .with_remaining_accounts(remaining_accounts.to_vec());
-    gummyroll::cpi::insert_or_append(
-        cpi_ctx,
-        root_node,
-        leaf,
-        index,
-    )
+    gummyroll::cpi::insert_or_append(cpi_ctx, root_node, leaf, index)
 }

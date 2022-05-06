@@ -1,7 +1,7 @@
-use crate::state::node::{EMPTY, Node};
+use crate::state::node::{Node, EMPTY};
 use anchor_lang::{
     prelude::*,
-    solana_program::{keccak::hashv, msg, program_error::ProgramError}
+    solana_program::{keccak::hashv, msg, program_error::ProgramError},
 };
 use bytemuck::{Pod, PodCastError};
 use std::any::type_name;
@@ -45,7 +45,10 @@ pub fn recompute(leaf: Node, proof: &[Node], index: u32) -> Node {
     current_node
 }
 
-pub fn fill_in_proof<const MAX_DEPTH: usize>(proof_vec: Vec<Node>, full_proof: &mut [Node; MAX_DEPTH]) {
+pub fn fill_in_proof<const MAX_DEPTH: usize>(
+    proof_vec: Vec<Node>,
+    full_proof: &mut [Node; MAX_DEPTH],
+) {
     msg!("Attempting to fill in proof");
     if proof_vec.len() > 0 {
         full_proof[..proof_vec.len()].copy_from_slice(&proof_vec);
@@ -67,4 +70,3 @@ pub fn error_msg<T>(data_len: usize) -> impl Fn(PodCastError) -> ProgramError {
         ProgramError::InvalidAccountData
     }
 }
-

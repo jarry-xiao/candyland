@@ -199,6 +199,43 @@ impl Messenger for RedisMessenger {
                                 info!("Data Sent")
                             }
                         }
+                        gummyroll_crud::InstructionName::CreateTreeWithRoot => {
+                            let tree_id = keys.index(instruction.accounts[3] as usize);
+                            let auth = keys.index(instruction.accounts[0] as usize);
+                            let data = instruction.data[8..].to_owned();
+                            let data_buf = &mut data.as_slice();
+                            let ix: gummyroll_crud::instruction::CreateTreeWithRoot =
+                                gummyroll_crud::instruction::CreateTreeWithRoot::deserialize(
+                                    data_buf,
+                                )
+                                .unwrap();
+
+                            println!("Captured tree with root");
+                            let metadata_uri = &std::str::from_utf8(&ix.metadata_db_uri)
+                                .unwrap()
+                                .to_string();
+                            let changelog_uri = &std::str::from_utf8(&ix.changelog_db_uri)
+                                .unwrap()
+                                .to_string();
+                            let res: RedisResult<()> =
+                                self.connection.as_mut().unwrap().xadd_maxlen(
+                                    "GMC_OP",
+                                    maxlen,
+                                    "*",
+                                    &[
+                                        ("op", "create_batch"),
+                                        ("tree_id", &*tree_id.to_string()),
+                                        ("authority", &*auth.to_string()),
+                                        ("metadata_db_uri", &metadata_uri),
+                                        ("changelog_db_uri", &changelog_uri),
+                                    ],
+                                );
+                            if res.is_err() {
+                                error!("{}", res.err().unwrap());
+                            } else {
+                                info!("Data Sent")
+                            }
+                        }
                         gummyroll_crud::InstructionName::Add => {
                             let data = instruction.data[8..].to_owned();
                             let data_buf = &mut data.as_slice();
@@ -286,7 +323,9 @@ impl Messenger for RedisMessenger {
                                 info!("Data Sent")
                             }
                         }
-                        _ => {}
+                        _ => {
+                            println!("{:?}", &instruction.data[..8]);
+                        }
                     };
                 }
                 _ => {}
