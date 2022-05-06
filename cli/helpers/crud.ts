@@ -130,16 +130,6 @@ export async function batchInitTree(
         treeAdminKeypair.publicKey
     );
 
-    console.log({
-        maxDepth,
-        maxBufferSize,
-        // root: proofInfo.root,
-        // leaf: proofInfo.leaf,
-        index: proofInfo.index,
-        // proof: proofInfo.proof.map((node) => node.toString()),
-        changeLogDbUri,
-        metadataDbUri,
-    });
     const batchTreeIx = gummyrollCrud.instruction.createTreeWithRoot(
         maxDepth,
         maxBufferSize,

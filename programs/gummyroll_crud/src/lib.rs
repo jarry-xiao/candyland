@@ -88,6 +88,7 @@ pub struct Transfer<'info> {
 pub enum InstructionName {
     Unknown,
     CreateTree,
+    CreateTreeWithRoot,
     Add,
     Transfer,
     Remove,
@@ -100,6 +101,7 @@ pub fn get_instruction_type(full_bytes: &Vec<u8>) -> InstructionName {
     };
     match disc {
         [165, 83, 136, 142, 89, 202, 47, 220] => InstructionName::CreateTree,
+        [101, 214, 253, 135, 176, 170, 11, 235] => InstructionName::CreateTreeWithRoot,
         [163, 52, 200, 231, 140, 3, 69, 186] => InstructionName::Transfer,
         [199, 186, 9, 79, 96, 129, 24, 106] => InstructionName::Remove,
         [41, 249, 249, 146, 197, 111, 56, 181] => InstructionName::Add,
