@@ -121,14 +121,6 @@ createCommand("batchTree")
         "1024"
     )
     .option(
-        "-m, --metadata-uri <string>",
-        "URI to metadata csv file",
-    )
-    .option(
-        "-c, --changelog-uri <string>",
-        "URI to changelog csv file"
-    )
-    .option(
         "-m, --dir <string>",
         "Directory to draw metadata from",
         "tree-0"

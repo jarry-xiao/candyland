@@ -7,62 +7,14 @@ import { createArrayCsvWriter } from 'csv-writer';
 import { bfs, getProofOfLeaf, hash, Tree } from '../../tests/merkle-tree';
 import { join } from 'path';
 
-// type IndexedLeaves = {
-//     leafIndex: string,
-//     hash: string,
-// };
-
-/**
- * Takes a sorted list of leaf hashes from the input file
- * and throws if a precondition is violated
- * @param leaves 
- */
-// function validateLeaves(leaves: IndexedLeaves[]) {
-//     // Check de-duped
-//     leaves.map((leaf, index) => {
-//         if (Number(leaf.leafIndex) != index) {
-//             throw new Error(`leafIndex mismatch for ${index}th leaf which incorrectly has 'leafIndex' set to ${leaf.leafIndex}`);
-//         }
-//         try {
-//             const _pubkey = new PublicKey(leaf.hash);
-//         } catch (e) {
-//             throw new Error(
-//                 `Could not create pubkey from the bytes of hash-- index: ${index}, bytes: ${leaf.hash}, leafIndex: ${leaf.leafIndex}\n${e}`
-//             );
-//         }
-//     });
-
-//     // Check that # of leaves matches up
-//     if (Number(leaves[leaves.length - 1].leafIndex) != leaves.length - 1) {
-//         throw new Error("Unable to proceed, final # of leaf_indices != # of hashes provided");
-//     }
-// }
-
 export function processLeaves(leaves: Buffer[], maxDepth: number): Buffer[] {
     const leafHashes = leaves.slice();
-    // leaves = leaves.sort((left, right) => Number(left.leafIndex) - Number(right.leafIndex));
-
-    // validateLeaves(leaves);
-
-    // leaves.map((leaf) => {
-    //     leafHashes.push(new PublicKey(leaf).toBuffer());
-    // });
-    // const height = Math.ceil(Math.log2(leaves.length))
     const numLeaves = 2 ** maxDepth;
     while (leafHashes.length < numLeaves) {
         leafHashes.push(Buffer.alloc(32));
     }
     return leafHashes;
 }
-
-// export function loadLeaves(inputFile: string, maxDepth: number) {
-//     const leaves = parse(fs.readFileSync(inputFile).toString(), {
-//         columns: true,
-//         skipEmptyLines: true,
-//     });
-//     log.debug(`Loaded ${leaves.length} leaves from ${inputFile}`);
-//     return processLeaves(leaves, maxDepth);
-// }
 
 /**
  * Do BFS from the tree root down to leaves & write to outFile
@@ -130,27 +82,6 @@ export function hashMessages(messages: OwnedMessage[]): Buffer[] {
         return hashOwnedMessage(ownedMessage)
     });
 }
-
-// /**
-//  * Writes minimal changelog csv (just leaves) to csv
-//  * @param messages 
-//  * @param outDir 
-//  * @param fname 
-//  */
-// export function writeChangelog(messages: Buffer[], outDir: string, fname: string = "changelog.csv") {
-//     const writer = createArrayCsvWriter({
-//         path: join(outDir, fname),
-//         header: ['leafIndex', 'hash']
-//     });
-//     const records = messages.map((buffer, index) => {
-//         return [
-//             index.toString(),
-//             new PublicKey(buffer).toString(),
-//         ]
-//     });
-//     log.debug("Records", records);
-//     writer.writeRecords(records as any[]);
-// }
 
 export function writeProof(tree: Tree, rightMostIndex: number, outDir: string, fname: string = "proof.json") {
     const outFile = join(outDir, fname);

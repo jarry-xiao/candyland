@@ -1,11 +1,10 @@
-# Batchmint CLI
-
+# Batchmint CLI Readme
 
 ## How to Use
 
 1. Write messages to CSV
 
-Schema for `hashMessages` follows from GummyrollCrud
+Schema for `processMessages` follows from GummyrollCrud
 
 ```
 Owner,Hash
@@ -13,17 +12,32 @@ Owner,Hash
 <Pubkey L>,noooooo!!!!!
 ```
 
-2. Convert messages to nodes in the merkle tree
+2. Process these messages to be ready for batch mint instruction
 
-`ts-node index.ts createNodes -f messages.csv -o changelog.csv`
+`ts-node gummyroll-crud-cli.ts processMessages -f messages.csv -m tree-0`
 
-3. Write messages to DB-compatible format
+3. Upload metadata & changelog csv to Arweave
 
-`ts-node index.ts prepareMetadata -f messages.csv -o metadata.csv`
+- (required to init bundlr node) `bundlr fund 5000000 -h http://node1.bundlr.network -w ~/.config/solana/id.json -c solana` 
+- `bundlr upload tree-0/metadata.csv -h  https://node1.bundlr.network -w ~/.config/solana/id.json -c solana`
+- `bundlr upload tree-0/changelog.csv -h  https://node1.bundlr.network -w ~/.config/solana/id.json -c solana`
 
-3. Upload changelog & metadata CSVs to arweave
+3. Write arweave links manually to `tree-0/upload.json`
 
-See below
+Example `tree-0/upload.json`:
+```json
+{
+    "changelogUri": "https://arweave.net/iju1AE9qcdKEmGvKXEO41MyHBoeIMh8RQoIsEQDzLu8",
+    "metadataUri": "https://arweave.net/1c1-QMoJ-G2mfFPJ7qNqpHlj7KPDV-XlZ0DOkZbIZPA"
+}
+```
+
+4. Batch mint tree!
+
+`ts-node gummyroll-crud-cli.ts batchTree -m tree-0 -u "RPC_URL"`
+
+5. See uploaded assets at `/owner/<owner address>/assets`
+
 #### Uploading to Arweave
 Install `npm i -g @bundlr-network/client`
 
@@ -49,6 +63,3 @@ cargo install arloader
 arloader upload outfile.csv --with-sol --sol-keypair-path ~/.config/solana/id.json --ar-default-keypair
 ```
 
-Example Arweave Links:
-- changelog.csv "https://arweave.net/iju1AE9qcdKEmGvKXEO41MyHBoeIMh8RQoIsEQDzLu8"
-- metadata.csv "https://arweave.net/_1X1bOx0dNhPhbckZ8HsI4ApOXHF8gGV5idnAs5XRXI"
