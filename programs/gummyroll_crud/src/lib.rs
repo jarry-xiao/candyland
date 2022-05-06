@@ -142,7 +142,7 @@ pub mod gummyroll_crud {
     }
 
     pub fn create_tree_with_root<'a, 'b, 'c, 'info>(
-        ctx: Context<'a, 'b, 'c, 'info, CreateTree>,
+        ctx: Context<'a, 'b, 'c, 'info, CreateTree<'info>>,
         max_depth: u32,
         max_buffer_size: u32,
         root: [u8; 32],
@@ -152,7 +152,7 @@ pub mod gummyroll_crud {
         metadata_db_uri: Vec<u8>,
     ) -> Result<()> {
         let authority = ctx.accounts.authority.to_account_info();
-        let merkle_roll = ctx.accounts.merkle_roll.clone().to_account_info();
+        let merkle_roll = ctx.accounts.merkle_roll.to_account_info();
         let gummyroll_program = ctx.accounts.gummyroll_program.to_account_info();
         let authority_pda = ctx.accounts.authority_pda.to_account_info();
         let authority_pda_bump_seed = &[*ctx.bumps.get("authority_pda").unwrap()];
