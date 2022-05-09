@@ -83,6 +83,7 @@ struct NodeView {
     pub hash: String,
     pub level: i64,
     pub index: i64,
+    pub seq: i64,
 }
 
 #[derive(Serialize)]
@@ -105,6 +106,7 @@ fn node_to_view(r: NodeDAO) -> NodeView {
         hash: bs58::encode(r.hash).into_string(),
         level: r.level,
         index: r.node_idx,
+        seq: r.seq,
     }
 }
 
@@ -222,7 +224,7 @@ async fn handle_get_proof(
     let tree_id = decode_b58_param(req.param("tree_id").unwrap()).unwrap();
     let index = req.param("index").unwrap().parse::<i64>().unwrap();
 
-    let proof = get_proof(db, &tree_id, index).await;
+    let proof = get_proof_and_root(db, &tree_id, index).await;
     if proof.is_err() {
         return if let ApiError::ResponseError { status, msg } = proof.err().unwrap() {
             json_failed_resp_with_message(status, msg)
@@ -230,7 +232,8 @@ async fn handle_get_proof(
             json_failed_resp(StatusCode::INTERNAL_SERVER_ERROR)
         };
     }
-    json_success_resp(&proof.unwrap())
+    let proof_unwrapped = proof.unwrap();
+    json_success_resp(&proof_unwrapped[..proof_unwrapped.len()-1].to_vec())
 }
 
 async fn handle_get_asset_proof(
@@ -243,13 +246,11 @@ async fn handle_get_asset_proof(
 
     let tree_height = get_height(db, &tree_id).await.unwrap();
     let node_idx = leaf_idx_to_node_idx(leaf_idx, tree_height);
-
-    let root_result = get_root(db, &tree_id).await;
-    let result = get_asset(db, &tree_id, node_idx).await;
-    let proof: Result<Vec<String>, ApiError> = get_proof(db, &tree_id, node_idx)
+    let proof: Result<Vec<String>, ApiError> = get_proof_and_root(db, &tree_id, node_idx)
         .await
         .map(|p| p.iter().map(|node| node.hash.clone()).collect());
 
+    let result = get_asset(db, &tree_id, node_idx).await;
     let string: String;
     if result.is_err() {
         println!("Could not find asset...\n");
@@ -258,10 +259,11 @@ async fn handle_get_asset_proof(
     } else {
         string = result.unwrap().hash.clone();
     }
+
     let asset_proof = proof.map(|p| AssetProof {
         hash: string,
-        root: root_result.unwrap().to_string(),
-        proof: p,
+        root: p[p.len()-1].clone(),
+        proof: p[..p.len()-1].to_vec(),
     });
 
     if asset_proof.is_err() {
@@ -272,6 +274,7 @@ async fn handle_get_asset_proof(
             json_failed_resp(StatusCode::INTERNAL_SERVER_ERROR)
         };
     }
+
     json_success_resp(&asset_proof.unwrap())
 }
 
@@ -334,7 +337,7 @@ async fn get_asset(
         })
 }
 
-async fn get_proof(
+async fn get_proof_and_root(
     db: &Pool<Postgres>,
     tree_id: &Vec<u8>,
     index: i64,
@@ -344,7 +347,13 @@ async fn get_proof(
     let results = sqlx::query_as::<_, NodeDAO>(
         r#"
     select distinct on (node_idx) node_idx, hash, level, max(seq) as seq
-    from cl_items where node_idx = ANY ($1) and tree = $2 and node_idx > 1
+    from cl_items
+    where node_idx = ANY ($1) and tree = $2
+    and seq <= (
+        select max(seq) as seq 
+        from cl_items 
+        where node_idx = 1 and tree = $2
+    )
     group by seq, node_idx, level, hash
     order by node_idx desc, seq desc
     "#,
@@ -394,6 +403,7 @@ fn get_required_nodes_for_proof(index: i64) -> Vec<i64> {
         }
         idx >>= 1
     }
+    indexes.push(1);
     println!("nodes {:?}", indexes);
     return indexes;
 }
