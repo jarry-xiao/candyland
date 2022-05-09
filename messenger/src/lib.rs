@@ -39,6 +39,3 @@ pub trait Messenger {
     fn recv_transaction(&self) -> Result<()>;
     fn recv_block(&self) -> Result<()>;
 }
-
-//fn send<T: MessengerKey>(&self, buffer: &[u8]) -> Result<()>;
-//fn recv<'a, T: MessengerKey>(&self, buffer: &'a [u8]) -> Result<&'a [u8]>;

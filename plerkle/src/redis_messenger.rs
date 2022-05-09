@@ -1,22 +1,21 @@
 use {
-    crate::{
-        account_info_generated::account_info::{
-            root_as_account_info, AccountInfo, AccountInfoArgs,
-        },
-        block_info_generated,
-        error::PlerkleError,
-        programs::gummy_roll::handle_change_log_event,
-        slot_status_info_generated::slot_status_info::{self, SlotStatusInfo, SlotStatusInfoArgs},
-        transaction_info_generated::transaction_info::{
-            self, TransactionInfo, TransactionInfoArgs,
-        },
-    },
+    crate::{error::PlerkleError, programs::gummy_roll::handle_change_log_event},
     anchor_client::anchor_lang::AnchorDeserialize,
     flatbuffers::FlatBufferBuilder,
     log::*,
     messenger::{
         Messenger, SerializedBlock, ACCOUNT_STREAM, BLOCK_STREAM, DATA_KEY, SLOT_STREAM,
         TRANSACTION_STREAM,
+    },
+    plerkle_serialization::{
+        account_info_generated::account_info::{
+            root_as_account_info, AccountInfo, AccountInfoArgs,
+        },
+        block_info_generated,
+        slot_status_info_generated::slot_status_info::{self, SlotStatusInfo, SlotStatusInfoArgs},
+        transaction_info_generated::transaction_info::{
+            self, TransactionInfo, TransactionInfoArgs,
+        },
     },
     redis::{streams::StreamMaxlen, Commands, Connection, RedisResult, ToRedisArgs},
     solana_geyser_plugin_interface::geyser_plugin_interface::{
@@ -169,11 +168,6 @@ impl Messenger for RedisMessenger {
     fn recv_block(&self) -> Result<()> {
         Ok(())
     }
-
-    // fn recv<'a, T: MessengerKey>(&self, buffer: &'a [u8]) -> Result<&'a [u8]> {
-    //     // Not implemented.
-    //     Ok(buffer)
-    // }
 }
 
 impl RedisMessenger {

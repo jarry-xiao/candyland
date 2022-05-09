@@ -38,6 +38,7 @@ serde_json = "1.0.74"
 hex = "0.4.3"
 messenger={path= "../messenger"}
 flatbuffers = "2.1.2"
+plerkle-serialization={path= "../plerkle_serialization"}
 
 [dependencies.num-integer]
 version = "0.1.44"

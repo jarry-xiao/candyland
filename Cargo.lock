@@ -1963,6 +1963,7 @@ dependencies = [
  "lazy_static",
  "messenger",
  "num-integer",
+ "plerkle-serialization",
  "redis",
  "regex",
  "routerify",
@@ -2276,6 +2277,7 @@ dependencies = [
  "log",
  "messenger",
  "num-integer",
+ "plerkle-serialization",
  "redis",
  "regex",
  "serde",
@@ -2289,6 +2291,13 @@ dependencies = [
  "solana-sdk",
  "solana-transaction-status",
  "thiserror",
+]
+
+[[package]]
+name = "plerkle-serialization"
+version = "0.1.0"
+dependencies = [
+ "flatbuffers",
 ]
 
 [[package]]

@@ -4,7 +4,10 @@ use {
     gummyroll::state::change_log::ChangeLogEvent,
     lazy_static::lazy_static,
     messenger::{ACCOUNT_STREAM, BLOCK_STREAM, DATA_KEY, SLOT_STREAM, TRANSACTION_STREAM},
-    nft_api_lib::{error::*, events::handle_event},
+    nft_api_lib::events::handle_event,
+    plerkle_serialization::transaction_info_generated::transaction_info::{
+        self, root_as_transaction_info, TransactionInfo,
+    },
     redis::{
         streams::{StreamId, StreamKey, StreamReadOptions, StreamReadReply},
         Commands, Value,
@@ -12,12 +15,7 @@ use {
     regex::Regex,
     solana_sdk::keccak,
     sqlx::{self, postgres::PgPoolOptions, Pool, Postgres},
-    transaction_info_generated::transaction_info::{
-        self, root_as_transaction_info, TransactionInfo,
-    },
 };
-
-mod transaction_info_generated;
 
 mod program_ids {
     #![allow(missing_docs)]
