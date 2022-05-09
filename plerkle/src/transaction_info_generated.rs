@@ -17,91 +17,6 @@ pub mod transaction_info {
   extern crate flatbuffers;
   use self::flatbuffers::{EndianScalar, Follow};
 
-// struct Pubkey, aligned to 1
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq)]
-pub struct Pubkey(pub [u8; 32]);
-impl Default for Pubkey { 
-  fn default() -> Self { 
-    Self([0; 32])
-  }
-}
-impl core::fmt::Debug for Pubkey {
-  fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-    f.debug_struct("Pubkey")
-      .field("key", &self.key())
-      .finish()
-  }
-}
-
-impl flatbuffers::SimpleToVerifyInSlice for Pubkey {}
-impl flatbuffers::SafeSliceAccess for Pubkey {}
-impl<'a> flatbuffers::Follow<'a> for Pubkey {
-  type Inner = &'a Pubkey;
-  #[inline]
-  fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-    <&'a Pubkey>::follow(buf, loc)
-  }
-}
-impl<'a> flatbuffers::Follow<'a> for &'a Pubkey {
-  type Inner = &'a Pubkey;
-  #[inline]
-  fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
-    flatbuffers::follow_cast_ref::<Pubkey>(buf, loc)
-  }
-}
-impl<'b> flatbuffers::Push for Pubkey {
-    type Output = Pubkey;
-    #[inline]
-    fn push(&self, dst: &mut [u8], _rest: &[u8]) {
-        let src = unsafe {
-            ::core::slice::from_raw_parts(self as *const Pubkey as *const u8, Self::size())
-        };
-        dst.copy_from_slice(src);
-    }
-}
-impl<'b> flatbuffers::Push for &'b Pubkey {
-    type Output = Pubkey;
-
-    #[inline]
-    fn push(&self, dst: &mut [u8], _rest: &[u8]) {
-        let src = unsafe {
-            ::core::slice::from_raw_parts(*self as *const Pubkey as *const u8, Self::size())
-        };
-        dst.copy_from_slice(src);
-    }
-}
-
-impl<'a> flatbuffers::Verifiable for Pubkey {
-  #[inline]
-  fn run_verifier(
-    v: &mut flatbuffers::Verifier, pos: usize
-  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
-    use self::flatbuffers::Verifiable;
-    v.in_buffer::<Self>(pos)
-  }
-}
-
-impl<'a> Pubkey {
-  #[allow(clippy::too_many_arguments)]
-  pub fn new(
-    key: &[u8; 32],
-  ) -> Self {
-    let mut s = Self([0; 32]);
-    s.set_key(key);
-    s
-  }
-
-  pub fn key(&'a self) -> flatbuffers::Array<'a, u8, 32> {
-    flatbuffers::Array::follow(&self.0, 0)
-  }
-
-  pub fn set_key(&mut self, items: &[u8; 32]) {
-    flatbuffers::emplace_scalar_array(&mut self.0, 0, items);
-  }
-
-}
-
 pub enum TransactionInfoOffset {}
 #[derive(Copy, Clone, PartialEq)]
 
@@ -150,8 +65,8 @@ impl<'a> TransactionInfo<'a> {
     self._tab.get::<bool>(TransactionInfo::VT_IS_VOTE, Some(false)).unwrap()
   }
   #[inline]
-  pub fn account_keys(&self) -> Option<&'a [Pubkey]> {
-    self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, Pubkey>>>(TransactionInfo::VT_ACCOUNT_KEYS, None).map(|v| v.safe_slice())
+  pub fn account_keys(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Pubkey<'a>>>> {
+    self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Pubkey>>>>(TransactionInfo::VT_ACCOUNT_KEYS, None)
   }
   #[inline]
   pub fn log_messages(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<&'a str>>> {
@@ -179,7 +94,7 @@ impl flatbuffers::Verifiable for TransactionInfo<'_> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
      .visit_field::<bool>("is_vote", Self::VT_IS_VOTE, false)?
-     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, Pubkey>>>("account_keys", Self::VT_ACCOUNT_KEYS, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<Pubkey>>>>("account_keys", Self::VT_ACCOUNT_KEYS, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<&'_ str>>>>("log_messages", Self::VT_LOG_MESSAGES, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<InnerInstructions>>>>("inner_instructions", Self::VT_INNER_INSTRUCTIONS, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<CompiledInstruction>>>>("outer_instructions", Self::VT_OUTER_INSTRUCTIONS, false)?
@@ -190,7 +105,7 @@ impl flatbuffers::Verifiable for TransactionInfo<'_> {
 }
 pub struct TransactionInfoArgs<'a> {
     pub is_vote: bool,
-    pub account_keys: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, Pubkey>>>,
+    pub account_keys: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<Pubkey<'a>>>>>,
     pub log_messages: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<&'a str>>>>,
     pub inner_instructions: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<InnerInstructions<'a>>>>>,
     pub outer_instructions: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CompiledInstruction<'a>>>>>,
@@ -220,7 +135,7 @@ impl<'a: 'b, 'b> TransactionInfoBuilder<'a, 'b> {
     self.fbb_.push_slot::<bool>(TransactionInfo::VT_IS_VOTE, is_vote, false);
   }
   #[inline]
-  pub fn add_account_keys(&mut self, account_keys: flatbuffers::WIPOffset<flatbuffers::Vector<'b , Pubkey>>) {
+  pub fn add_account_keys(&mut self, account_keys: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<Pubkey<'b >>>>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(TransactionInfo::VT_ACCOUNT_KEYS, account_keys);
   }
   #[inline]
@@ -263,6 +178,100 @@ impl core::fmt::Debug for TransactionInfo<'_> {
       ds.field("inner_instructions", &self.inner_instructions());
       ds.field("outer_instructions", &self.outer_instructions());
       ds.field("slot", &self.slot());
+      ds.finish()
+  }
+}
+pub enum PubkeyOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct Pubkey<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for Pubkey<'a> {
+  type Inner = Pubkey<'a>;
+  #[inline]
+  fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table { buf, loc } }
+  }
+}
+
+impl<'a> Pubkey<'a> {
+  pub const VT_KEY: flatbuffers::VOffsetT = 4;
+
+  #[inline]
+  pub fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    Pubkey { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args PubkeyArgs<'args>
+  ) -> flatbuffers::WIPOffset<Pubkey<'bldr>> {
+    let mut builder = PubkeyBuilder::new(_fbb);
+    if let Some(x) = args.key { builder.add_key(x); }
+    builder.finish()
+  }
+
+
+  #[inline]
+  pub fn key(&self) -> Option<&'a [u8]> {
+    self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, u8>>>(Pubkey::VT_KEY, None).map(|v| v.safe_slice())
+  }
+}
+
+impl flatbuffers::Verifiable for Pubkey<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, u8>>>("key", Self::VT_KEY, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct PubkeyArgs<'a> {
+    pub key: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, u8>>>,
+}
+impl<'a> Default for PubkeyArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    PubkeyArgs {
+      key: None,
+    }
+  }
+}
+
+pub struct PubkeyBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> PubkeyBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_key(&mut self, key: flatbuffers::WIPOffset<flatbuffers::Vector<'b , u8>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(Pubkey::VT_KEY, key);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> PubkeyBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    PubkeyBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<Pubkey<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for Pubkey<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("Pubkey");
+      ds.field("key", &self.key());
       ds.finish()
   }
 }

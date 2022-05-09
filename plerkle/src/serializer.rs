@@ -10,6 +10,7 @@ use {
         },
     },
     flatbuffers::FlatBufferBuilder,
+    messenger::SerializedBlock,
     solana_geyser_plugin_interface::geyser_plugin_interface::{
         ReplicaAccountInfo, ReplicaBlockInfo, ReplicaTransactionInfo, Result, SlotStatus,
     },
@@ -94,7 +95,12 @@ pub fn serialize_transaction<'a>(
     let account_keys = if account_keys_len > 0 {
         let mut account_keys_fb_vec = Vec::with_capacity(account_keys_len);
         for key in account_keys.iter() {
-            account_keys_fb_vec.push(transaction_info::Pubkey::new(&key.to_bytes()));
+            let key = builder.create_vector(&key.to_bytes());
+            let pubkey = transaction_info::Pubkey::create(
+                builder,
+                &transaction_info::PubkeyArgs { key: Some(key) },
+            );
+            account_keys_fb_vec.push(pubkey);
         }
         Some(builder.create_vector(&account_keys_fb_vec))
     } else {
@@ -198,7 +204,7 @@ pub fn serialize_transaction<'a>(
 pub fn serialize_block<'a>(
     builder: &'a mut FlatBufferBuilder,
     block_info: &ReplicaBlockInfo,
-) -> &'a [u8] {
+) -> SerializedBlock<'a> {
     // Serialize blockash.
     let blockhash = Some(builder.create_string(&block_info.blockhash));
 
@@ -257,5 +263,5 @@ pub fn serialize_block<'a>(
 
     // Finalize buffer and return to caller.
     builder.finish(block_info, None);
-    builder.finished_data()
+    SerializedBlock::new(builder.finished_data())
 }

@@ -1,25 +1,38 @@
-extern crate core;
+use {
+    anchor_client::anchor_lang::AnchorDeserialize,
+    flatbuffers::{ForwardsUOffset, Vector},
+    gummyroll::state::change_log::ChangeLogEvent,
+    lazy_static::lazy_static,
+    messenger::{ACCOUNT_STREAM, BLOCK_STREAM, DATA_KEY, SLOT_STREAM, TRANSACTION_STREAM},
+    nft_api_lib::{error::*, events::handle_event},
+    redis::{
+        streams::{StreamId, StreamKey, StreamReadOptions, StreamReadReply},
+        Commands, Value,
+    },
+    regex::Regex,
+    solana_sdk::keccak,
+    sqlx::{self, postgres::PgPoolOptions, Pool, Postgres},
+    transaction_info_generated::transaction_info::{root_as_transaction_info, TransactionInfo},
+};
 
-use hyper::{Body, Client, Request, Response, Server, StatusCode};
-// Import the routerify prelude traits.
-use futures_util::future::join3;
-use redis::streams::{StreamId, StreamKey, StreamReadOptions, StreamReadReply};
-use redis::{Commands, Value};
-use routerify::prelude::*;
-use routerify::{Middleware, Router, RouterService};
+mod transaction_info_generated;
 
-use anchor_client::anchor_lang::prelude::Pubkey;
-use routerify_json_response::{json_failed_resp_with_message, json_success_resp};
-use std::{net::SocketAddr, thread};
+mod program_ids {
+    #![allow(missing_docs)]
 
-use gummyroll::state::change_log::{ChangeLogEvent, PathNode};
-
-use nft_api_lib::error::*;
-use nft_api_lib::events::handle_event;
-use sqlx;
-use sqlx::postgres::PgPoolOptions;
-use sqlx::{Pool, Postgres};
-use tokio::task;
+    use solana_sdk::pubkeys;
+    pubkeys!(
+        token_metadata,
+        "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
+    );
+    pubkeys!(
+        gummy_roll_crud,
+        "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+    );
+    pubkeys!(gummy_roll, "GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD");
+    pubkeys!(token, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
+    pubkeys!(a_token, "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
+}
 
 #[derive(Default)]
 struct AppEvent {
@@ -27,6 +40,7 @@ struct AppEvent {
     message: String,
     leaf: String,
     owner: String,
+    new_owner: Option<String>,
     tree_id: String,
     authority: String,
 }
@@ -45,182 +59,6 @@ struct AppSpecificRev {
     revision: i64,
 }
 
-pub async fn cl_service(ids: &Vec<StreamId>, pool: &Pool<Postgres>) -> String {
-    let mut last_id = "".to_string();
-    for StreamId { id, map } in ids {
-        println!("\tCL STREAM ID {}", id);
-        let pid = id.replace("-", "").parse::<i64>().unwrap();
-
-        let data = map.get("data");
-
-        if data.is_none() {
-            println!("\tNo Data");
-            continue;
-        }
-
-        if let Value::Data(bytes) = data.unwrap().to_owned() {
-            let raw_str = String::from_utf8(bytes);
-            if !raw_str.is_ok() {
-                continue;
-            }
-            let change_log_res = raw_str
-                .map_err(|_serr| ApiError::ChangeLogEventMalformed)
-                .and_then(|o| {
-                    let d: Result<ChangeLogEvent, ApiError> = handle_event(o);
-                    d
-                });
-            if change_log_res.is_err() {
-                println!("\tBad Data");
-                continue;
-            }
-            let change_log = change_log_res.unwrap();
-            println!("\tCL tree {:?}", change_log.id);
-            let txnb = pool.begin().await;
-            match txnb {
-                Ok(txn) => {
-                    let mut i: i64 = 0;
-                    for p in change_log.path.into_iter() {
-                        println!("level {}, node {:?}", i, p.node.inner);
-                        let tree_id = change_log.id.as_ref();
-                        let f = sqlx::query(SET_CLSQL_ITEM)
-                            .bind(&tree_id)
-                            .bind(&pid + i)
-                            .bind(&i)
-                            .bind(&p.node.inner.as_ref())
-                            .bind(&(p.index as i64))
-                            .execute(pool)
-                            .await;
-                        if f.is_err() {
-                            println!("Error {:?}", f.err().unwrap());
-                        }
-                        i += 1;
-                    }
-                    match txn.commit().await {
-                        Ok(_r) => {
-                            println!("Saved CL");
-                        }
-                        Err(e) => {
-                            eprintln!("{}", e.to_string())
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("{}", e.to_string())
-                }
-            }
-        }
-        last_id = id.clone();
-    }
-    last_id
-}
-
-pub async fn structured_program_event_service(
-    ids: &Vec<StreamId>,
-    pool: &Pool<Postgres>,
-) -> String {
-    let mut last_id = "".to_string();
-    for StreamId { id, map } in ids {
-        let mut app_event = AppEvent::default();
-        for (k, v) in map.to_owned() {
-            if let Value::Data(bytes) = v {
-                let raw_str = String::from_utf8(bytes);
-                if raw_str.is_ok() {
-                    if k == "op" {
-                        app_event.op = raw_str.unwrap();
-                    } else if k == "tree_id" {
-                        app_event.tree_id = raw_str.unwrap();
-                    } else if k == "msg" {
-                        app_event.message = raw_str.unwrap();
-                    } else if k == "leaf" {
-                        app_event.leaf = raw_str.unwrap();
-                    } else if k == "owner" {
-                        app_event.owner = raw_str.unwrap();
-                    } else if k == "authority" {
-                        app_event.authority = raw_str.unwrap();
-                    }
-                }
-            }
-        }
-
-        let pid = id.replace("-", "").parse::<i64>().unwrap();
-        let new_owner = map.get("new_owner").and_then(|x| {
-            if let Value::Data(bytes) = x.to_owned() {
-                String::from_utf8(bytes).ok()
-            } else {
-                None
-            }
-        });
-        println!("Op: {:?}", app_event.op);
-        println!("leaf: {:?}", &app_event.leaf);
-        println!("owner: {:?}", &app_event.owner);
-        println!("tree_id: {:?}", &app_event.tree_id);
-        println!("new_owner: {:?}", new_owner);
-        if app_event.op == "add" || app_event.op == "tran" || app_event.op == "create" {
-            let row = sqlx::query_as::<_, AppSpecificRev>(GET_APPSQL)
-                .bind(&un_jank_message(&app_event.message))
-                .bind(&bs58::decode(&app_event.tree_id).into_vec().unwrap())
-                .fetch_one(pool)
-                .await;
-            if row.is_ok() {
-                let res = row.unwrap();
-                if pid < res.revision as i64 {
-                    continue;
-                }
-            }
-        }
-        if app_event.op == "add" {
-            sqlx::query(SET_APPSQL)
-                .bind(&un_jank_message(&app_event.message))
-                .bind(&bs58::decode(&app_event.leaf).into_vec().unwrap())
-                .bind(&bs58::decode(&app_event.owner).into_vec().unwrap())
-                .bind(&bs58::decode(&app_event.tree_id).into_vec().unwrap())
-                .bind(&pid)
-                .execute(pool)
-                .await
-                .unwrap();
-        } else if app_event.op == "tran" {
-            match new_owner {
-                Some(x) => {
-                    sqlx::query(SET_APPSQL)
-                        .bind(&un_jank_message(&app_event.message))
-                        .bind(&bs58::decode(&app_event.leaf).into_vec().unwrap())
-                        .bind(&bs58::decode(&x).into_vec().unwrap())
-                        .bind(&bs58::decode(&app_event.tree_id).into_vec().unwrap())
-                        .bind(&pid)
-                        .execute(pool)
-                        .await
-                        .unwrap();
-                }
-                None => {
-                    println!("Received Transfer op with no new_owner");
-                    continue;
-                }
-            };
-        } else if app_event.op == "rm" {
-            sqlx::query(DEL_APPSQL)
-                .bind(&bs58::decode(&app_event.leaf).into_vec().unwrap())
-                .bind(&bs58::decode(&app_event.tree_id).into_vec().unwrap())
-                .execute(pool)
-                .await
-                .unwrap();
-        } else if app_event.op == "create" {
-            sqlx::query(SET_OWNERSHIP_APPSQL)
-                .bind(&bs58::decode(&app_event.tree_id).into_vec().unwrap())
-                .bind(&bs58::decode(&app_event.authority).into_vec().unwrap())
-                .bind(&pid)
-                .execute(pool)
-                .await
-                .unwrap();
-        }
-        last_id = id.clone();
-    }
-    last_id
-}
-
-fn un_jank_message(hex_str: &String) -> String {
-    String::from_utf8(hex::decode(hex_str).unwrap()).unwrap()
-}
-
 #[tokio::main]
 async fn main() {
     let client = redis::Client::open("redis://redis/").unwrap();
@@ -229,33 +67,480 @@ async fn main() {
         .connect("postgres://solana:solana@db/solana")
         .await
         .unwrap();
-    let mut cl_last_id: String = ">".to_string();
-    let mut gm_last_id: String = ">".to_string();
-    let conn_res = client.get_connection();
-    let mut conn = conn_res.unwrap();
-    let streams = vec!["GM_CL", "GMC_OP"];
+    // let mut cl_last_id: String = ">".to_string();
+    // let mut gm_last_id: String = ">".to_string();
+    let ids = [">", ">", ">", ">"];
+
+    let mut conn = client.get_connection().unwrap();
+    //let streams = vec!["GM_CL", "GMC_OP"];
+    let streams = [
+        ACCOUNT_STREAM,
+        SLOT_STREAM,
+        TRANSACTION_STREAM,
+        BLOCK_STREAM,
+    ];
+
     let group_name = "ingester";
+
     for key in &streams {
         let created: Result<(), _> = conn.xgroup_create_mkstream(*key, group_name, "$");
         if let Err(e) = created {
             println!("Group already exists: {:?}", e)
         }
     }
+
+    let opts = StreamReadOptions::default()
+        .block(1000)
+        .count(100000)
+        .group(group_name, "lelelelle");
+
     loop {
-        let opts = StreamReadOptions::default()
-            .block(1000)
-            .count(100000)
-            .group(group_name, "lelelelle");
-        let srr: StreamReadReply = conn
-            .xread_options(streams.as_slice(), &[&cl_last_id, &gm_last_id], &opts)
-            .unwrap();
+        let srr: StreamReadReply = conn.xread_options(&streams, &ids, &opts).unwrap();
+
         for StreamKey { key, ids } in srr.keys {
-            println!("{}", key);
-            if key == "GM_CL" {
-                cl_service(&ids, &pool).await;
-            } else if key == "GMC_OP" {
-                structured_program_event_service(&ids, &pool).await;
+            // if key == "GM_CL" {
+            //     cl_service(&ids, &pool).await;
+            // } else if key == "GMC_OP" {
+            //     structured_program_event_service(&ids, &pool).await;
+            if key == ACCOUNT_STREAM {
+                //handle_account(&ids, &pool).await;
+            } else if key == SLOT_STREAM {
+                //handle_slot_data.await();
+            } else if key == TRANSACTION_STREAM {
+                println!("{}", key);
+                handle_transaction(&ids, &pool).await;
+            } else if key == BLOCK_STREAM {
+                //handle_block_data.await();
             }
         }
     }
+}
+
+pub async fn handle_transaction(ids: &Vec<StreamId>, pool: &Pool<Postgres>) {
+    for StreamId { id, map } in ids {
+        let pid = id.replace("-", "").parse::<i64>().unwrap();
+
+        // Get data from map.
+        let data = if let Some(data) = map.get(DATA_KEY) {
+            data
+        } else {
+            println!("\tNo Data");
+            continue;
+        };
+
+        let bytes = match data {
+            Value::Data(bytes) => bytes,
+            _ => {
+                println!("Data wrong format");
+                continue;
+            }
+        };
+
+        // Get root.
+        let transaction = match root_as_transaction_info(&bytes) {
+            Err(err) => {
+                println!("Overall transaction info deserialization error: {err}");
+                continue;
+            }
+            Ok(transaction) => transaction,
+        };
+
+        // Get account keys.
+        let keys = match transaction.account_keys() {
+            None => {
+                println!("account_keys deserialization error");
+                continue;
+            }
+            Some(keys) => keys,
+        };
+
+        // Handle log message parsing.
+        //let keys = transaction_info.transaction.message().account_keys();
+        //if keys.iter().any(|v| solana_sdk::pubkey::Pubkey::new(&v.0) == program_ids::gummy_roll()) {
+        if keys
+            .iter()
+            .any(|pubkey| pubkey.key().unwrap() == program_ids::gummy_roll().to_bytes())
+        {
+            println!("Found GM CL event");
+            // Get vector of change log events.
+            let change_log_event_vec = if let Ok(change_log_event_vec) =
+                handle_change_log_event(transaction.log_messages())
+            {
+                change_log_event_vec
+            } else {
+                println!("Could not handle change log event vector");
+                continue;
+            };
+
+            //change_log_event.unwrap().iter().for_each(|ev| {
+            for event in change_log_event_vec {
+                // Handle event and get change log event.
+                let change_log_res: Result<ChangeLogEvent, ApiError> = handle_event(event);
+
+                let change_log_event = if let Ok(change_log_event) = change_log_res {
+                    change_log_event
+                } else {
+                    println!("\tBad Data");
+                    continue;
+                };
+
+                // Put change log event into database.
+                change_log_event_to_database(change_log_event, pid, pool).await;
+            }
+        }
+
+        // Handle instruction parsing.
+        let instructions = order_instructions(&transaction);
+
+        for program_instruction in instructions {
+            match program_instruction {
+                (program, instruction) if program == program_ids::gummy_roll_crud() => {
+                    let mut app_event = AppEvent::default();
+                    match gummyroll_crud::get_instruction_type(&instruction.data) {
+                        gummyroll_crud::InstructionName::CreateTree => {
+                            // Get tree ID.
+                            let tree_id = keys.get(instruction.accounts[3] as usize);
+                            let tree_id =
+                                String::from_utf8(tree_id.key().unwrap().to_vec()).unwrap();
+
+                            // Get authority.
+                            let auth = keys.get(instruction.accounts[0] as usize);
+                            let auth = String::from_utf8(auth.key().unwrap().to_vec()).unwrap();
+
+                            // Populate app event.
+                            app_event.op = String::from("create");
+                            app_event.tree_id = tree_id;
+                            app_event.authority = auth;
+                        }
+                        gummyroll_crud::InstructionName::Add => {
+                            // Get data.
+                            let data = instruction.data[8..].to_owned();
+                            let data_buf = &mut data.as_slice();
+                            let add: gummyroll_crud::instruction::Add =
+                                gummyroll_crud::instruction::Add::deserialize(data_buf).unwrap();
+
+                            // Get tree ID.
+                            //let tree_id = keys.index(instruction.accounts[3] as usize);
+                            let tree_id = keys.get(instruction.accounts[3] as usize);
+                            let tree_id =
+                                String::from_utf8(tree_id.key().unwrap().to_vec()).unwrap();
+
+                            // Get owner from index 0.
+                            //let owner = keys.index(instruction.accounts[0] as usize);
+                            let owner = keys.get(instruction.accounts[0] as usize);
+                            let owner = String::from_utf8(owner.key().unwrap().to_vec()).unwrap();
+
+                            // Get message and leaf.
+                            let hex_message = hex::encode(&add.message);
+                            let leaf = keccak::hashv(&[&owner.as_bytes(), add.message.as_slice()]);
+
+                            // Populate app event.
+                            app_event.op = String::from("add");
+                            app_event.tree_id = tree_id;
+                            app_event.leaf = leaf.to_string();
+                            app_event.message = hex_message;
+                            app_event.owner = owner;
+                        }
+                        gummyroll_crud::InstructionName::Transfer => {
+                            // Get data.
+                            let data = instruction.data[8..].to_owned();
+                            let data_buf = &mut data.as_slice();
+                            let add: gummyroll_crud::instruction::Transfer =
+                                gummyroll_crud::instruction::Transfer::deserialize(data_buf)
+                                    .unwrap();
+
+                            // Get tree ID.
+                            //let tree_id = keys.index(instruction.accounts[3] as usize);
+                            let tree_id = keys.get(instruction.accounts[3] as usize);
+                            let tree_id =
+                                String::from_utf8(tree_id.key().unwrap().to_vec()).unwrap();
+
+                            // Get owner from index 4.
+                            //let owner = keys.index(instruction.accounts[4] as usize);
+                            let owner = keys.get(instruction.accounts[4] as usize);
+                            let owner = String::from_utf8(owner.key().unwrap().to_vec()).unwrap();
+
+                            // Get new owner from index 5.
+                            //let new_owner = keys.index(instruction.accounts[5] as usize);
+                            let new_owner = keys.get(instruction.accounts[5] as usize);
+                            let new_owner =
+                                String::from_utf8(new_owner.key().unwrap().to_vec()).unwrap();
+
+                            // Get message and leaf.
+                            let hex_message = hex::encode(&add.message);
+                            let leaf =
+                                keccak::hashv(&[&new_owner.as_bytes(), add.message.as_slice()]);
+
+                            // Populate app event.
+                            app_event.op = String::from("tran");
+                            app_event.tree_id = tree_id;
+                            app_event.leaf = leaf.to_string();
+                            app_event.message = hex_message;
+                            app_event.owner = owner;
+                            app_event.new_owner = Some(new_owner);
+                        }
+                        gummyroll_crud::InstructionName::Remove => {
+                            // Get data.
+                            let data = instruction.data[8..].to_owned();
+                            let data_buf = &mut data.as_slice();
+                            let remove: gummyroll_crud::instruction::Remove =
+                                gummyroll_crud::instruction::Remove::deserialize(data_buf).unwrap();
+
+                            // Get tree ID.
+                            //let tree_id = keys.index(instruction.accounts[3] as usize);
+                            let tree_id = keys.get(instruction.accounts[3] as usize);
+                            let tree_id =
+                                String::from_utf8(tree_id.key().unwrap().to_vec()).unwrap();
+
+                            // Get owner from index 0.
+                            //let owner = keys.index(instruction.accounts[0] as usize);
+                            let owner = keys.get(instruction.accounts[0] as usize);
+                            let owner = String::from_utf8(owner.key().unwrap().to_vec()).unwrap();
+
+                            // Get leaf.
+                            let leaf = bs58::encode(&remove.leaf_hash).into_string();
+
+                            // Populate app event.
+                            app_event.op = String::from("rm");
+                            app_event.tree_id = tree_id;
+                            app_event.leaf = leaf.to_string();
+                            app_event.message = "".to_string();
+                            app_event.owner = owner;
+                        }
+                        _ => {}
+                    }
+                    // If we populated an app event, write it to the database.
+                    if app_event.op.len() > 0 {
+                        let _result = app_event_to_database(&app_event, pid, pool).await;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+}
+
+fn handle_change_log_event(
+    log_messages: Option<Vector<ForwardsUOffset<&str>>>,
+) -> Result<Vec<String>, ()> {
+    lazy_static! {
+        static ref CLRE: Regex = Regex::new(
+            r"Program data: ((?:[A-Za-z\d+/]{4})*(?:[A-Za-z\d+/]{3}=|[A-Za-z\d+/]{2}==)?$)"
+        )
+        .unwrap();
+    }
+    let mut events: Vec<String> = vec![];
+
+    match log_messages {
+        Some(lines) => {
+            for line in lines {
+                let captures = CLRE.captures(line);
+                let b64raw = captures.and_then(|c| c.get(1)).map(|c| c.as_str());
+                b64raw.map(|raw| events.push((raw).parse().unwrap()));
+            }
+            if events.is_empty() {
+                println!("No events captured!");
+                Err(())
+            } else {
+                Ok(events)
+            }
+        }
+        None => {
+            println!("Some plerkle error outside of event parsing/ no log messages");
+            Err(())
+        }
+    }
+}
+
+pub fn order_instructions(
+    transaction_info: &TransactionInfo,
+) -> Vec<(
+    solana_sdk::pubkey::Pubkey,
+    solana_sdk::instruction::CompiledInstruction,
+)> {
+    let mut ordered_ixs: Vec<(
+        solana_sdk::pubkey::Pubkey,
+        solana_sdk::instruction::CompiledInstruction,
+    )> = vec![];
+    // Get inner instructions.
+    let inner_ixs = transaction_info.inner_instructions();
+
+    // Get outer instructions.
+    let outer_instructions = match transaction_info.outer_instructions() {
+        None => {
+            println!("outer instructions deserialization error");
+            return ordered_ixs;
+        }
+        Some(instructions) => instructions,
+    };
+
+    // Get account keys.
+    let keys = match transaction_info.account_keys() {
+        None => {
+            println!("account_keys deserialization error");
+            return ordered_ixs;
+        }
+        Some(keys) => keys,
+    };
+
+    if let Some(inner_ix_list) = inner_ixs {
+        //let inner_ix_list = inner_ixs.as_ref().unwrap().as_slice();
+        for inner in inner_ix_list {
+            let outer = outer_instructions.get(inner.index() as usize);
+            let program_id = keys.get(outer.program_id_index() as usize);
+            let program_id = solana_sdk::pubkey::Pubkey::new(program_id.key().unwrap());
+
+            let outer = solana_sdk::instruction::CompiledInstruction::new_from_raw_parts(
+                outer.program_id_index(),
+                outer.data().unwrap().to_vec(),
+                outer.accounts().unwrap().to_vec(),
+            );
+
+            ordered_ixs.push((program_id, outer));
+
+            for inner_ix_instance in inner.instructions().unwrap() {
+                let inner_program_id = keys.get(inner_ix_instance.program_id_index() as usize);
+                let inner_program_id =
+                    solana_sdk::pubkey::Pubkey::new(inner_program_id.key().unwrap());
+
+                let inner_ix_instance =
+                    solana_sdk::instruction::CompiledInstruction::new_from_raw_parts(
+                        inner_ix_instance.program_id_index(),
+                        inner_ix_instance.data().unwrap().to_vec(),
+                        inner_ix_instance.accounts().unwrap().to_vec(),
+                    );
+                ordered_ixs.push((inner_program_id, inner_ix_instance));
+            }
+        }
+    } else {
+        for instruction in outer_instructions {
+            let program_id = keys.get(instruction.program_id_index() as usize);
+            let program_id = solana_sdk::pubkey::Pubkey::new(program_id.key().unwrap());
+            let instruction = solana_sdk::instruction::CompiledInstruction::new_from_raw_parts(
+                instruction.program_id_index(),
+                instruction.data().unwrap().to_vec(),
+                instruction.accounts().unwrap().to_vec(),
+            );
+            ordered_ixs.push((program_id, instruction));
+        }
+    }
+    ordered_ixs
+}
+
+async fn change_log_event_to_database(
+    change_log_event: ChangeLogEvent,
+    pid: i64,
+    pool: &Pool<Postgres>,
+) {
+    println!("\tCL tree {:?}", change_log_event.id);
+    let txnb = pool.begin().await;
+    match txnb {
+        Ok(txn) => {
+            let mut i: i64 = 0;
+            for p in change_log_event.path.into_iter() {
+                println!("level {}, node {:?}", i, p.node.inner);
+                let tree_id = change_log_event.id.as_ref();
+                let f = sqlx::query(SET_CLSQL_ITEM)
+                    .bind(&tree_id)
+                    .bind(&pid + i)
+                    .bind(&i)
+                    .bind(&p.node.inner.as_ref())
+                    .bind(&(p.index as i64))
+                    .execute(pool)
+                    .await;
+                if f.is_err() {
+                    println!("Error {:?}", f.err().unwrap());
+                }
+                i += 1;
+            }
+            match txn.commit().await {
+                Ok(_r) => {
+                    println!("Saved CL");
+                }
+                Err(e) => {
+                    eprintln!("{}", e.to_string())
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("{}", e.to_string())
+        }
+    }
+}
+
+fn un_jank_message(hex_str: &String) -> String {
+    String::from_utf8(hex::decode(hex_str).unwrap()).unwrap()
+}
+
+async fn app_event_to_database(
+    app_event: &AppEvent,
+    pid: i64,
+    pool: &Pool<Postgres>,
+) -> Result<(), ()> {
+    println!("Op: {:?}", app_event.op);
+    println!("leaf: {:?}", &app_event.leaf);
+    println!("owner: {:?}", &app_event.owner);
+    println!("tree_id: {:?}", &app_event.tree_id);
+    println!("new_owner: {:?}", &app_event.new_owner);
+
+    if app_event.op == "add" || app_event.op == "tran" || app_event.op == "create" {
+        let row = sqlx::query_as::<_, AppSpecificRev>(GET_APPSQL)
+            .bind(&un_jank_message(&app_event.message))
+            .bind(&bs58::decode(&app_event.tree_id).into_vec().unwrap())
+            .fetch_one(pool)
+            .await;
+        if row.is_ok() {
+            let res = row.unwrap();
+            if pid < res.revision as i64 {
+                return Err(());
+            }
+        }
+    }
+
+    if app_event.op == "add" {
+        sqlx::query(SET_APPSQL)
+            .bind(&un_jank_message(&app_event.message))
+            .bind(&bs58::decode(&app_event.leaf).into_vec().unwrap())
+            .bind(&bs58::decode(&app_event.owner).into_vec().unwrap())
+            .bind(&bs58::decode(&app_event.tree_id).into_vec().unwrap())
+            .bind(&pid)
+            .execute(pool)
+            .await
+            .unwrap();
+    } else if app_event.op == "tran" {
+        match &app_event.new_owner {
+            Some(x) => {
+                sqlx::query(SET_APPSQL)
+                    .bind(&un_jank_message(&app_event.message))
+                    .bind(&bs58::decode(&app_event.leaf).into_vec().unwrap())
+                    .bind(&bs58::decode(&x).into_vec().unwrap())
+                    .bind(&bs58::decode(&app_event.tree_id).into_vec().unwrap())
+                    .bind(&pid)
+                    .execute(pool)
+                    .await
+                    .unwrap();
+            }
+            None => {
+                println!("Received Transfer op with no new_owner");
+                return Err(());
+            }
+        };
+    } else if app_event.op == "rm" {
+        sqlx::query(DEL_APPSQL)
+            .bind(&bs58::decode(&app_event.leaf).into_vec().unwrap())
+            .bind(&bs58::decode(&app_event.tree_id).into_vec().unwrap())
+            .execute(pool)
+            .await
+            .unwrap();
+    } else if app_event.op == "create" {
+        sqlx::query(SET_OWNERSHIP_APPSQL)
+            .bind(&bs58::decode(&app_event.tree_id).into_vec().unwrap())
+            .bind(&bs58::decode(&app_event.authority).into_vec().unwrap())
+            .bind(&pid)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+
+    Ok(())
 }

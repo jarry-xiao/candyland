@@ -14,7 +14,10 @@ use {
     anchor_client::anchor_lang::AnchorDeserialize,
     flatbuffers::FlatBufferBuilder,
     log::*,
-    messenger::Messenger,
+    messenger::{
+        Messenger, SerializedBlock, ACCOUNT_STREAM, BLOCK_STREAM, DATA_KEY, SLOT_STREAM,
+        TRANSACTION_STREAM,
+    },
     redis::{streams::StreamMaxlen, Commands, Connection, RedisResult, ToRedisArgs},
     solana_geyser_plugin_interface::geyser_plugin_interface::{
         GeyserPluginError, ReplicaAccountInfo, ReplicaBlockInfo, ReplicaTransactionInfo, Result,
@@ -136,19 +139,19 @@ impl Messenger for RedisMessenger {
     }
 
     fn send_account(&mut self, bytes: &[u8]) -> Result<()> {
-        self.send_data("ACC", bytes)
+        self.send_data(ACCOUNT_STREAM, bytes)
     }
 
     fn send_slot_status(&mut self, bytes: &[u8]) -> Result<()> {
-        self.send_data("SLT", bytes)
+        self.send_data(SLOT_STREAM, bytes)
     }
 
     fn send_transaction(&mut self, bytes: &[u8]) -> Result<()> {
-        self.send_data("TXN", bytes)
+        self.send_data(TRANSACTION_STREAM, bytes)
     }
 
-    fn send_block(&mut self, bytes: &[u8]) -> Result<()> {
-        self.send_data("BLK", bytes)
+    fn send_block(&mut self, bytes: SerializedBlock) -> Result<()> {
+        self.send_data(BLOCK_STREAM, bytes.bytes())
     }
 
     fn recv_account(&self) -> Result<()> {
@@ -173,21 +176,14 @@ impl Messenger for RedisMessenger {
     // }
 }
 
-enum DataType {
-    AccountInfo,
-    SlotStatus,
-    TransactionInfo,
-    BlockStatus,
-}
-
 impl RedisMessenger {
-    fn send_data(&mut self, key: &'static str, bytes: &[u8]) -> Result<()> {
+    fn send_data(&mut self, stream_name: &'static str, bytes: &[u8]) -> Result<()> {
         // Put serialized data into Redis.
         let res: RedisResult<()> = self.connection.as_mut().unwrap().xadd_maxlen(
-            key,
+            stream_name,
             StreamMaxlen::Approx(55000),
             "*",
-            &[("data", bytes)],
+            &[(DATA_KEY, bytes)],
         );
 
         // Log but do not return errors.

@@ -11,8 +11,8 @@ table TransactionInfo {
   slot: uint64;
 }
 
-struct Pubkey {
-    key:[uint8:32];
+table Pubkey {
+    key:[uint8];
 }
 
 table CompiledInstruction {
