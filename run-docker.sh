@@ -3,9 +3,9 @@ set -e
 
 # Build on-chain programs first
 anchor build
-cp programs/target/deploy/gummyroll.so docker-vol/gummyroll.so
-cp programs/target/deploy/gummyroll_crud.so docker-vol/gummyroll_crud.so
-cp programs/target/deploy/bubblegum.so docker-vol/bubblegum.so
+cp target/deploy/gummyroll.so docker-vol/gummyroll.so
+cp target/deploy/gummyroll_crud.so docker-vol/gummyroll_crud.so
+cp target/deploy/bubblegum.so docker-vol/bubblegum.so
 
 # Off Chain Setup
 # Speed up by using cargo remote
