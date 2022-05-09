@@ -1,29 +1,15 @@
 use {
-    crate::{error::PlerkleError, programs::gummy_roll::handle_change_log_event},
-    anchor_client::anchor_lang::AnchorDeserialize,
-    flatbuffers::FlatBufferBuilder,
+    crate::error::PlerkleError,
     log::*,
     messenger::{
         Messenger, SerializedBlock, ACCOUNT_STREAM, BLOCK_STREAM, DATA_KEY, SLOT_STREAM,
         TRANSACTION_STREAM,
     },
-    plerkle_serialization::{
-        account_info_generated::account_info::{
-            root_as_account_info, AccountInfo, AccountInfoArgs,
-        },
-        block_info_generated,
-        slot_status_info_generated::slot_status_info::{self, SlotStatusInfo, SlotStatusInfoArgs},
-        transaction_info_generated::transaction_info::{
-            self, TransactionInfo, TransactionInfoArgs,
-        },
-    },
     redis::{streams::StreamMaxlen, Commands, Connection, RedisResult, ToRedisArgs},
     solana_geyser_plugin_interface::geyser_plugin_interface::{
-        GeyserPluginError, ReplicaAccountInfo, ReplicaBlockInfo, ReplicaTransactionInfo, Result,
-        SlotStatus,
+        GeyserPluginError, ReplicaTransactionInfo, Result,
     },
-    solana_runtime::bank::RewardType,
-    solana_sdk::{instruction::CompiledInstruction, keccak, pubkey::Pubkey},
+    solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey},
     std::{
         collections::HashMap,
         fmt::{Debug, Formatter},
