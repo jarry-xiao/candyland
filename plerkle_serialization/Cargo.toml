@@ -1,6 +1,6 @@
 [package]
-name = "messenger"
-description = "Metaplex Messenger trait for Geyser plugin producer/consumer patterns."
+name = "plerkle-serialization"
+description = "Metaplex Flatbuffers Plerkle Serialization for Geyser plugin producer/consumer patterns."
 version = "0.1.0"
 edition = "2021"
 license = "AGPL3"
@@ -8,7 +8,7 @@ homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-geyser-plugin-interface"
 
 [dependencies]
-solana-geyser-plugin-interface  = { version = "=1.10.10" }
+flatbuffers = "2.1.2"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

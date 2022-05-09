@@ -1,8 +1,14 @@
 use {
     crate::{
-        accounts_selector::AccountsSelector, error::PlerkleError, redis_messenger::RedisMessenger,
+        accounts_selector::AccountsSelector,
+        error::PlerkleError,
+        redis_messenger::RedisMessenger,
+        serializer::{
+            serialize_account, serialize_block, serialize_slot_status, serialize_transaction,
+        },
         transaction_selector::TransactionSelector,
     },
+    flatbuffers::FlatBufferBuilder,
     log::*,
     messenger::Messenger,
     solana_geyser_plugin_interface::geyser_plugin_interface::{
@@ -167,7 +173,11 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
                             msg: "There is no connection to data store.".to_string(),
                         },
                     ))),
-                    Some(messenger) => messenger.send_account(account, slot, is_startup),
+                    Some(messenger) => {
+                        let mut builder = FlatBufferBuilder::new();
+                        let bytes = serialize_account(&mut builder, account, slot, is_startup);
+                        messenger.send_account(bytes)
+                    }
                 }
             }
         }
@@ -192,7 +202,11 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
                     msg: "There is no connection to data store.".to_string(),
                 },
             ))),
-            Some(messenger) => messenger.send_slot_status(slot, parent, status),
+            Some(messenger) => {
+                let mut builder = FlatBufferBuilder::new();
+                let bytes = serialize_slot_status(&mut builder, slot, parent, status);
+                messenger.send_slot_status(bytes)
+            }
         }
     }
 
@@ -229,7 +243,11 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
                             msg: "There is no connection to data store.".to_string(),
                         },
                     ))),
-                    Some(messenger) => messenger.send_transaction(transaction_info, slot),
+                    Some(messenger) => {
+                        let mut builder = FlatBufferBuilder::new();
+                        let bytes = serialize_transaction(&mut builder, transaction_info, slot);
+                        messenger.send_transaction(bytes)
+                    }
                 }
             }
         }
@@ -250,7 +268,11 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
                             msg: "There is no connection to data store.".to_string(),
                         },
                     ))),
-                    Some(messenger) => messenger.send_block(block_info),
+                    Some(messenger) => {
+                        let mut builder = FlatBufferBuilder::new();
+                        let bytes = serialize_block(&mut builder, block_info);
+                        messenger.send_block(bytes)
+                    }
                 }
             }
         }

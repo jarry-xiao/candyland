@@ -1,0 +1,30 @@
+// Flatbuffer IDL for Block Info schema.
+
+namespace BlockInfo;
+
+enum RewardType:uint8 {
+    Fee,
+    Rent,
+    Staking,
+    Voting,
+}
+
+table Reward {
+    pubkey:[uint8];
+    lamports:int64;
+    // Account balance in lamports after `lamports` was applied.
+    post_balance:uint64;
+    reward_type:RewardType = null;
+    // Vote account commission when the reward was credited, only present for voting and staking rewards.
+    commission:uint8 = null;
+}
+
+table BlockInfo {
+  slot:uint64;
+  blockhash:string;
+  rewards:[Reward];
+  block_time:int64 = null;
+  block_height:uint64 = null;
+}
+
+root_type BlockInfo;
