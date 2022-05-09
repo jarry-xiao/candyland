@@ -12,7 +12,9 @@ use {
     regex::Regex,
     solana_sdk::keccak,
     sqlx::{self, postgres::PgPoolOptions, Pool, Postgres},
-    transaction_info_generated::transaction_info::{root_as_transaction_info, TransactionInfo},
+    transaction_info_generated::transaction_info::{
+        self, root_as_transaction_info, TransactionInfo,
+    },
 };
 
 mod transaction_info_generated;
@@ -67,23 +69,18 @@ async fn main() {
         .connect("postgres://solana:solana@db/solana")
         .await
         .unwrap();
-    // let mut cl_last_id: String = ">".to_string();
-    // let mut gm_last_id: String = ">".to_string();
     let ids = [">", ">", ">", ">"];
-
     let mut conn = client.get_connection().unwrap();
-    //let streams = vec!["GM_CL", "GMC_OP"];
     let streams = [
         ACCOUNT_STREAM,
         SLOT_STREAM,
         TRANSACTION_STREAM,
         BLOCK_STREAM,
     ];
-
-    let group_name = "ingester";
+    const GROUP_NAME: &str = "ingester";
 
     for key in &streams {
-        let created: Result<(), _> = conn.xgroup_create_mkstream(*key, group_name, "$");
+        let created: Result<(), _> = conn.xgroup_create_mkstream(*key, GROUP_NAME, "$");
         if let Err(e) = created {
             println!("Group already exists: {:?}", e)
         }
@@ -92,25 +89,21 @@ async fn main() {
     let opts = StreamReadOptions::default()
         .block(1000)
         .count(100000)
-        .group(group_name, "lelelelle");
+        .group(GROUP_NAME, "lelelelle");
 
     loop {
         let srr: StreamReadReply = conn.xread_options(&streams, &ids, &opts).unwrap();
 
         for StreamKey { key, ids } in srr.keys {
-            // if key == "GM_CL" {
-            //     cl_service(&ids, &pool).await;
-            // } else if key == "GMC_OP" {
-            //     structured_program_event_service(&ids, &pool).await;
             if key == ACCOUNT_STREAM {
-                //handle_account(&ids, &pool).await;
+                // Do nothing for now.
             } else if key == SLOT_STREAM {
-                //handle_slot_data.await();
+                // Do nothing for now.
             } else if key == TRANSACTION_STREAM {
                 println!("{}", key);
                 handle_transaction(&ids, &pool).await;
             } else if key == BLOCK_STREAM {
-                //handle_block_data.await();
+                // Do nothing for now.
             }
         }
     }
@@ -124,39 +117,36 @@ pub async fn handle_transaction(ids: &Vec<StreamId>, pool: &Pool<Postgres>) {
         let data = if let Some(data) = map.get(DATA_KEY) {
             data
         } else {
-            println!("\tNo Data");
+            println!("No Data was stored in Redis for ID {id}");
             continue;
         };
-
         let bytes = match data {
             Value::Data(bytes) => bytes,
             _ => {
-                println!("Data wrong format");
+                println!("Redis data for ID {id} in wrong format");
                 continue;
             }
         };
 
-        // Get root.
+        // Get root of transaction info flatbuffers object.
         let transaction = match root_as_transaction_info(&bytes) {
             Err(err) => {
-                println!("Overall transaction info deserialization error: {err}");
+                println!("Flatbuffers TransactionInfo deserialization error: {err}");
                 continue;
             }
             Ok(transaction) => transaction,
         };
 
-        // Get account keys.
+        // Get account keys flatbuffers object.
         let keys = match transaction.account_keys() {
             None => {
-                println!("account_keys deserialization error");
+                println!("Flatbuffers account_keys missing");
                 continue;
             }
             Some(keys) => keys,
         };
 
         // Handle log message parsing.
-        //let keys = transaction_info.transaction.message().account_keys();
-        //if keys.iter().any(|v| solana_sdk::pubkey::Pubkey::new(&v.0) == program_ids::gummy_roll()) {
         if keys
             .iter()
             .any(|pubkey| pubkey.key().unwrap() == program_ids::gummy_roll().to_bytes())
@@ -172,15 +162,12 @@ pub async fn handle_transaction(ids: &Vec<StreamId>, pool: &Pool<Postgres>) {
                 continue;
             };
 
-            //change_log_event.unwrap().iter().for_each(|ev| {
+            // Get each change log event in the vector.
             for event in change_log_event_vec {
-                // Handle event and get change log event.
-                let change_log_res: Result<ChangeLogEvent, ApiError> = handle_event(event);
-
-                let change_log_event = if let Ok(change_log_event) = change_log_res {
+                let change_log_event = if let Ok(change_log_event) = handle_event(event) {
                     change_log_event
                 } else {
-                    println!("\tBad Data");
+                    println!("\tBad change log event data");
                     continue;
                 };
 
@@ -191,7 +178,6 @@ pub async fn handle_transaction(ids: &Vec<StreamId>, pool: &Pool<Postgres>) {
 
         // Handle instruction parsing.
         let instructions = order_instructions(&transaction);
-
         for program_instruction in instructions {
             match program_instruction {
                 (program, instruction) if program == program_ids::gummy_roll_crud() => {
@@ -199,13 +185,12 @@ pub async fn handle_transaction(ids: &Vec<StreamId>, pool: &Pool<Postgres>) {
                     match gummyroll_crud::get_instruction_type(&instruction.data) {
                         gummyroll_crud::InstructionName::CreateTree => {
                             // Get tree ID.
-                            let tree_id = keys.get(instruction.accounts[3] as usize);
                             let tree_id =
-                                String::from_utf8(tree_id.key().unwrap().to_vec()).unwrap();
+                                pubkey_from_fb_table(&keys, instruction.accounts[3] as usize);
 
                             // Get authority.
-                            let auth = keys.get(instruction.accounts[0] as usize);
-                            let auth = String::from_utf8(auth.key().unwrap().to_vec()).unwrap();
+                            let auth =
+                                pubkey_from_fb_table(&keys, instruction.accounts[0] as usize);
 
                             // Populate app event.
                             app_event.op = String::from("create");
@@ -220,15 +205,12 @@ pub async fn handle_transaction(ids: &Vec<StreamId>, pool: &Pool<Postgres>) {
                                 gummyroll_crud::instruction::Add::deserialize(data_buf).unwrap();
 
                             // Get tree ID.
-                            //let tree_id = keys.index(instruction.accounts[3] as usize);
-                            let tree_id = keys.get(instruction.accounts[3] as usize);
                             let tree_id =
-                                String::from_utf8(tree_id.key().unwrap().to_vec()).unwrap();
+                                pubkey_from_fb_table(&keys, instruction.accounts[3] as usize);
 
                             // Get owner from index 0.
-                            //let owner = keys.index(instruction.accounts[0] as usize);
-                            let owner = keys.get(instruction.accounts[0] as usize);
-                            let owner = String::from_utf8(owner.key().unwrap().to_vec()).unwrap();
+                            let owner =
+                                pubkey_from_fb_table(&keys, instruction.accounts[0] as usize);
 
                             // Get message and leaf.
                             let hex_message = hex::encode(&add.message);
@@ -250,21 +232,16 @@ pub async fn handle_transaction(ids: &Vec<StreamId>, pool: &Pool<Postgres>) {
                                     .unwrap();
 
                             // Get tree ID.
-                            //let tree_id = keys.index(instruction.accounts[3] as usize);
-                            let tree_id = keys.get(instruction.accounts[3] as usize);
                             let tree_id =
-                                String::from_utf8(tree_id.key().unwrap().to_vec()).unwrap();
+                                pubkey_from_fb_table(&keys, instruction.accounts[3] as usize);
 
                             // Get owner from index 4.
-                            //let owner = keys.index(instruction.accounts[4] as usize);
-                            let owner = keys.get(instruction.accounts[4] as usize);
-                            let owner = String::from_utf8(owner.key().unwrap().to_vec()).unwrap();
+                            let owner =
+                                pubkey_from_fb_table(&keys, instruction.accounts[4] as usize);
 
                             // Get new owner from index 5.
-                            //let new_owner = keys.index(instruction.accounts[5] as usize);
-                            let new_owner = keys.get(instruction.accounts[5] as usize);
                             let new_owner =
-                                String::from_utf8(new_owner.key().unwrap().to_vec()).unwrap();
+                                pubkey_from_fb_table(&keys, instruction.accounts[5] as usize);
 
                             // Get message and leaf.
                             let hex_message = hex::encode(&add.message);
@@ -287,15 +264,12 @@ pub async fn handle_transaction(ids: &Vec<StreamId>, pool: &Pool<Postgres>) {
                                 gummyroll_crud::instruction::Remove::deserialize(data_buf).unwrap();
 
                             // Get tree ID.
-                            //let tree_id = keys.index(instruction.accounts[3] as usize);
-                            let tree_id = keys.get(instruction.accounts[3] as usize);
                             let tree_id =
-                                String::from_utf8(tree_id.key().unwrap().to_vec()).unwrap();
+                                pubkey_from_fb_table(&keys, instruction.accounts[3] as usize);
 
                             // Get owner from index 0.
-                            //let owner = keys.index(instruction.accounts[0] as usize);
-                            let owner = keys.get(instruction.accounts[0] as usize);
-                            let owner = String::from_utf8(owner.key().unwrap().to_vec()).unwrap();
+                            let owner =
+                                pubkey_from_fb_table(&keys, instruction.accounts[0] as usize);
 
                             // Get leaf.
                             let leaf = bs58::encode(&remove.leaf_hash).into_string();
@@ -543,4 +517,12 @@ async fn app_event_to_database(
     }
 
     Ok(())
+}
+
+fn pubkey_from_fb_table(
+    keys: &Vector<ForwardsUOffset<transaction_info::Pubkey>>,
+    index: usize,
+) -> String {
+    let pubkey = keys.get(index);
+    String::from_utf8(pubkey.key().unwrap().to_vec()).unwrap()
 }
