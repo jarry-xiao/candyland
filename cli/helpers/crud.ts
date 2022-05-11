@@ -155,7 +155,6 @@ export async function batchInitTree(
             }),
         }
     );
-    console.log("Discriminant", Uint8Array.from(batchTreeIx.data.slice(0, 8)));
 
     const tx = new Transaction().add(allocGummyrollAccountIx).add(batchTreeIx);
     const batchTreeTxId = await gummyroll.provider.send(
