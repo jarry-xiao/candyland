@@ -1,5 +1,6 @@
 use {
     anchor_client::anchor_lang::AnchorDeserialize,
+    solana_sdk::pubkey::Pubkey,
     flatbuffers::{ForwardsUOffset, Vector},
     gummyroll::state::change_log::ChangeLogEvent,
     lazy_static::lazy_static,
@@ -430,6 +431,7 @@ pub async fn handle_transaction(ids: &Vec<StreamId>, pool: &Pool<Postgres>) {
                         }
                         gummyroll_crud::InstructionName::CreateTreeWithRoot => {
                             // Get tree ID.
+                            println!("Captured tree with root");
                             let tree_id =
                                 pubkey_from_fb_table(&keys, instruction.accounts[3] as usize);
 
@@ -446,7 +448,6 @@ pub async fn handle_transaction(ids: &Vec<StreamId>, pool: &Pool<Postgres>) {
                                 )
                                 .unwrap();
 
-                            println!("Captured tree with root");
                             app_event.op = String::from("create_batch");
                             app_event.tree_id = tree_id;
                             app_event.authority = auth;
@@ -795,5 +796,5 @@ fn pubkey_from_fb_table(
     index: usize,
 ) -> String {
     let pubkey = keys.get(index);
-    String::from_utf8(pubkey.key().unwrap().to_vec()).unwrap()
+    Pubkey::new(pubkey.key().unwrap()).to_string()
 }
