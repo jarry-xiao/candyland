@@ -1,14 +1,15 @@
 use {
-    crate::{error::PlerkleError, programs::gummy_roll::handle_change_log_event},
-    anchor_client::anchor_lang::AnchorDeserialize,
+    crate::error::PlerkleError,
     log::*,
-    messenger::Messenger,
+    messenger::{
+        Messenger, SerializedBlock, ACCOUNT_STREAM, BLOCK_STREAM, DATA_KEY, SLOT_STREAM,
+        TRANSACTION_STREAM,
+    },
     redis::{streams::StreamMaxlen, Commands, Connection, RedisResult, ToRedisArgs},
     solana_geyser_plugin_interface::geyser_plugin_interface::{
-        GeyserPluginError, ReplicaAccountInfo, ReplicaBlockInfo, ReplicaTransactionInfo, Result,
-        SlotStatus,
+        GeyserPluginError, ReplicaTransactionInfo, Result,
     },
-    solana_sdk::{instruction::CompiledInstruction, keccak, pubkey::Pubkey},
+    solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey},
     std::{
         collections::HashMap,
         fmt::{Debug, Formatter},
@@ -122,221 +123,20 @@ impl Messenger for RedisMessenger {
         })
     }
 
-    fn send_account(
-        &self,
-        _account: &ReplicaAccountInfo,
-        _slot: u64,
-        _is_startup: bool,
-    ) -> Result<()> {
-        Ok(())
+    fn send_account(&mut self, bytes: &[u8]) -> Result<()> {
+        self.send_data(ACCOUNT_STREAM, bytes)
     }
 
-    fn send_slot_status(
-        &self,
-        _slot: u64,
-        _parent: Option<u64>,
-        _status: SlotStatus,
-    ) -> Result<()> {
-        Ok(())
+    fn send_slot_status(&mut self, bytes: &[u8]) -> Result<()> {
+        self.send_data(SLOT_STREAM, bytes)
     }
 
-    fn send_transaction(
-        &mut self,
-        transaction_info: &ReplicaTransactionInfo,
-        _slot: u64,
-    ) -> Result<()> {
-        // Handle log parsing.
-        let keys = transaction_info.transaction.message().account_keys();
-        if keys.iter().any(|v| v == &program_ids::gummy_roll()) {
-            println!("Found GM CL event");
-            let maxlen = StreamMaxlen::Approx(55000);
-            let change_log_event = handle_change_log_event(&transaction_info);
-            if change_log_event.is_ok() {
-                change_log_event.unwrap().iter().for_each(|ev| {
-                    let res: RedisResult<()> = self.connection.as_mut().unwrap().xadd_maxlen(
-                        "GM_CL",
-                        maxlen,
-                        "*",
-                        &[("data", ev)],
-                    );
-                    if res.is_err() {
-                        error!("{}", res.err().unwrap());
-                    } else {
-                        info!("Data Sent")
-                    }
-                });
-            } else {
-                println!("Could not handle change log event");
-            }
-        }
-
-        // Handle Instruction Parsing
-        let instructions = Self::order_instructions(&transaction_info);
-
-        for program_instruction in instructions {
-            match program_instruction {
-                (program, instruction) if program == program_ids::gummy_roll_crud() => {
-                    let maxlen = StreamMaxlen::Approx(5000);
-                    let _message = match gummyroll_crud::get_instruction_type(&instruction.data) {
-                        gummyroll_crud::InstructionName::CreateTree => {
-                            warn!("yo yo yo yo");
-                            let tree_id = keys.index(instruction.accounts[3] as usize);
-                            let auth = keys.index(instruction.accounts[0] as usize);
-                            let res: RedisResult<()> =
-                                self.connection.as_mut().unwrap().xadd_maxlen(
-                                    "GMC_OP",
-                                    maxlen,
-                                    "*",
-                                    &[
-                                        ("op", "create"),
-                                        ("tree_id", &*tree_id.to_string()),
-                                        ("authority", &*auth.to_string()),
-                                    ],
-                                );
-                            if res.is_err() {
-                                error!("{}", res.err().unwrap());
-                            } else {
-                                info!("Data Sent")
-                            }
-                        }
-                        gummyroll_crud::InstructionName::CreateTreeWithRoot => {
-                            let tree_id = keys.index(instruction.accounts[3] as usize);
-                            let auth = keys.index(instruction.accounts[0] as usize);
-                            let data = instruction.data[8..].to_owned();
-                            let data_buf = &mut data.as_slice();
-                            let ix: gummyroll_crud::instruction::CreateTreeWithRoot =
-                                gummyroll_crud::instruction::CreateTreeWithRoot::deserialize(
-                                    data_buf,
-                                )
-                                .unwrap();
-
-                            println!("Captured tree with root");
-                            let metadata_uri = &std::str::from_utf8(&ix.metadata_db_uri)
-                                .unwrap()
-                                .to_string();
-                            let changelog_uri = &std::str::from_utf8(&ix.changelog_db_uri)
-                                .unwrap()
-                                .to_string();
-                            let res: RedisResult<()> =
-                                self.connection.as_mut().unwrap().xadd_maxlen(
-                                    "GMC_OP",
-                                    maxlen,
-                                    "*",
-                                    &[
-                                        ("op", "create_batch"),
-                                        ("tree_id", &*tree_id.to_string()),
-                                        ("authority", &*auth.to_string()),
-                                        ("metadata_db_uri", &metadata_uri),
-                                        ("changelog_db_uri", &changelog_uri),
-                                    ],
-                                );
-                            if res.is_err() {
-                                error!("{}", res.err().unwrap());
-                            } else {
-                                info!("Data Sent")
-                            }
-                        }
-                        gummyroll_crud::InstructionName::Add => {
-                            let data = instruction.data[8..].to_owned();
-                            let data_buf = &mut data.as_slice();
-                            let add: gummyroll_crud::instruction::Add =
-                                gummyroll_crud::instruction::Add::deserialize(data_buf).unwrap();
-                            let tree_id = keys.index(instruction.accounts[3] as usize);
-                            let owner = keys.index(instruction.accounts[0] as usize);
-                            let hex_message = hex::encode(&add.message);
-                            let leaf = keccak::hashv(&[&owner.to_bytes(), add.message.as_slice()]);
-                            let res: RedisResult<()> =
-                                self.connection.as_mut().unwrap().xadd_maxlen(
-                                    "GMC_OP",
-                                    maxlen,
-                                    "*",
-                                    &[
-                                        ("op", "add"),
-                                        ("tree_id", &*tree_id.to_string()),
-                                        ("leaf", &*leaf.to_string()),
-                                        ("msg", &*hex_message),
-                                        ("owner", &*owner.to_string()),
-                                    ],
-                                );
-                            if res.is_err() {
-                                error!("{}", res.err().unwrap());
-                            } else {
-                                info!("Data Sent")
-                            }
-                        }
-                        gummyroll_crud::InstructionName::Transfer => {
-                            let data = instruction.data[8..].to_owned();
-                            let data_buf = &mut data.as_slice();
-                            let add: gummyroll_crud::instruction::Transfer =
-                                gummyroll_crud::instruction::Transfer::deserialize(data_buf)
-                                    .unwrap();
-                            let tree_id = keys.index(instruction.accounts[3] as usize);
-                            let owner = keys.index(instruction.accounts[4] as usize);
-                            let new_owner = keys.index(instruction.accounts[5] as usize);
-                            let hex_message = hex::encode(&add.message);
-                            let leaf =
-                                keccak::hashv(&[&new_owner.to_bytes(), add.message.as_slice()]);
-                            let res: RedisResult<()> =
-                                self.connection.as_mut().unwrap().xadd_maxlen(
-                                    "GMC_OP",
-                                    maxlen,
-                                    "*",
-                                    &[
-                                        ("op", "tran"),
-                                        ("tree_id", &*tree_id.to_string()),
-                                        ("leaf", &*leaf.to_string()),
-                                        ("msg", &*hex_message),
-                                        ("owner", &*owner.to_string()),
-                                        ("new_owner", &*new_owner.to_string()),
-                                    ],
-                                );
-                            if res.is_err() {
-                                error!("{}", res.err().unwrap());
-                            } else {
-                                info!("Data Sent")
-                            }
-                        }
-                        gummyroll_crud::InstructionName::Remove => {
-                            let data = instruction.data[8..].to_owned();
-                            let data_buf = &mut data.as_slice();
-                            let remove: gummyroll_crud::instruction::Remove =
-                                gummyroll_crud::instruction::Remove::deserialize(data_buf).unwrap();
-                            let tree_id = keys.index(instruction.accounts[3] as usize);
-                            let owner = keys.index(instruction.accounts[0] as usize);
-                            let leaf = bs58::encode(&remove.leaf_hash).into_string();
-                            let res: RedisResult<()> =
-                                self.connection.as_mut().unwrap().xadd_maxlen(
-                                    "GMC_OP",
-                                    maxlen,
-                                    "*",
-                                    &[
-                                        ("op", "rm"),
-                                        ("tree_id", &*tree_id.to_string()),
-                                        ("leaf", &*leaf.to_string()),
-                                        ("msg", ""),
-                                        ("owner", &*owner.to_string()),
-                                    ],
-                                );
-                            if res.is_err() {
-                                error!("{}", res.err().unwrap());
-                            } else {
-                                info!("Data Sent")
-                            }
-                        }
-                        _ => {
-                            println!("{:?}", &instruction.data[..8]);
-                        }
-                    };
-                }
-                _ => {}
-            };
-        }
-
-        Ok(())
+    fn send_transaction(&mut self, bytes: &[u8]) -> Result<()> {
+        self.send_data(TRANSACTION_STREAM, bytes)
     }
 
-    fn send_block(&mut self, _block_info: &ReplicaBlockInfo) -> Result<()> {
-        Ok(())
+    fn send_block(&mut self, bytes: SerializedBlock) -> Result<()> {
+        self.send_data(BLOCK_STREAM, bytes.bytes())
     }
 
     fn recv_account(&self) -> Result<()> {
@@ -352,6 +152,27 @@ impl Messenger for RedisMessenger {
     }
 
     fn recv_block(&self) -> Result<()> {
+        Ok(())
+    }
+}
+
+impl RedisMessenger {
+    fn send_data(&mut self, stream_name: &'static str, bytes: &[u8]) -> Result<()> {
+        // Put serialized data into Redis.
+        let res: RedisResult<()> = self.connection.as_mut().unwrap().xadd_maxlen(
+            stream_name,
+            StreamMaxlen::Approx(55000),
+            "*",
+            &[(DATA_KEY, bytes)],
+        );
+
+        // Log but do not return errors.
+        if res.is_err() {
+            error!("{}", res.err().unwrap());
+        } else {
+            info!("Data Sent");
+        }
+
         Ok(())
     }
 }
