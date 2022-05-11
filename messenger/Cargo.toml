@@ -9,6 +9,7 @@ documentation = "https://docs.rs/solana-geyser-plugin-interface"
 
 [dependencies]
 solana-geyser-plugin-interface  = { version = "=1.10.10" }
+plerkle-serialization={path= "../plerkle_serialization"}
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

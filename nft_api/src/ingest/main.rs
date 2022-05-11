@@ -4,15 +4,12 @@ use {
     flatbuffers::{ForwardsUOffset, Vector},
     gummyroll::state::change_log::ChangeLogEvent,
     lazy_static::lazy_static,
-    messenger::{ACCOUNT_STREAM, BLOCK_STREAM, DATA_KEY, SLOT_STREAM, TRANSACTION_STREAM},
+    messenger::{Messenger, ACCOUNT_STREAM, BLOCK_STREAM, SLOT_STREAM, TRANSACTION_STREAM},
     nft_api_lib::error::ApiError,
     nft_api_lib::events::handle_event,
+    plerkle::redis_messenger::RedisMessenger,
     plerkle_serialization::transaction_info_generated::transaction_info::{
         self, root_as_transaction_info, TransactionInfo,
-    },
-    redis::{
-        streams::{StreamId, StreamKey, StreamReadOptions, StreamReadReply},
-        Commands, Value,
     },
     regex::Regex,
     reqwest,
@@ -294,73 +291,39 @@ pub async fn batch_init_service(
 
 #[tokio::main]
 async fn main() {
-    let client = redis::Client::open("redis://redis/").unwrap();
+    // Setup Redis Messenger.
+    let mut messenger = RedisMessenger::new().unwrap();
+    messenger.add_stream(ACCOUNT_STREAM, 0);
+    messenger.add_stream(SLOT_STREAM, 0);
+    messenger.add_stream(TRANSACTION_STREAM, 0);
+    messenger.add_stream(BLOCK_STREAM, 0);
+
+    // Setup Postgres.
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect("postgres://solana:solana@db/solana")
         .await
         .unwrap();
-    let ids = [">", ">", ">", ">"];
-    let mut conn = client.get_connection().unwrap();
-    let streams = [
-        ACCOUNT_STREAM,
-        SLOT_STREAM,
-        TRANSACTION_STREAM,
-        BLOCK_STREAM,
-    ];
-    const GROUP_NAME: &str = "ingester";
 
-    for key in &streams {
-        let created: Result<(), _> = conn.xgroup_create_mkstream(*key, GROUP_NAME, "$");
-        if let Err(e) = created {
-            println!("Group already exists: {:?}", e)
-        }
-    }
-
-    let opts = StreamReadOptions::default()
-        .block(1000)
-        .count(100000)
-        .group(GROUP_NAME, "lelelelle");
-
+    // Service streams.
     loop {
-        let srr: StreamReadReply = conn.xread_options(&streams, &ids, &opts).unwrap();
-
-        for StreamKey { key, ids } in srr.keys {
-            if key == ACCOUNT_STREAM {
-                // Do nothing for now.
-            } else if key == SLOT_STREAM {
-                // Do nothing for now.
-            } else if key == TRANSACTION_STREAM {
-                println!("{}", key);
-                handle_transaction(&ids, &pool).await;
-            } else if key == BLOCK_STREAM {
-                // Do nothing for now.
+        if let Ok(_) = messenger.recv() {
+            if let Ok(data) = messenger.get(TRANSACTION_STREAM) {
+                handle_transaction(data, &pool).await;
             }
+
+            // Ignore these for now.
+            let _ = messenger.get(ACCOUNT_STREAM);
+            let _ = messenger.get(SLOT_STREAM);
+            let _ = messenger.get(BLOCK_STREAM);
         }
     }
 }
 
-pub async fn handle_transaction(ids: &Vec<StreamId>, pool: &Pool<Postgres>) {
-    for StreamId { id, map } in ids {
-        let pid = id.replace("-", "").parse::<i64>().unwrap();
-
-        // Get data from map.
-        let data = if let Some(data) = map.get(DATA_KEY) {
-            data
-        } else {
-            println!("No Data was stored in Redis for ID {id}");
-            continue;
-        };
-        let bytes = match data {
-            Value::Data(bytes) => bytes,
-            _ => {
-                println!("Redis data for ID {id} in wrong format");
-                continue;
-            }
-        };
-
+pub async fn handle_transaction(data: Vec<(i64, &[u8])>, pool: &Pool<Postgres>) {
+    for (pid, data) in data {
         // Get root of transaction info flatbuffers object.
-        let transaction = match root_as_transaction_info(&bytes) {
+        let transaction = match root_as_transaction_info(data) {
             Err(err) => {
                 println!("Flatbuffers TransactionInfo deserialization error: {err}");
                 continue;

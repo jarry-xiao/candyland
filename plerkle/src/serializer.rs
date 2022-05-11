@@ -1,10 +1,7 @@
 use {
     flatbuffers::FlatBufferBuilder,
-    messenger::SerializedBlock,
     plerkle_serialization::{
-        account_info_generated::account_info::{
-            root_as_account_info, AccountInfo, AccountInfoArgs,
-        },
+        account_info_generated::account_info::{AccountInfo, AccountInfoArgs},
         block_info_generated,
         slot_status_info_generated::slot_status_info::{self, SlotStatusInfo, SlotStatusInfoArgs},
         transaction_info_generated::transaction_info::{
@@ -12,15 +9,9 @@ use {
         },
     },
     solana_geyser_plugin_interface::geyser_plugin_interface::{
-        ReplicaAccountInfo, ReplicaBlockInfo, ReplicaTransactionInfo, Result, SlotStatus,
+        ReplicaAccountInfo, ReplicaBlockInfo, ReplicaTransactionInfo, SlotStatus,
     },
     solana_runtime::bank::RewardType,
-    solana_sdk::{instruction::CompiledInstruction, keccak, pubkey::Pubkey},
-    std::{
-        collections::HashMap,
-        fmt::{Debug, Formatter},
-        ops::Index,
-    },
 };
 
 pub fn serialize_account<'a>(
@@ -204,7 +195,7 @@ pub fn serialize_transaction<'a>(
 pub fn serialize_block<'a>(
     builder: &'a mut FlatBufferBuilder,
     block_info: &ReplicaBlockInfo,
-) -> SerializedBlock<'a> {
+) -> &'a [u8] {
     // Serialize blockash.
     let blockhash = Some(builder.create_string(&block_info.blockhash));
 
@@ -263,5 +254,5 @@ pub fn serialize_block<'a>(
 
     // Finalize buffer and return to caller.
     builder.finish(block_info, None);
-    SerializedBlock::new(builder.finished_data())
+    builder.finished_data()
 }
