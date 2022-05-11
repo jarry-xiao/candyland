@@ -1,6 +1,13 @@
 use {
     anchor_client::anchor_lang::AnchorDeserialize,
     solana_sdk::pubkey::Pubkey,
+
+csv,
+reqwest,
+serde::Deserialize,
+std::fs::File,
+std::io::Write,
+
     flatbuffers::{ForwardsUOffset, Vector},
     gummyroll::state::change_log::ChangeLogEvent,
     lazy_static::lazy_static,
@@ -35,12 +42,6 @@ mod program_ids {
     pubkeys!(token, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
     pubkeys!(a_token, "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 }
-
-use csv;
-use reqwest;
-use serde::Deserialize;
-use std::fs::File;
-use std::io::Write;
 
 #[derive(Default)]
 struct AppEvent {
@@ -451,12 +452,10 @@ pub async fn handle_transaction(ids: &Vec<StreamId>, pool: &Pool<Postgres>) {
                             app_event.op = String::from("create_batch");
                             app_event.tree_id = tree_id;
                             app_event.authority = auth;
-                            app_event.metadata_db_uri = std::str::from_utf8(&ix.metadata_db_uri)
-                                .unwrap()
-                                .to_string();
-                            app_event.changelog_db_uri = std::str::from_utf8(&ix.changelog_db_uri)
-                                .unwrap()
-                                .to_string();
+                            app_event.metadata_db_uri = String::from_utf8(ix.metadata_db_uri.to_vec())
+                                .unwrap();
+                            app_event.changelog_db_uri = String::from_utf8(ix.changelog_db_uri.to_vec())
+                                .unwrap();
                         }
                         gummyroll_crud::InstructionName::Add => {
                             // Get data.
