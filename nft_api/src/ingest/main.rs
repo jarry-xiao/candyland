@@ -3,10 +3,13 @@ use {
     flatbuffers::{ForwardsUOffset, Vector},
     gummyroll::state::change_log::ChangeLogEvent,
     lazy_static::lazy_static,
-    messenger::{ACCOUNT_STREAM, BLOCK_STREAM, DATA_KEY, SLOT_STREAM, TRANSACTION_STREAM},
+    messenger::DATA_KEY,
     nft_api_lib::events::handle_event,
-    plerkle_serialization::transaction_info_generated::transaction_info::{
-        self, root_as_transaction_info, TransactionInfo,
+    plerkle_serialization::{
+        transaction_info_generated::transaction_info::{
+            self, root_as_transaction_info, TransactionInfo,
+        },
+        ACCOUNT_STREAM, BLOCK_STREAM, SLOT_STREAM, TRANSACTION_STREAM,
     },
     redis::{
         streams::{StreamId, StreamKey, StreamReadOptions, StreamReadReply},

@@ -1834,6 +1834,7 @@ dependencies = [
 name = "messenger"
 version = "0.1.0"
 dependencies = [
+ "plerkle-serialization",
  "solana-geyser-plugin-interface",
 ]
 

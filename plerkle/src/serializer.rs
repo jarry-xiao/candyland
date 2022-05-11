@@ -1,34 +1,44 @@
 use {
+    flatbuffers::FlatBufferBuilder,
     plerkle_serialization::{
-        account_info_generated::account_info::{
-            root_as_account_info, AccountInfo, AccountInfoArgs,
-        },
+        account_info_generated::account_info::{AccountInfo, AccountInfoArgs},
         block_info_generated,
         slot_status_info_generated::slot_status_info::{self, SlotStatusInfo, SlotStatusInfoArgs},
         transaction_info_generated::transaction_info::{
             self, TransactionInfo, TransactionInfoArgs,
-        }
+        },
     },
-    flatbuffers::FlatBufferBuilder,
-    messenger::SerializedBlock,
+    plerkle_serialization::{
+        PlerkleSerialized, ACCOUNT_STREAM, BLOCK_STREAM, SLOT_STREAM, TRANSACTION_STREAM,
+    },
     solana_geyser_plugin_interface::geyser_plugin_interface::{
-        ReplicaAccountInfo, ReplicaBlockInfo, ReplicaTransactionInfo, Result, SlotStatus,
+        ReplicaAccountInfo, ReplicaBlockInfo, ReplicaTransactionInfo, SlotStatus,
     },
     solana_runtime::bank::RewardType,
-    solana_sdk::{instruction::CompiledInstruction, keccak, pubkey::Pubkey},
-    std::{
-        collections::HashMap,
-        fmt::{Debug, Formatter},
-        ops::Index,
-    },
 };
+
+pub struct SerializedAccount<'a>(&'a [u8]);
+
+impl<'a> PlerkleSerialized<'a> for SerializedAccount<'a> {
+    fn new(bytes: &'a [u8]) -> Self {
+        Self(bytes)
+    }
+
+    fn bytes(&self) -> &'a [u8] {
+        self.0
+    }
+
+    fn key(&self) -> &'static str {
+        ACCOUNT_STREAM
+    }
+}
 
 pub fn serialize_account<'a>(
     builder: &'a mut FlatBufferBuilder,
     account: &ReplicaAccountInfo,
     slot: u64,
     is_startup: bool,
-) -> &'a [u8] {
+) -> SerializedAccount<'a> {
     // Serialize vector data.
     let pubkey = builder.create_vector(account.pubkey);
     let owner = builder.create_vector(account.owner);
@@ -52,7 +62,23 @@ pub fn serialize_account<'a>(
 
     // Finalize buffer and return to caller.
     builder.finish(account_info, None);
-    builder.finished_data()
+    SerializedAccount::new(builder.finished_data())
+}
+
+pub struct SerializedSlotStatus<'a>(&'a [u8]);
+
+impl<'a> PlerkleSerialized<'a> for SerializedSlotStatus<'a> {
+    fn new(bytes: &'a [u8]) -> Self {
+        Self(bytes)
+    }
+
+    fn bytes(&self) -> &'a [u8] {
+        self.0
+    }
+
+    fn key(&self) -> &'static str {
+        SLOT_STREAM
+    }
 }
 
 pub fn serialize_slot_status<'a>(
@@ -60,7 +86,7 @@ pub fn serialize_slot_status<'a>(
     slot: u64,
     parent: Option<u64>,
     status: SlotStatus,
-) -> &'a [u8] {
+) -> SerializedSlotStatus<'a> {
     // Convert to flatbuffer enum.
     let status = match status {
         SlotStatus::Confirmed => slot_status_info::Status::Confirmed,
@@ -80,14 +106,29 @@ pub fn serialize_slot_status<'a>(
 
     // Finalize buffer and return to caller.
     builder.finish(slot_status, None);
-    builder.finished_data()
+    SerializedSlotStatus::new(builder.finished_data())
+}
+pub struct SerializedTransaction<'a>(&'a [u8]);
+
+impl<'a> PlerkleSerialized<'a> for SerializedTransaction<'a> {
+    fn new(bytes: &'a [u8]) -> Self {
+        Self(bytes)
+    }
+
+    fn bytes(&self) -> &'a [u8] {
+        self.0
+    }
+
+    fn key(&self) -> &'static str {
+        TRANSACTION_STREAM
+    }
 }
 
 pub fn serialize_transaction<'a>(
     builder: &'a mut FlatBufferBuilder,
     transaction_info: &ReplicaTransactionInfo,
     slot: u64,
-) -> &'a [u8] {
+) -> SerializedTransaction<'a> {
     // Flatten and serialize account keys.
     let account_keys = transaction_info.transaction.message().account_keys();
     let account_keys_len = account_keys.len();
@@ -198,7 +239,23 @@ pub fn serialize_transaction<'a>(
 
     // Finalize buffer and return to caller.
     builder.finish(transaction_info, None);
-    builder.finished_data()
+    SerializedTransaction::new(builder.finished_data())
+}
+
+pub struct SerializedBlock<'a>(&'a [u8]);
+
+impl<'a> PlerkleSerialized<'a> for SerializedBlock<'a> {
+    fn new(bytes: &'a [u8]) -> Self {
+        Self(bytes)
+    }
+
+    fn bytes(&self) -> &'a [u8] {
+        self.0
+    }
+
+    fn key(&self) -> &'static str {
+        BLOCK_STREAM
+    }
 }
 
 pub fn serialize_block<'a>(

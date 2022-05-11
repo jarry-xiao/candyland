@@ -1,19 +1,13 @@
 use {
     crate::error::PlerkleError,
     log::*,
-    messenger::{
-        Messenger, SerializedBlock, ACCOUNT_STREAM, BLOCK_STREAM, DATA_KEY, SLOT_STREAM,
-        TRANSACTION_STREAM,
-    },
+    messenger::{Messenger, DATA_KEY},
+    plerkle_serialization::PlerkleSerialized,
     redis::{streams::StreamMaxlen, Commands, Connection, RedisResult, ToRedisArgs},
-    solana_geyser_plugin_interface::geyser_plugin_interface::{
-        GeyserPluginError, ReplicaTransactionInfo, Result,
-    },
-    solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey},
+    solana_geyser_plugin_interface::geyser_plugin_interface::{GeyserPluginError, Result},
     std::{
         collections::HashMap,
         fmt::{Debug, Formatter},
-        ops::Index,
     },
 };
 
@@ -46,36 +40,6 @@ pub struct RedisMessengerStream {
 }
 
 impl RedisMessenger {
-    pub fn order_instructions(
-        transaction_info: &ReplicaTransactionInfo,
-    ) -> Vec<(Pubkey, CompiledInstruction)> {
-        let inner_ixs = transaction_info
-            .transaction_status_meta
-            .clone()
-            .inner_instructions;
-        let outer_instructions = transaction_info.transaction.message().instructions();
-        let keys = transaction_info.transaction.message().account_keys();
-        let mut ordered_ixs: Vec<(Pubkey, CompiledInstruction)> = vec![];
-        if inner_ixs.is_some() {
-            let inner_ix_list = inner_ixs.as_ref().unwrap().as_slice();
-            for inner in inner_ix_list {
-                let outer = outer_instructions.get(inner.index as usize).unwrap();
-                let program_id = keys.index(outer.program_id_index as usize);
-                ordered_ixs.push((*program_id, outer.to_owned()));
-                for inner_ix_instance in &inner.instructions {
-                    let inner_program_id = keys.index(inner_ix_instance.program_id_index as usize);
-                    ordered_ixs.push((*inner_program_id, inner_ix_instance.to_owned()));
-                }
-            }
-        } else {
-            for instruction in outer_instructions {
-                let program_id = keys.index(instruction.program_id_index as usize);
-                ordered_ixs.push((*program_id, instruction.to_owned()));
-            }
-        }
-        ordered_ixs.to_owned()
-    }
-
     pub fn _add_stream(&mut self, name: String, max_buffer_size: usize) {
         self.streams.insert(
             name.clone(),
@@ -123,47 +87,13 @@ impl Messenger for RedisMessenger {
         })
     }
 
-    fn send_account(&mut self, bytes: &[u8]) -> Result<()> {
-        self.send_data(ACCOUNT_STREAM, bytes)
-    }
-
-    fn send_slot_status(&mut self, bytes: &[u8]) -> Result<()> {
-        self.send_data(SLOT_STREAM, bytes)
-    }
-
-    fn send_transaction(&mut self, bytes: &[u8]) -> Result<()> {
-        self.send_data(TRANSACTION_STREAM, bytes)
-    }
-
-    fn send_block(&mut self, bytes: SerializedBlock) -> Result<()> {
-        self.send_data(BLOCK_STREAM, bytes.bytes())
-    }
-
-    fn recv_account(&self) -> Result<()> {
-        Ok(())
-    }
-
-    fn recv_slot_status(&self) -> Result<()> {
-        Ok(())
-    }
-
-    fn recv_transaction(&self) -> Result<()> {
-        Ok(())
-    }
-
-    fn recv_block(&self) -> Result<()> {
-        Ok(())
-    }
-}
-
-impl RedisMessenger {
-    fn send_data(&mut self, stream_name: &'static str, bytes: &[u8]) -> Result<()> {
+    fn send<'a, T: PlerkleSerialized<'a>>(&mut self, bytes: T) -> Result<()> {
         // Put serialized data into Redis.
         let res: RedisResult<()> = self.connection.as_mut().unwrap().xadd_maxlen(
-            stream_name,
+            bytes.key(),
             StreamMaxlen::Approx(55000),
             "*",
-            &[(DATA_KEY, bytes)],
+            &[(DATA_KEY, bytes.bytes())],
         );
 
         // Log but do not return errors.
