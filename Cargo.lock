@@ -2035,6 +2035,7 @@ dependencies = [
  "anchor-client",
  "base64 0.13.0",
  "bs58 0.4.0",
+ "bubblegum",
  "csv",
  "flatbuffers",
  "futures-util",

@@ -1,5 +1,6 @@
 use {
     anchor_client::anchor_lang::AnchorDeserialize,
+    bubblegum,
     csv,
     flatbuffers::{ForwardsUOffset, Vector},
     gummyroll::state::change_log::ChangeLogEvent,
@@ -32,6 +33,10 @@ mod program_ids {
     pubkeys!(
         gummy_roll_crud,
         "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+    );
+    pubkeys!(
+        bubblegum,
+        "BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o"
     );
     pubkeys!(gummy_roll, "GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD");
     pubkeys!(token, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
@@ -370,7 +375,7 @@ pub async fn handle_transaction(data: Vec<(i64, &[u8])>, pool: &Pool<Postgres>) 
             }
         }
 
-        // Handle instruction parsing.
+        // Update metadata associated with the programs that store data in leaves
         let instructions = order_instructions(&transaction);
         for program_instruction in instructions {
             match program_instruction {
@@ -379,10 +384,36 @@ pub async fn handle_transaction(data: Vec<(i64, &[u8])>, pool: &Pool<Postgres>) 
                         .await
                         .unwrap();
                 }
+                (program, instruction) if program == program_ids::bubblegum() => {
+                    handle_bubblegum_event(&instruction, &keys, pid, pool)
+                        .await
+                        .unwrap();
+                }
                 _ => {}
             }
         }
     }
+}
+
+async fn handle_bubblegum_event(
+    instruction: &solana_sdk::instruction::CompiledInstruction,
+    keys: &Vector<'_, ForwardsUOffset<transaction_info::Pubkey<'_>>>,
+    pid: i64,
+    pool: &Pool<Postgres>,
+) -> Result<(), ()> {
+    match bubblegum::get_instruction_type(&instruction.data) {
+        bubblegum::InstructionName::Transfer => {
+            println!("Ah yes! a transfer");
+        }
+        bubblegum::InstructionName::Mint => {
+            println!("Ah yes! a redeem");
+        }
+        bubblegum::InstructionName::Decompress => {
+            println!("Ah yes! a decompress");
+        }
+        _ =>  println!("unknown, or don't care"),
+    }
+    Ok(())
 }
 
 async fn handle_gummyroll_crud_event(
