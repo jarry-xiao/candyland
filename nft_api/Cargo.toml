@@ -31,6 +31,8 @@ sqlx = {version = "0.5.11", features = ["runtime-tokio-rustls","postgres"] }
 tokio-postgres = "0.7.5"
 serde = "1.0.136"
 bs58="0.4.0"
+reqwest="0.11.10"
+csv="1.1.6"
 messenger={path= "../messenger"}
 flatbuffers = "2.1.2"
 solana-sdk = { version = "=1.10.10" }

@@ -88,9 +88,10 @@ pub struct Transfer<'info> {
 pub enum InstructionName {
     Unknown,
     CreateTree,
+    CreateTreeWithRoot,
     Add,
     Transfer,
-    Remove
+    Remove,
 }
 pub fn get_instruction_type(full_bytes: &Vec<u8>) -> InstructionName {
     let disc: [u8; 8] = {
@@ -100,10 +101,11 @@ pub fn get_instruction_type(full_bytes: &Vec<u8>) -> InstructionName {
     };
     match disc {
         [165, 83, 136, 142, 89, 202, 47, 220] => InstructionName::CreateTree,
+        [101, 214, 253, 135, 176, 170, 11, 235] => InstructionName::CreateTreeWithRoot,
         [163, 52, 200, 231, 140, 3, 69, 186] => InstructionName::Transfer,
         [199, 186, 9, 79, 96, 129, 24, 106] => InstructionName::Remove,
         [41, 249, 249, 146, 197, 111, 56, 181] => InstructionName::Add,
-        _ => InstructionName::Unknown
+        _ => InstructionName::Unknown,
     }
 }
 
@@ -117,9 +119,9 @@ pub mod gummyroll_crud {
         max_depth: u32,
         max_buffer_size: u32,
     ) -> Result<()> {
-        let gummyroll_program = ctx.accounts.gummyroll_program.to_account_info();
         let merkle_roll = ctx.accounts.merkle_roll.to_account_info();
         let authority = ctx.accounts.authority.to_account_info();
+        let gummyroll_program = ctx.accounts.gummyroll_program.to_account_info();
         let authority_pda = ctx.accounts.authority_pda.to_account_info();
         let authority_pda_bump_seed = &[*ctx.bumps.get("authority_pda").unwrap()];
         let seeds = &[
@@ -139,6 +141,51 @@ pub mod gummyroll_crud {
             authority_pda_signer,
         );
         gummyroll::cpi::init_empty_gummyroll(cpi_ctx, max_depth, max_buffer_size)
+    }
+
+    pub fn create_tree_with_root<'a, 'b, 'c, 'info>(
+        ctx: Context<'a, 'b, 'c, 'info, CreateTree<'info>>,
+        max_depth: u32,
+        max_buffer_size: u32,
+        root: [u8; 32],
+        leaf: [u8; 32],
+        index: u32,
+        changelog_db_uri: Vec<u8>,
+        metadata_db_uri: Vec<u8>,
+    ) -> Result<()> {
+        let authority = ctx.accounts.authority.to_account_info();
+        let merkle_roll = ctx.accounts.merkle_roll.to_account_info();
+        let gummyroll_program = ctx.accounts.gummyroll_program.to_account_info();
+        let authority_pda = ctx.accounts.authority_pda.to_account_info();
+        let authority_pda_bump_seed = &[*ctx.bumps.get("authority_pda").unwrap()];
+        let seeds = &[
+            b"gummyroll-crud-authority-pda",
+            merkle_roll.key.as_ref(),
+            authority.key.as_ref(),
+            authority_pda_bump_seed,
+        ];
+        let authority_pda_signer = &[&seeds[..]];
+        let cpi_ctx = CpiContext::new_with_signer(
+            gummyroll_program,
+            gummyroll::cpi::accounts::Initialize {
+                authority: authority_pda.clone(),
+                append_authority: authority_pda.clone(),
+                merkle_roll,
+            },
+            authority_pda_signer,
+        )
+        .with_remaining_accounts(ctx.remaining_accounts.to_vec());
+
+        gummyroll::cpi::init_gummyroll_with_root(
+            cpi_ctx,
+            max_depth,
+            max_buffer_size,
+            Node::new(root),
+            Node::new(leaf),
+            index,
+            std::str::from_utf8(&changelog_db_uri).unwrap().to_string(),
+            std::str::from_utf8(&metadata_db_uri).unwrap().to_string(),
+        )
     }
 
     pub fn add(ctx: Context<Add>, message: Vec<u8>) -> Result<()> {

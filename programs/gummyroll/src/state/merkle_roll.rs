@@ -308,9 +308,9 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         let mask: usize = MAX_BUFFER_SIZE - 1;
         let padding: usize = 32 - MAX_DEPTH;
         sol_log_compute_units();
-        // Modifies proof by iterating through the change log 
+        // Modifies proof by iterating through the change log
         loop {
-            // If use_full_buffer is false, this loop will terminate if the initial value of j is the active index 
+            // If use_full_buffer is false, this loop will terminate if the initial value of j is the active index
             if !use_full_buffer && j == self.active_index {
                 break;
             }

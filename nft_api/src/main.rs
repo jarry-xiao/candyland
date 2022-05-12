@@ -6,8 +6,8 @@ use futures_util::StreamExt;
 use gummyroll::state::change_log::{ChangeLogEvent, PathNode};
 use gummyroll::utils::empty_node;
 use hyper::header::HeaderValue;
-use redis::streams::{StreamId, StreamKey, StreamReadOptions, StreamReadReply};
-use redis::{Commands, Value};
+use redis::streams::{StreamId, StreamKey, StreamMaxlen, StreamReadOptions, StreamReadReply};
+use redis::{Commands, RedisResult, Value};
 use routerify::prelude::*;
 use routerify::{Middleware, RequestInfo, Router, RouterService};
 use routerify_json_response::{json_failed_resp, json_failed_resp_with_message, json_success_resp};
@@ -55,7 +55,7 @@ struct AssetDAO {
     pub tree: Vec<u8>,
     pub admin: Vec<u8>,
     pub hash: Vec<u8>,
-    pub level: i64
+    pub level: i64,
 }
 
 #[derive(Serialize)]
@@ -233,7 +233,7 @@ async fn handle_get_proof(
         };
     }
     let proof_unwrapped = proof.unwrap();
-    json_success_resp(&proof_unwrapped[..proof_unwrapped.len()-1].to_vec())
+    json_success_resp(&proof_unwrapped[..proof_unwrapped.len() - 1].to_vec())
 }
 
 async fn handle_get_asset_proof(
@@ -262,8 +262,8 @@ async fn handle_get_asset_proof(
 
     let asset_proof = proof.map(|p| AssetProof {
         hash: string,
-        root: p[p.len()-1].clone(),
-        proof: p[..p.len()-1].to_vec(),
+        root: p[p.len() - 1].clone(),
+        proof: p[..p.len() - 1].to_vec(),
     });
 
     if asset_proof.is_err() {

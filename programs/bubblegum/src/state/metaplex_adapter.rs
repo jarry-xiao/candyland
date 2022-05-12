@@ -26,10 +26,10 @@ impl Creator {
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Debug, Clone)]
 pub enum TokenStandard {
-    NonFungible,  // This is a master edition
-    FungibleAsset, // A token with metadata that can also have attrributes
-    Fungible,     // A token with simple metadata
-    NonFungibleEdition,      // This is a limited edition
+    NonFungible,        // This is a master edition
+    FungibleAsset,      // A token with metadata that can also have attrributes
+    Fungible,           // A token with simple metadata
+    NonFungibleEdition, // This is a limited edition
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Debug, Clone)]
@@ -40,10 +40,11 @@ pub enum UseMethod {
 }
 
 #[derive(AnchorSerialize, AnchorDeserialize, PartialEq, Debug, Clone)]
-pub struct Uses { // 17 bytes + Option byte
+pub struct Uses {
+    // 17 bytes + Option byte
     pub use_method: UseMethod, //1
-    pub remaining: u64, //8
-    pub total: u64, //8
+    pub remaining: u64,        //8
+    pub total: u64,            //8
 }
 
 impl Uses {
@@ -66,7 +67,6 @@ pub struct Collection {
     pub verified: bool,
     pub key: Pubkey,
 }
-
 
 impl Collection {
     pub fn adapt(&self) -> mpl_token_metadata::state::Collection {

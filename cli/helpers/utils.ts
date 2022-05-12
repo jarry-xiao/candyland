@@ -4,48 +4,11 @@ import { parse } from 'csv-parse/sync';
 import { Buffer } from 'buffer';
 import { PublicKey, Keypair, Connection } from '@solana/web3.js';
 import { createArrayCsvWriter } from 'csv-writer';
-import { bfs, hash, Tree } from '../../tests/merkle-tree';
+import { bfs, getProofOfLeaf, hash, Tree } from '../../tests/merkle-tree';
+import { join } from 'path';
 
-type LeafSchema = {
-    leafIndex: string,
-    hash: string,
-};
-
-/**
- * Takes a sorted list of leaf hashes from the input file
- * and throws if a precondition is violated
- * @param leaves 
- */
-function validateLeaves(leaves: LeafSchema[]) {
-    // Check de-duped
-    leaves.map((leaf, index) => {
-        if (Number(leaf.leafIndex) != index) {
-            throw new Error(`leafIndex mismatch for ${index}th leaf which incorrectly has 'leafIndex' set to ${leaf.leafIndex}`);
-        }
-        try {
-            const _pubkey = new PublicKey(leaf.hash);
-        } catch (e) {
-            throw new Error(
-                `Could not create pubkey from the bytes of hash-- index: ${index}, bytes: ${leaf.hash}, leafIndex: ${leaf.leafIndex}\n${e}`
-            );
-        }
-    });
-
-    // Check that # of leaves matches up
-    if (Number(leaves[leaves.length - 1].leafIndex) != leaves.length - 1) {
-        throw new Error("Unable to proceed, final # of leaf_indices != # of hashes provided");
-    }
-}
-
-function processLeaves(leaves: LeafSchema[], maxDepth: number): Buffer[] {
-    const leafHashes = [];
-    leaves = leaves.sort((left, right) => Number(left.leafIndex) - Number(right.leafIndex));
-
-    validateLeaves(leaves);
-
-    leaves.map((leaf) => {
-        leafHashes.push(new PublicKey(leaf.hash).toBuffer());
-    });
+export function processLeaves(leaves: Buffer[], maxDepth: number): Buffer[] {
+    const leafHashes = leaves.slice();
     const numLeaves = 2 ** maxDepth;
     while (leafHashes.length < numLeaves) {
         leafHashes.push(Buffer.alloc(32));
@@ -53,25 +16,16 @@ function processLeaves(leaves: LeafSchema[], maxDepth: number): Buffer[] {
     return leafHashes;
 }
 
-export function loadLeaves(inputFile: string, maxDepth: number) {
-    const leaves = parse(fs.readFileSync(inputFile).toString(), {
-        columns: true,
-        skipEmptyLines: true,
-    });
-    log.debug(`Loaded ${leaves.length} leaves from ${inputFile}`);
-    return processLeaves(leaves, maxDepth);
-}
-
 /**
  * Do BFS from the tree root down to leaves & write to outFile
  */
-export function writeTree(tree: Tree, outFile: string) {
+export function writeTree(tree: Tree, outDir: string, fname: string = "changelog.csv") {
+    const outFile = join(outDir, fname);
     const writer = createArrayCsvWriter({
         path: outFile,
         header: ['node_idx', 'seq', 'level', 'hash']
     });
 
-    log.debug("doing bfs on a tree");
     const records = bfs(tree, (treeNode, idx) => {
         return [
             (idx + 1).toString(),
@@ -81,19 +35,21 @@ export function writeTree(tree: Tree, outFile: string) {
         ]
     });
 
-    log.debug(records[0], records[records.length - 1]);
     writer.writeRecords(records);
+    log.debug("Wrote tree csv to:", outFile);
 }
 
-export function writeMetadata(messages: OwnedMessage[], outFile: string) {
+export function writeMetadata(messages: OwnedMessage[], maxDepth: number, outDir: string, fname: string = "metadata.csv") {
+    const outFile = join(outDir, fname);
     const writer = createArrayCsvWriter({
         path: outFile,
-        header: ["msg", "owner", "leaf", "revision"]
+        header: ["node_idx", "msg", "owner", "leaf", "revision"]
     });
-    log.debug("Wrote metadata csv to:", outFile);
 
-    const records = messages.map((ownedMessage) => {
+    const offset = 2 ** maxDepth;
+    const records = messages.map((ownedMessage, idx) => {
         return [
+            offset + idx,
             ownedMessage.message,
             ownedMessage.owner,
             new PublicKey(hashOwnedMessage(ownedMessage)).toString(),
@@ -101,6 +57,7 @@ export function writeMetadata(messages: OwnedMessage[], outFile: string) {
         ]
     })
     writer.writeRecords(records);
+    log.debug("Wrote metadata csv to:", outFile);
 }
 
 type OwnedMessage = {
@@ -126,19 +83,20 @@ export function hashMessages(messages: OwnedMessage[]): Buffer[] {
     });
 }
 
-export function writeHashes(messages: Buffer[], outFile: string) {
-    const writer = createArrayCsvWriter({
-        path: outFile,
-        header: ['leafIndex', 'hash']
-    });
-    const records = messages.map((buffer, index) => {
-        return [
-            index.toString(),
-            new PublicKey(buffer).toString(),
-        ]
-    });
-    log.debug("Records", records);
-    writer.writeRecords(records as any[]);
+export function writeProof(tree: Tree, rightMostIndex: number, outDir: string, fname: string = "proof.json") {
+    const outFile = join(outDir, fname);
+    const proof = getProofOfLeaf(tree, rightMostIndex);
+    const proofInfo = {
+        proof: proof.map((node) => new PublicKey(node.node).toString()),
+        leaf: new PublicKey(tree.leaves[rightMostIndex].node).toString(),
+        root: new PublicKey(tree.root).toString(),
+        index: rightMostIndex,
+    }
+    fs.writeFileSync(
+        outFile,
+        JSON.stringify(proofInfo, undefined, 2)
+    );
+    log.info("Wrote proof json to:", outFile);
 }
 
 export function loadWalletKey(keypair: string): Keypair {

@@ -1,4 +1,6 @@
 use {
+    flatbuffers::FlatBufferBuilder,
+    messenger::SerializedBlock,
     plerkle_serialization::{
         account_info_generated::account_info::{
             root_as_account_info, AccountInfo, AccountInfoArgs,
@@ -7,10 +9,8 @@ use {
         slot_status_info_generated::slot_status_info::{self, SlotStatusInfo, SlotStatusInfoArgs},
         transaction_info_generated::transaction_info::{
             self, TransactionInfo, TransactionInfoArgs,
-        }
+        },
     },
-    flatbuffers::FlatBufferBuilder,
-    messenger::SerializedBlock,
     solana_geyser_plugin_interface::geyser_plugin_interface::{
         ReplicaAccountInfo, ReplicaBlockInfo, ReplicaTransactionInfo, Result, SlotStatus,
     },

@@ -79,7 +79,6 @@ macro_rules! merkle_roll_apply_fn {
     ($header:ident, $emit_msg:ident, $id:ident, $bytes:ident, $func:ident, $($arg:tt)*) => {
         // Note: max_buffer_size MUST be a power of 2
         match ($header.max_depth, $header.max_buffer_size) {
-            (3, 8) => merkle_roll_depth_size_apply_fn!(3, 8, $emit_msg, $id, $bytes, $func, $($arg)*),
             (14, 64) => merkle_roll_depth_size_apply_fn!(14, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
             (14, 256) => merkle_roll_depth_size_apply_fn!(14, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
             (14, 1024) => merkle_roll_depth_size_apply_fn!(14, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
@@ -131,7 +130,6 @@ pub mod gummyroll {
         );
         header.serialize(&mut header_bytes)?;
         let id = ctx.accounts.merkle_roll.key();
-        // A call is made to MerkleRoll::initialize()
         match merkle_roll_apply_fn!(header, true, id, roll_bytes, initialize,) {
             Some(new_root) => {
                 msg!("New Root: {:?}", new_root);
@@ -148,6 +146,8 @@ pub mod gummyroll {
         root: Node,
         leaf: Node,
         index: u32,
+        changelog_db_uri: String,
+        metadata_db_uri: String,
     ) -> ProgramResult {
         let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
 
@@ -163,6 +163,7 @@ pub mod gummyroll {
         );
         header.serialize(&mut header_bytes)?;
 
+        // Get rightmost proof from accounts
         let mut proof = vec![];
         for node in ctx.remaining_accounts.iter() {
             proof.push(Node::new(node.key().to_bytes()));
@@ -173,7 +174,7 @@ pub mod gummyroll {
         // A call is made to MerkleRoll::initialize_with_root(root, leaf, proof, index)
         match merkle_roll_apply_fn!(
             header,
-            false,
+            true,
             id,
             roll_bytes,
             initialize_with_root,
@@ -243,7 +244,6 @@ pub mod gummyroll {
         assert_eq!(header.append_authority, ctx.accounts.append_authority.key());
 
         let id = ctx.accounts.merkle_roll.key();
-        // A call is made to MerkleRoll::append(leaf)
         match merkle_roll_apply_fn!(header, true, id, roll_bytes, append, leaf) {
             Some(new_root) => {
                 msg!("New Root: {:?}", new_root);
