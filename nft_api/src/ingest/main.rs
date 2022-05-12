@@ -1,13 +1,6 @@
 use {
     anchor_client::anchor_lang::AnchorDeserialize,
-    solana_sdk::pubkey::Pubkey,
-
-csv,
-reqwest,
-serde::Deserialize,
-std::fs::File,
-std::io::Write,
-
+    csv,
     flatbuffers::{ForwardsUOffset, Vector},
     gummyroll::state::change_log::ChangeLogEvent,
     lazy_static::lazy_static,
@@ -22,8 +15,13 @@ std::io::Write,
         Commands, Value,
     },
     regex::Regex,
+    reqwest,
+    serde::Deserialize,
     solana_sdk::keccak,
+    solana_sdk::pubkey::Pubkey,
     sqlx::{self, postgres::PgPoolOptions, Pool, Postgres},
+    std::fs::File,
+    std::io::Write,
 };
 
 mod program_ids {
@@ -414,144 +412,139 @@ pub async fn handle_transaction(ids: &Vec<StreamId>, pool: &Pool<Postgres>) {
         for program_instruction in instructions {
             match program_instruction {
                 (program, instruction) if program == program_ids::gummy_roll_crud() => {
-                    let mut app_event = AppEvent::default();
-                    match gummyroll_crud::get_instruction_type(&instruction.data) {
-                        gummyroll_crud::InstructionName::CreateTree => {
-                            // Get tree ID.
-                            let tree_id =
-                                pubkey_from_fb_table(&keys, instruction.accounts[3] as usize);
-
-                            // Get authority.
-                            let auth =
-                                pubkey_from_fb_table(&keys, instruction.accounts[0] as usize);
-
-                            // Populate app event.
-                            app_event.op = String::from("create");
-                            app_event.tree_id = tree_id;
-                            app_event.authority = auth;
-                        }
-                        gummyroll_crud::InstructionName::CreateTreeWithRoot => {
-                            // Get tree ID.
-                            println!("Captured tree with root");
-                            let tree_id =
-                                pubkey_from_fb_table(&keys, instruction.accounts[3] as usize);
-
-                            // Get authority.
-                            let auth =
-                                pubkey_from_fb_table(&keys, instruction.accounts[0] as usize);
-
-                            // Get data.
-                            let data = instruction.data[8..].to_owned();
-                            let data_buf = &mut data.as_slice();
-                            let ix: gummyroll_crud::instruction::CreateTreeWithRoot =
-                                gummyroll_crud::instruction::CreateTreeWithRoot::deserialize(
-                                    data_buf,
-                                )
-                                .unwrap();
-
-                            app_event.op = String::from("create_batch");
-                            app_event.tree_id = tree_id;
-                            app_event.authority = auth;
-                            app_event.metadata_db_uri = String::from_utf8(ix.metadata_db_uri.to_vec())
-                                .unwrap();
-                            app_event.changelog_db_uri = String::from_utf8(ix.changelog_db_uri.to_vec())
-                                .unwrap();
-                        }
-                        gummyroll_crud::InstructionName::Add => {
-                            // Get data.
-                            let data = instruction.data[8..].to_owned();
-                            let data_buf = &mut data.as_slice();
-                            let add: gummyroll_crud::instruction::Add =
-                                gummyroll_crud::instruction::Add::deserialize(data_buf).unwrap();
-
-                            // Get tree ID.
-                            let tree_id =
-                                pubkey_from_fb_table(&keys, instruction.accounts[3] as usize);
-
-                            // Get owner from index 0.
-                            let owner =
-                                pubkey_from_fb_table(&keys, instruction.accounts[0] as usize);
-
-                            // Get message and leaf.
-                            let hex_message = hex::encode(&add.message);
-                            let leaf = keccak::hashv(&[&owner.as_bytes(), add.message.as_slice()]);
-
-                            // Populate app event.
-                            app_event.op = String::from("add");
-                            app_event.tree_id = tree_id;
-                            app_event.leaf = leaf.to_string();
-                            app_event.message = hex_message;
-                            app_event.owner = owner;
-                        }
-                        gummyroll_crud::InstructionName::Transfer => {
-                            // Get data.
-                            let data = instruction.data[8..].to_owned();
-                            let data_buf = &mut data.as_slice();
-                            let add: gummyroll_crud::instruction::Transfer =
-                                gummyroll_crud::instruction::Transfer::deserialize(data_buf)
-                                    .unwrap();
-
-                            // Get tree ID.
-                            let tree_id =
-                                pubkey_from_fb_table(&keys, instruction.accounts[3] as usize);
-
-                            // Get owner from index 4.
-                            let owner =
-                                pubkey_from_fb_table(&keys, instruction.accounts[4] as usize);
-
-                            // Get new owner from index 5.
-                            let new_owner =
-                                pubkey_from_fb_table(&keys, instruction.accounts[5] as usize);
-
-                            // Get message and leaf.
-                            let hex_message = hex::encode(&add.message);
-                            let leaf =
-                                keccak::hashv(&[&new_owner.as_bytes(), add.message.as_slice()]);
-
-                            // Populate app event.
-                            app_event.op = String::from("tran");
-                            app_event.tree_id = tree_id;
-                            app_event.leaf = leaf.to_string();
-                            app_event.message = hex_message;
-                            app_event.owner = owner;
-                            app_event.new_owner = Some(new_owner);
-                        }
-                        gummyroll_crud::InstructionName::Remove => {
-                            // Get data.
-                            let data = instruction.data[8..].to_owned();
-                            let data_buf = &mut data.as_slice();
-                            let remove: gummyroll_crud::instruction::Remove =
-                                gummyroll_crud::instruction::Remove::deserialize(data_buf).unwrap();
-
-                            // Get tree ID.
-                            let tree_id =
-                                pubkey_from_fb_table(&keys, instruction.accounts[3] as usize);
-
-                            // Get owner from index 0.
-                            let owner =
-                                pubkey_from_fb_table(&keys, instruction.accounts[0] as usize);
-
-                            // Get leaf.
-                            let leaf = bs58::encode(&remove.leaf_hash).into_string();
-
-                            // Populate app event.
-                            app_event.op = String::from("rm");
-                            app_event.tree_id = tree_id;
-                            app_event.leaf = leaf.to_string();
-                            app_event.message = "".to_string();
-                            app_event.owner = owner;
-                        }
-                        _ => {}
-                    }
-                    // If we populated an app event, write it to the database.
-                    if app_event.op.len() > 0 {
-                        let _result = app_event_to_database(&app_event, pid, pool).await;
-                    }
+                    handle_gummyroll_crud_event(&instruction, &keys, pid, pool)
+                        .await
+                        .unwrap();
                 }
                 _ => {}
             }
         }
     }
+}
+
+async fn handle_gummyroll_crud_event(
+    instruction: &solana_sdk::instruction::CompiledInstruction,
+    keys: &Vector<'_, ForwardsUOffset<transaction_info::Pubkey<'_>>>,
+    pid: i64,
+    pool: &Pool<Postgres>,
+) -> Result<(), ()> {
+    let mut app_event = AppEvent::default();
+    // If we populated an app event, write it to the database.
+    match gummyroll_crud::get_instruction_type(&instruction.data) {
+        gummyroll_crud::InstructionName::CreateTree => {
+            // Get tree ID.
+            let tree_id = pubkey_from_fb_table(keys, instruction.accounts[3] as usize);
+
+            // Get authority.
+            let auth = pubkey_from_fb_table(keys, instruction.accounts[0] as usize);
+
+            // Populate app event.
+            app_event.op = String::from("create");
+            app_event.tree_id = tree_id;
+            app_event.authority = auth;
+        }
+        gummyroll_crud::InstructionName::CreateTreeWithRoot => {
+            // Get tree ID.
+            println!("Captured tree with root");
+            let tree_id = pubkey_from_fb_table(keys, instruction.accounts[3] as usize);
+
+            // Get authority.
+            let auth = pubkey_from_fb_table(keys, instruction.accounts[0] as usize);
+
+            // Get data.
+            let data = instruction.data[8..].to_owned();
+            let data_buf = &mut data.as_slice();
+            let ix: gummyroll_crud::instruction::CreateTreeWithRoot =
+                gummyroll_crud::instruction::CreateTreeWithRoot::deserialize(data_buf).unwrap();
+
+            app_event.op = String::from("create_batch");
+            app_event.tree_id = tree_id;
+            app_event.authority = auth;
+            app_event.metadata_db_uri = String::from_utf8(ix.metadata_db_uri.to_vec()).unwrap();
+            app_event.changelog_db_uri = String::from_utf8(ix.changelog_db_uri.to_vec()).unwrap();
+        }
+        gummyroll_crud::InstructionName::Add => {
+            // Get data.
+            let data = instruction.data[8..].to_owned();
+            let data_buf = &mut data.as_slice();
+            let add: gummyroll_crud::instruction::Add =
+                gummyroll_crud::instruction::Add::deserialize(data_buf).unwrap();
+
+            // Get tree ID.
+            let tree_id = pubkey_from_fb_table(keys, instruction.accounts[3] as usize);
+
+            // Get owner from index 0.
+            let owner = pubkey_from_fb_table(keys, instruction.accounts[0] as usize);
+
+            // Get message and leaf.
+            let hex_message = hex::encode(&add.message);
+            let leaf = keccak::hashv(&[&owner.as_bytes(), add.message.as_slice()]);
+
+            // Populate app event.
+            app_event.op = String::from("add");
+            app_event.tree_id = tree_id;
+            app_event.leaf = leaf.to_string();
+            app_event.message = hex_message;
+            app_event.owner = owner;
+        }
+        gummyroll_crud::InstructionName::Transfer => {
+            // Get data.
+            let data = instruction.data[8..].to_owned();
+            let data_buf = &mut data.as_slice();
+            let add: gummyroll_crud::instruction::Transfer =
+                gummyroll_crud::instruction::Transfer::deserialize(data_buf).unwrap();
+
+            // Get tree ID.
+            let tree_id = pubkey_from_fb_table(keys, instruction.accounts[3] as usize);
+
+            // Get owner from index 4.
+            let owner = pubkey_from_fb_table(keys, instruction.accounts[4] as usize);
+
+            // Get new owner from index 5.
+            let new_owner = pubkey_from_fb_table(keys, instruction.accounts[5] as usize);
+
+            // Get message and leaf.
+            let hex_message = hex::encode(&add.message);
+            let leaf = keccak::hashv(&[&new_owner.as_bytes(), add.message.as_slice()]);
+
+            // Populate app event.
+            app_event.op = String::from("tran");
+            app_event.tree_id = tree_id;
+            app_event.leaf = leaf.to_string();
+            app_event.message = hex_message;
+            app_event.owner = owner;
+            app_event.new_owner = Some(new_owner);
+        }
+        gummyroll_crud::InstructionName::Remove => {
+            // Get data.
+            let data = instruction.data[8..].to_owned();
+            let data_buf = &mut data.as_slice();
+            let remove: gummyroll_crud::instruction::Remove =
+                gummyroll_crud::instruction::Remove::deserialize(data_buf).unwrap();
+
+            // Get tree ID.
+            let tree_id = pubkey_from_fb_table(keys, instruction.accounts[3] as usize);
+
+            // Get owner from index 0.
+            let owner = pubkey_from_fb_table(keys, instruction.accounts[0] as usize);
+
+            // Get leaf.
+            let leaf = bs58::encode(&remove.leaf_hash).into_string();
+
+            // Populate app event.
+            app_event.op = String::from("rm");
+            app_event.tree_id = tree_id;
+            app_event.leaf = leaf.to_string();
+            app_event.message = "".to_string();
+            app_event.owner = owner;
+        }
+        _ => {}
+    }
+
+    if app_event.op.len() > 0 {
+        let _result = app_event_to_database(&app_event, pid, pool).await;
+    }
+    Ok(())
 }
 
 fn handle_change_log_event(
