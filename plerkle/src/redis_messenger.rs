@@ -1,21 +1,23 @@
 use {
     crate::error::PlerkleError,
     log::*,
-    messenger::{
-        Messenger, SerializedBlock, ACCOUNT_STREAM, BLOCK_STREAM, DATA_KEY, SLOT_STREAM,
-        TRANSACTION_STREAM,
+    messenger::Messenger,
+    redis::{streams::StreamMaxlen, Commands, Connection, RedisResult},
+    redis::{
+        streams::{StreamId, StreamKey, StreamReadOptions, StreamReadReply},
+        Value,
     },
-    redis::{streams::StreamMaxlen, Commands, Connection, RedisResult, ToRedisArgs},
-    solana_geyser_plugin_interface::geyser_plugin_interface::{
-        GeyserPluginError, ReplicaTransactionInfo, Result,
-    },
-    solana_sdk::{instruction::CompiledInstruction, pubkey::Pubkey},
+    solana_geyser_plugin_interface::geyser_plugin_interface::{GeyserPluginError, Result},
     std::{
         collections::HashMap,
         fmt::{Debug, Formatter},
-        ops::Index,
     },
 };
+
+// Redis stream values.
+const GROUP_NAME: &str = "plerkle";
+const CONSUMER_NAME: &str = "ingester";
+const DATA_KEY: &str = "data";
 
 mod program_ids {
     #![allow(missing_docs)]
@@ -37,79 +39,21 @@ mod program_ids {
 #[derive(Default)]
 pub struct RedisMessenger {
     connection: Option<Connection>,
-    streams: HashMap<String, RedisMessengerStream>,
+    streams: HashMap<&'static str, RedisMessengerStream>,
+    stream_read_reply: StreamReadReply,
 }
 
 pub struct RedisMessengerStream {
-    buffer_size: StreamMaxlen,
-    name: String,
-}
-
-impl RedisMessenger {
-    pub fn order_instructions(
-        transaction_info: &ReplicaTransactionInfo,
-    ) -> Vec<(Pubkey, CompiledInstruction)> {
-        let inner_ixs = transaction_info
-            .transaction_status_meta
-            .clone()
-            .inner_instructions;
-        let outer_instructions = transaction_info.transaction.message().instructions();
-        let keys = transaction_info.transaction.message().account_keys();
-        let mut ordered_ixs: Vec<(Pubkey, CompiledInstruction)> = vec![];
-        if inner_ixs.is_some() {
-            let inner_ix_list = inner_ixs.as_ref().unwrap().as_slice();
-            for inner in inner_ix_list {
-                let outer = outer_instructions.get(inner.index as usize).unwrap();
-                let program_id = keys.index(outer.program_id_index as usize);
-                ordered_ixs.push((*program_id, outer.to_owned()));
-                for inner_ix_instance in &inner.instructions {
-                    let inner_program_id = keys.index(inner_ix_instance.program_id_index as usize);
-                    ordered_ixs.push((*inner_program_id, inner_ix_instance.to_owned()));
-                }
-            }
-        } else {
-            for instruction in outer_instructions {
-                let program_id = keys.index(instruction.program_id_index as usize);
-                ordered_ixs.push((*program_id, instruction.to_owned()));
-            }
-        }
-        ordered_ixs.to_owned()
-    }
-
-    pub fn _add_stream(&mut self, name: String, max_buffer_size: usize) {
-        self.streams.insert(
-            name.clone(),
-            RedisMessengerStream {
-                name,
-                buffer_size: StreamMaxlen::Approx(max_buffer_size),
-            },
-        );
-    }
-
-    pub fn _get_stream(&self, name: String) -> Option<&RedisMessengerStream> {
-        self.streams.get(&*name)
-    }
-
-    pub fn _add<K: ToRedisArgs, T: ToRedisArgs>(
-        &mut self,
-        stream: RedisMessengerStream,
-        id: String,
-        items: &[(K, T)],
-    ) -> Result<()> {
-        let conn = self.connection.as_mut().unwrap();
-        conn.xadd_maxlen(stream.name, stream.buffer_size, &*id, items)
-            .map_err(|e| {
-                GeyserPluginError::Custom(Box::new(PlerkleError::ConfigurationError {
-                    msg: e.to_string(),
-                }))
-            })
-    }
+    _buffer_size: StreamMaxlen,
+    name: &'static str,
 }
 
 impl Messenger for RedisMessenger {
     fn new() -> Result<Self> {
         // Setup Redis client.
         let client = redis::Client::open("redis://redis/").unwrap();
+
+        // Get connection.
         let connection = client.get_connection().map_err(|e| {
             error!("{}", e.to_string());
             GeyserPluginError::Custom(Box::new(PlerkleError::ConfigurationError {
@@ -119,48 +63,39 @@ impl Messenger for RedisMessenger {
 
         Ok(Self {
             connection: Some(connection),
-            streams: HashMap::<String, RedisMessengerStream>::default(),
+            streams: HashMap::<&'static str, RedisMessengerStream>::default(),
+            stream_read_reply: StreamReadReply::default(),
         })
     }
 
-    fn send_account(&mut self, bytes: &[u8]) -> Result<()> {
-        self.send_data(ACCOUNT_STREAM, bytes)
+    fn add_stream(&mut self, stream_key: &'static str, max_buffer_size: usize) {
+        let _result = self.streams.insert(
+            stream_key,
+            RedisMessengerStream {
+                name: stream_key,
+                _buffer_size: StreamMaxlen::Approx(max_buffer_size),
+            },
+        );
+
+        let created: core::result::Result<(), _> = self
+            .connection
+            .as_mut()
+            .unwrap()
+            .xgroup_create_mkstream(stream_key, GROUP_NAME, "$");
+        if let Err(e) = created {
+            println!("Group already exists: {:?}", e)
+        }
     }
 
-    fn send_slot_status(&mut self, bytes: &[u8]) -> Result<()> {
-        self.send_data(SLOT_STREAM, bytes)
-    }
+    fn send(&mut self, stream_key: &'static str, bytes: &[u8]) -> Result<()> {
+        if !self.streams.contains_key(stream_key) {
+            error!("Cannot send. Stream key {stream_key} not configured");
+            return Ok(());
+        }
 
-    fn send_transaction(&mut self, bytes: &[u8]) -> Result<()> {
-        self.send_data(TRANSACTION_STREAM, bytes)
-    }
-
-    fn send_block(&mut self, bytes: SerializedBlock) -> Result<()> {
-        self.send_data(BLOCK_STREAM, bytes.bytes())
-    }
-
-    fn recv_account(&self) -> Result<()> {
-        Ok(())
-    }
-
-    fn recv_slot_status(&self) -> Result<()> {
-        Ok(())
-    }
-
-    fn recv_transaction(&self) -> Result<()> {
-        Ok(())
-    }
-
-    fn recv_block(&self) -> Result<()> {
-        Ok(())
-    }
-}
-
-impl RedisMessenger {
-    fn send_data(&mut self, stream_name: &'static str, bytes: &[u8]) -> Result<()> {
         // Put serialized data into Redis.
         let res: RedisResult<()> = self.connection.as_mut().unwrap().xadd_maxlen(
-            stream_name,
+            stream_key,
             StreamMaxlen::Approx(55000),
             "*",
             &[(DATA_KEY, bytes)],
@@ -174,6 +109,63 @@ impl RedisMessenger {
         }
 
         Ok(())
+    }
+
+    fn recv(&mut self) -> Result<()> {
+        let opts = StreamReadOptions::default()
+            .block(1000)
+            .count(100000)
+            .group(GROUP_NAME, CONSUMER_NAME);
+
+        let keys: Vec<&str> = self.streams.keys().map(|s| *s).collect();
+        let ids: Vec<&str> = vec![">"; keys.len()];
+
+        self.stream_read_reply = self
+            .connection
+            .as_mut()
+            .unwrap()
+            .xread_options(&keys, &ids, &opts)
+            .unwrap();
+
+        Ok(())
+    }
+
+    fn get<'a>(&'a mut self, stream_key: &'static str) -> Result<Vec<(i64, &[u8])>> {
+        let mut data_vec = Vec::<(i64, &[u8])>::new();
+
+        let mut stream = if let Some(stream) = self.streams.get_mut(stream_key) {
+            stream
+        } else {
+            error!("Cannot get data for stream key {stream_key}, it is not configured");
+            return Ok(data_vec);
+        };
+
+        for StreamKey { key, ids } in self.stream_read_reply.keys.iter() {
+            if key == stream_key {
+                for StreamId { id, map } in ids {
+                    let pid = id.replace("-", "").parse::<i64>().unwrap();
+
+                    // Get data from map.
+                    let data = if let Some(data) = map.get(DATA_KEY) {
+                        data
+                    } else {
+                        println!("No Data was stored in Redis for ID {id}");
+                        continue;
+                    };
+                    let bytes = match data {
+                        Value::Data(bytes) => bytes,
+                        _ => {
+                            println!("Redis data for ID {id} in wrong format");
+                            continue;
+                        }
+                    };
+
+                    data_vec.push((pid, &bytes));
+                }
+            }
+        }
+
+        Ok(data_vec)
     }
 }
 

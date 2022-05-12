@@ -10,7 +10,7 @@ use {
     },
     flatbuffers::FlatBufferBuilder,
     log::*,
-    messenger::Messenger,
+    messenger::{Messenger, ACCOUNT_STREAM, BLOCK_STREAM, SLOT_STREAM, TRANSACTION_STREAM},
     solana_geyser_plugin_interface::geyser_plugin_interface::{
         GeyserPlugin, GeyserPluginError, ReplicaAccountInfoVersions, ReplicaBlockInfoVersions,
         ReplicaTransactionInfoVersions, Result, SlotStatus,
@@ -139,7 +139,12 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
         }
 
         // Setup messenger.
-        let messenger = T::new()?;
+        let mut messenger = T::new()?;
+        messenger.add_stream(ACCOUNT_STREAM, 0);
+        messenger.add_stream(SLOT_STREAM, 0);
+        messenger.add_stream(TRANSACTION_STREAM, 0);
+        messenger.add_stream(BLOCK_STREAM, 0);
+
         self.messenger = Some(messenger);
 
         Ok(())
@@ -176,7 +181,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
                     Some(messenger) => {
                         let mut builder = FlatBufferBuilder::new();
                         let bytes = serialize_account(&mut builder, account, slot, is_startup);
-                        messenger.send_account(bytes)
+                        messenger.send(ACCOUNT_STREAM, bytes)
                     }
                 }
             }
@@ -205,7 +210,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
             Some(messenger) => {
                 let mut builder = FlatBufferBuilder::new();
                 let bytes = serialize_slot_status(&mut builder, slot, parent, status);
-                messenger.send_slot_status(bytes)
+                messenger.send(SLOT_STREAM, bytes)
             }
         }
     }
@@ -246,7 +251,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
                     Some(messenger) => {
                         let mut builder = FlatBufferBuilder::new();
                         let bytes = serialize_transaction(&mut builder, transaction_info, slot);
-                        messenger.send_transaction(bytes)
+                        messenger.send(TRANSACTION_STREAM, bytes)
                     }
                 }
             }
@@ -271,7 +276,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
                     Some(messenger) => {
                         let mut builder = FlatBufferBuilder::new();
                         let bytes = serialize_block(&mut builder, block_info);
-                        messenger.send_block(bytes)
+                        messenger.send(BLOCK_STREAM, bytes)
                     }
                 }
             }

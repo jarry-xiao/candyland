@@ -39,6 +39,7 @@ solana-sdk = { version = "=1.10.10" }
 lazy_static = "1.4.0"
 regex = "1.5.5"
 gummyroll-crud={path= "../programs/gummyroll_crud", features = ["no-entrypoint"]}
+plerkle={path= "../plerkle"}
 plerkle-serialization={path= "../plerkle_serialization"}
 
 [dependencies.num-integer]
