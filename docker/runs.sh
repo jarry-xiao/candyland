@@ -53,6 +53,7 @@ args=(
   --bpf-program BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o /so/bubblegum.so
   --bpf-program Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS /so/gummyroll_crud.so
   --bpf-program GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD /so/gummyroll.so
+  --bpf-program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA /so/spl_token.so
   --bpf-program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb /so/spl_token_2022.so
   --bpf-program ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL /so/spl_associated_token_account.so
   --geyser-plugin-config accountsdb-plugin-config.json

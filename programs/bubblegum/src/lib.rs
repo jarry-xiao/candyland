@@ -269,7 +269,6 @@ pub fn hash_metadata(metadata: &MetadataArgs) -> Result<[u8; 32]> {
     Ok(keccak::hashv(&[metadata.try_to_vec()?.as_slice()]).to_bytes())
 }
 
-
 pub enum InstructionName {
     Unknown,
     Mint,
@@ -277,7 +276,7 @@ pub enum InstructionName {
     CancelRedeem,
     Transfer,
     Delegate,
-    Decompress
+    Decompress,
 }
 pub fn get_instruction_type(full_bytes: &Vec<u8>) -> InstructionName {
     let disc: [u8; 8] = {
@@ -286,30 +285,12 @@ pub fn get_instruction_type(full_bytes: &Vec<u8>) -> InstructionName {
         disc
     };
     match disc {
-        [
-               51,  57, 225,  47,
-                 182, 146, 137, 166
-        ] => InstructionName::Mint,
-        [
-              111,  76, 232,  50,
-                 39, 175,  48, 242
-        ] => InstructionName::CancelRedeem,
-        [
-              184,  12, 86, 149,
-                 70, 196, 97, 225
-        ] => InstructionName::Redeem,
-        [
-              163, 52, 200, 231,
-                140,  3,  69, 186
-        ] => InstructionName::Transfer,
-        [
-              90, 147, 75, 178,
-                85,  88,  4, 137
-        ] => InstructionName::Delegate,
-        [
-              74,  60, 49, 197,
-                18, 110, 93, 154
-        ] => InstructionName::Decompress,
+        [51, 57, 225, 47, 182, 146, 137, 166] => InstructionName::Mint,
+        [111, 76, 232, 50, 39, 175, 48, 242] => InstructionName::CancelRedeem,
+        [184, 12, 86, 149, 70, 196, 97, 225] => InstructionName::Redeem,
+        [163, 52, 200, 231, 140, 3, 69, 186] => InstructionName::Transfer,
+        [90, 147, 75, 178, 85, 88, 4, 137] => InstructionName::Delegate,
+        [74, 60, 49, 197, 18, 110, 93, 154] => InstructionName::Decompress,
         _ => InstructionName::Unknown,
     }
 }

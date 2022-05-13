@@ -1,7 +1,6 @@
 use {
     anchor_client::anchor_lang::AnchorDeserialize,
-    bubblegum,
-    csv,
+    bubblegum, csv,
     flatbuffers::{ForwardsUOffset, Vector},
     gummyroll::state::change_log::ChangeLogEvent,
     lazy_static::lazy_static,
@@ -31,14 +30,11 @@ mod program_ids {
         "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
     );
     pubkeys!(
-        gummy_roll_crud,
+        gummyroll_crud,
         "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
     );
-    pubkeys!(
-        bubblegum,
-        "BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o"
-    );
-    pubkeys!(gummy_roll, "GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD");
+    pubkeys!(bubblegum, "BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o");
+    pubkeys!(gummyroll, "GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD");
     pubkeys!(token, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
     pubkeys!(a_token, "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 }
@@ -60,6 +56,22 @@ const SET_APPSQL: &str = r#"INSERT INTO app_specific (msg, leaf, owner, tree_id,
                             DO UPDATE SET leaf = excluded.leaf, owner = excluded.owner, tree_id = excluded.tree_id, revision = excluded.revision"#;
 const SET_OWNERSHIP_APPSQL: &str = r#"INSERT INTO app_specific_ownership (tree_id, authority) VALUES ($1,$2) ON CONFLICT (tree_id)
                             DO UPDATE SET authority = excluded.authority"#;
+
+const SET_NFT_APPSQL: &str = r#"
+    INSERT INTO nft_metadata (
+        leaf,
+        tree_id,
+        revision,   
+        owner,      
+        delegate,   
+        nonce,      
+        name,       
+        symbol,     
+        uri
+    )
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) 
+    "#;
+
 const GET_APPSQL: &str = "SELECT revision FROM app_specific WHERE msg = $1 AND tree_id = $2";
 const DEL_APPSQL: &str = "DELETE FROM app_specific WHERE leaf = $1 AND tree_id = $2";
 const SET_CLSQL_ITEM: &str =
@@ -164,7 +176,6 @@ async fn batch_insert_cl_records(pool: &Pool<Postgres>, records: &Vec<CLRecord>,
     let mut levels: Vec<u32> = vec![];
     let mut hashes: Vec<Vec<u8>> = vec![];
 
-    let raw: Vec<[u8; 32]> = vec![];
     for record in records.iter() {
         tree_ids.push(bs58::decode(&tree_id).into_vec().unwrap());
         node_idxs.push(record.node_idx);
@@ -345,47 +356,38 @@ pub async fn handle_transaction(data: Vec<(i64, &[u8])>, pool: &Pool<Postgres>) 
             Some(keys) => keys,
         };
 
-        // Handle log message parsing.
+        // Handle change log events
         if keys
             .iter()
-            .any(|pubkey| pubkey.key().unwrap() == program_ids::gummy_roll().to_bytes())
+            .any(|pubkey| pubkey.key().unwrap() == program_ids::gummyroll().to_bytes())
         {
             println!("Found GM CL event");
             // Get vector of change log events.
-            let change_log_event_vec = if let Ok(change_log_event_vec) =
-                handle_change_log_event(transaction.log_messages())
-            {
-                change_log_event_vec
-            } else {
-                println!("Could not handle change log event vector");
-                continue;
-            };
-
-            // Get each change log event in the vector.
-            for event in change_log_event_vec {
-                let change_log_event = if let Ok(change_log_event) = handle_event(event) {
-                    change_log_event
-                } else {
-                    println!("\tBad change log event data");
-                    continue;
-                };
-
-                // Put change log event into database.
-                change_log_event_to_database(change_log_event, pid, pool).await;
-            }
         }
 
         // Update metadata associated with the programs that store data in leaves
         let instructions = order_instructions(&transaction);
-        for program_instruction in instructions {
+        let parsed_logs = parse_logs(transaction.log_messages()).unwrap();
+        for (program_instruction, parsed_log) in std::iter::zip(instructions, parsed_logs) {
+            // Sanity check that instructions and logs were parsed correctly
+            assert!(
+                program_instruction.0 == parsed_log.0,
+                "expected {:?}, but program log was {:?}",
+                program_instruction.0,
+                parsed_log.0
+            );
+
             match program_instruction {
-                (program, instruction) if program == program_ids::gummy_roll_crud() => {
-                    handle_gummyroll_crud_event(&instruction, &keys, pid, pool)
+                (program, instruction) if program == program_ids::gummyroll() => {
+                    handle_gummyroll_instruction(&parsed_log.1, pid, pool).await;
+                }
+                (program, instruction) if program == program_ids::gummyroll_crud() => {
+                    handle_gummyroll_crud_instruction(&instruction, &keys, pid, pool)
                         .await
                         .unwrap();
                 }
                 (program, instruction) if program == program_ids::bubblegum() => {
-                    handle_bubblegum_event(&instruction, &keys, pid, pool)
+                    handle_bubblegum_instruction(&instruction, &keys, pid, pool)
                         .await
                         .unwrap();
                 }
@@ -395,7 +397,34 @@ pub async fn handle_transaction(data: Vec<(i64, &[u8])>, pool: &Pool<Postgres>) 
     }
 }
 
-async fn handle_bubblegum_event(
+async fn handle_gummyroll_instruction(
+    logs: &Vec<String>,
+    pid: i64,
+    pool: &Pool<Postgres>,
+) -> Result<(), ()> {
+    let change_log_event_vec = if let Ok(change_log_event_vec) = filter_events_from_logs(logs) {
+        change_log_event_vec
+    } else {
+        println!("Could find emitted program data");
+        return Err(());
+    };
+
+    // Parse each change log event found in logs
+    for event in change_log_event_vec {
+        let change_log_event = if let Ok(change_log_event) = handle_event(event) {
+            change_log_event
+        } else {
+            println!("\tBad change log event data");
+            continue;
+        };
+
+        // Put change log event into database.
+        change_log_event_to_database(change_log_event, pid, pool).await;
+    }
+    Ok(())
+}
+
+async fn handle_bubblegum_instruction(
     instruction: &solana_sdk::instruction::CompiledInstruction,
     keys: &Vector<'_, ForwardsUOffset<transaction_info::Pubkey<'_>>>,
     pid: i64,
@@ -403,20 +432,69 @@ async fn handle_bubblegum_event(
 ) -> Result<(), ()> {
     match bubblegum::get_instruction_type(&instruction.data) {
         bubblegum::InstructionName::Transfer => {
+            // Insert metadata into database here
             println!("Ah yes! a transfer");
         }
         bubblegum::InstructionName::Mint => {
-            println!("Ah yes! a redeem");
+            // Insert metadata into database here
+            println!("Ah yes! a mint");
+
+            /*
+            let mint_auth = pubkey_from_fb_table(keys, instruction.accounts[0] as usize);
+            let auth = pubkey_from_fb_table(keys, instruction.accounts[1] as usize);
+            */
+            let owner = pubkey_from_fb_table(keys, instruction.accounts[4] as usize);
+            let delegate = pubkey_from_fb_table(keys, instruction.accounts[4] as usize);
+            let tree_id = pubkey_from_fb_table(keys, instruction.accounts[6] as usize);
+            // Get authority.
+            let data = instruction.data[8..].to_owned();
+            let data_buf = &mut data.as_slice();
+            let ix: bubblegum::instruction::Mint =
+                bubblegum::instruction::Mint::deserialize(data_buf).unwrap();
+            let metadata = ix.message;
+            let leaf = bubblegum::hash_metadata(&metadata).unwrap();
+            println!(
+                "Metadata info: {} {} {} {}",
+                &metadata.name,
+                metadata.seller_fee_basis_points,
+                metadata.primary_sale_happened,
+                metadata.is_mutable,
+            );
+            sqlx::query(SET_NFT_APPSQL)
+                .bind(&leaf.to_vec())
+                .bind(&bs58::decode(&tree_id).into_vec().unwrap())
+                .bind(&pid)
+                .bind(&bs58::decode(&owner).into_vec().unwrap())
+                .bind(&bs58::decode(&delegate).into_vec().unwrap())
+                // nonce
+                .bind(0 as i64)
+                // name
+                .bind(&metadata.name)
+                // symbol
+                .bind(&metadata.symbol)
+                // uri
+                .bind(&metadata.uri)
+                // sellerfeebasispoints
+                .bind(metadata.seller_fee_basis_points as u32)
+                // primarysalehappened
+                .bind(metadata.primary_sale_happened)
+                // isMutable
+                .bind(metadata.is_mutable)
+                .execute(pool)
+                .await
+                .unwrap();
+            println!("Inserted!");
         }
         bubblegum::InstructionName::Decompress => {
+            // This is actually just a remove?
             println!("Ah yes! a decompress");
         }
-        _ =>  println!("unknown, or don't care"),
+        _ => println!("unknown, or don't care"),
     }
     Ok(())
 }
 
-async fn handle_gummyroll_crud_event(
+async fn handle_gummyroll_crud_instruction(
     instruction: &solana_sdk::instruction::CompiledInstruction,
     keys: &Vector<'_, ForwardsUOffset<transaction_info::Pubkey<'_>>>,
     pid: i64,
@@ -541,9 +619,43 @@ async fn handle_gummyroll_crud_event(
     Ok(())
 }
 
-fn handle_change_log_event(
+// Associates logs with the given program ID
+fn parse_logs(
     log_messages: Option<Vector<ForwardsUOffset<&str>>>,
-) -> Result<Vec<String>, ()> {
+) -> Result<Vec<(Pubkey, Vec<String>)>, ()> {
+    lazy_static! {
+        static ref PLRE: Regex = Regex::new(r"Program (\w*) invoke \[(\d)\]").unwrap();
+    }
+    let mut program_logs: Vec<(Pubkey, Vec<String>)> = vec![];
+
+    match log_messages {
+        Some(logs) => {
+            for log in logs {
+                let captures = PLRE.captures(log);
+                let pubkey_bytes = captures
+                    .and_then(|c| c.get(1))
+                    .map(|c| bs58::decode(&c.as_str()).into_vec().unwrap());
+
+                match pubkey_bytes {
+                    None => {
+                        let last_program_log = program_logs.last_mut().unwrap();
+                        (*last_program_log).1.push(log.parse().unwrap());
+                    }
+                    Some(bytes) => {
+                        program_logs.push((Pubkey::new(&bytes), vec![]));
+                    }
+                }
+            }
+            Ok(program_logs)
+        }
+        None => {
+            println!("No logs found in transaction info!");
+            Err(())
+        }
+    }
+}
+
+fn filter_events_from_logs(log_messages: &Vec<String>) -> Result<Vec<String>, ()> {
     lazy_static! {
         static ref CLRE: Regex = Regex::new(
             r"Program data: ((?:[A-Za-z\d+/]{4})*(?:[A-Za-z\d+/]{3}=|[A-Za-z\d+/]{2}==)?$)"
@@ -552,24 +664,16 @@ fn handle_change_log_event(
     }
     let mut events: Vec<String> = vec![];
 
-    match log_messages {
-        Some(lines) => {
-            for line in lines {
-                let captures = CLRE.captures(line);
-                let b64raw = captures.and_then(|c| c.get(1)).map(|c| c.as_str());
-                b64raw.map(|raw| events.push((raw).parse().unwrap()));
-            }
-            if events.is_empty() {
-                println!("No events captured!");
-                Err(())
-            } else {
-                Ok(events)
-            }
-        }
-        None => {
-            println!("Some plerkle error outside of event parsing/ no log messages");
-            Err(())
-        }
+    for line in log_messages {
+        let captures = CLRE.captures(&line);
+        let b64raw = captures.and_then(|c| c.get(1)).map(|c| c.as_str());
+        b64raw.map(|raw| events.push((raw).parse().unwrap()));
+    }
+    if events.is_empty() {
+        println!("No events captured!");
+        Err(())
+    } else {
+        Ok(events)
     }
 }
 
@@ -630,6 +734,7 @@ pub fn order_instructions(
             }
         }
     }
+
     ordered_ixs
 }
 

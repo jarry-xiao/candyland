@@ -34,3 +34,36 @@ create table app_specific_ownership
 );
 
 create index app_specific_shizzle_mynizzle On app_specific_ownership (authority);
+
+-- 1, join tree info
+-- 2, ownership info
+-- 3, nft metadata
+create table nft_metadata
+(
+    leaf       bytea not null,
+    tree_id    bytea not null,
+    revision   bigint not null,
+
+    owner      bytea not null,
+    delegate   bytea,
+    nonce      bigint PRIMARY KEY,
+
+    name       text not null,
+    symbol     text not null,
+    uri        text not null,
+    sellerFeeBasisPoints int,
+    primarySaleHappened boolean,
+    isMutable boolean
+);
+
+create index nft_metadata_owner On nft_metadata (owner);
+create index nft_metadata_tree On nft_metadata (tree_id);
+create index nft_metadata_delegate On nft_metadata (delegate);
+--    editionNonce bigint not null,
+--    tokenStandard: null,
+--     tokenProgramVersion: {
+--     original: {},
+--     },
+--     collections: null,
+--     uses: null,
+--     creators: [],
