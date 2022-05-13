@@ -553,7 +553,7 @@ pub fn order_instructions(
         solana_sdk::instruction::CompiledInstruction,
     )> = vec![];
     // Get inner instructions.
-    let inner_ixs = transaction_info.inner_instructions();
+    let inner_ix_list = transaction_info.inner_instructions();
 
     // Get outer instructions.
     let outer_instructions = match transaction_info.outer_instructions() {
@@ -573,22 +573,18 @@ pub fn order_instructions(
         Some(keys) => keys,
     };
 
-    if let Some(inner_ix_list) = inner_ixs {
-        //let inner_ix_list = inner_ixs.as_ref().unwrap().as_slice();
-        for inner in inner_ix_list {
-            let outer = outer_instructions.get(inner.index() as usize);
-            let program_id = keys.get(outer.program_id_index() as usize);
-            let program_id = solana_sdk::pubkey::Pubkey::new(program_id.key().unwrap());
+    for (i, instruction) in outer_instructions.iter().enumerate() {
+        let program_id = keys.get(instruction.program_id_index() as usize);
+        let program_id = solana_sdk::pubkey::Pubkey::new(program_id.key().unwrap());
+        let instruction = solana_sdk::instruction::CompiledInstruction::new_from_raw_parts(
+            instruction.program_id_index(),
+            instruction.data().unwrap().to_vec(),
+            instruction.accounts().unwrap().to_vec(),
+        );
+        ordered_ixs.push((program_id, instruction));
 
-            let outer = solana_sdk::instruction::CompiledInstruction::new_from_raw_parts(
-                outer.program_id_index(),
-                outer.data().unwrap().to_vec(),
-                outer.accounts().unwrap().to_vec(),
-            );
-
-            ordered_ixs.push((program_id, outer));
-
-            for inner_ix_instance in inner.instructions().unwrap() {
+        if let Some(inner_ixs) = get_inner_ixs(inner_ix_list, i) {
+            for inner_ix_instance in inner_ixs.instructions().unwrap() {
                 let inner_program_id = keys.get(inner_ix_instance.program_id_index() as usize);
                 let inner_program_id =
                     solana_sdk::pubkey::Pubkey::new(inner_program_id.key().unwrap());
@@ -602,19 +598,25 @@ pub fn order_instructions(
                 ordered_ixs.push((inner_program_id, inner_ix_instance));
             }
         }
-    } else {
-        for instruction in outer_instructions {
-            let program_id = keys.get(instruction.program_id_index() as usize);
-            let program_id = solana_sdk::pubkey::Pubkey::new(program_id.key().unwrap());
-            let instruction = solana_sdk::instruction::CompiledInstruction::new_from_raw_parts(
-                instruction.program_id_index(),
-                instruction.data().unwrap().to_vec(),
-                instruction.accounts().unwrap().to_vec(),
-            );
-            ordered_ixs.push((program_id, instruction));
-        }
     }
     ordered_ixs
+}
+
+fn get_inner_ixs<'a>(
+    inner_ixs: Option<Vector<'a, ForwardsUOffset<transaction_info::InnerInstructions<'_>>>>,
+    outer_index: usize,
+) -> Option<transaction_info::InnerInstructions<'a>> {
+    match inner_ixs {
+        Some(inner_ix_list) => {
+            for inner_ixs in inner_ix_list {
+                if inner_ixs.index() == (outer_index as u8) {
+                    return Some(inner_ixs);
+                }
+            }
+            None
+        }
+        None => None,
+    }
 }
 
 async fn change_log_event_to_database(
