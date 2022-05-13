@@ -2,10 +2,12 @@ use {
     crate::error::PlerkleError,
     log::*,
     messenger::Messenger,
-    redis::{streams::StreamMaxlen, Commands, Connection, RedisResult},
     redis::{
-        streams::{StreamId, StreamKey, StreamReadOptions, StreamReadReply},
         Value,
+        {
+            streams::{StreamId, StreamKey, StreamMaxlen, StreamReadOptions, StreamReadReply},
+            Commands, Connection, RedisResult,
+        },
     },
     solana_geyser_plugin_interface::geyser_plugin_interface::{GeyserPluginError, Result},
     std::{
@@ -44,8 +46,7 @@ pub struct RedisMessenger {
 }
 
 pub struct RedisMessengerStream {
-    _buffer_size: StreamMaxlen,
-    name: &'static str,
+    buffer_size: Option<StreamMaxlen>,
 }
 
 impl Messenger for RedisMessenger {
@@ -68,42 +69,61 @@ impl Messenger for RedisMessenger {
         })
     }
 
-    fn add_stream(&mut self, stream_key: &'static str, max_buffer_size: usize) {
-        let _result = self.streams.insert(
-            stream_key,
-            RedisMessengerStream {
-                name: stream_key,
-                _buffer_size: StreamMaxlen::Approx(max_buffer_size),
-            },
-        );
+    fn add_stream(&mut self, stream_key: &'static str) {
+        // Add to streams hashmap.
+        let _result = self
+            .streams
+            .insert(stream_key, RedisMessengerStream { buffer_size: None });
 
-        let created: core::result::Result<(), _> = self
+        // Add stream to Redis.
+        let result: RedisResult<()> = self
             .connection
             .as_mut()
             .unwrap()
             .xgroup_create_mkstream(stream_key, GROUP_NAME, "$");
-        if let Err(e) = created {
+
+        if let Err(e) = result {
             println!("Group already exists: {:?}", e)
         }
     }
 
-    fn send(&mut self, stream_key: &'static str, bytes: &[u8]) -> Result<()> {
-        if !self.streams.contains_key(stream_key) {
-            error!("Cannot send. Stream key {stream_key} not configured");
-            return Ok(());
+    fn set_buffer_size(&mut self, stream_key: &'static str, max_buffer_size: usize) {
+        // Set max length for the stream.
+        if let Some(stream) = self.streams.get_mut(stream_key) {
+            stream.buffer_size = Some(StreamMaxlen::Approx(max_buffer_size));
+        } else {
+            error!("Stream key {stream_key} not configured");
         }
+    }
+
+    fn send(&mut self, stream_key: &'static str, bytes: &[u8]) -> Result<()> {
+        // Check if stream is configured.
+        let stream = if let Some(stream) = self.streams.get(stream_key) {
+            stream
+        } else {
+            error!("Cannot send data for stream key {stream_key}, it is not configured");
+            return Ok(());
+        };
+
+        // Get max length for the stream.
+        let maxlen = if let Some(maxlen) = stream.buffer_size {
+            maxlen
+        } else {
+            error!("Cannot send data for stream key {stream_key}, buffer size not set.");
+            return Ok(());
+        };
 
         // Put serialized data into Redis.
-        let res: RedisResult<()> = self.connection.as_mut().unwrap().xadd_maxlen(
+        let result: RedisResult<()> = self.connection.as_mut().unwrap().xadd_maxlen(
             stream_key,
-            StreamMaxlen::Approx(55000),
+            maxlen,
             "*",
             &[(DATA_KEY, bytes)],
         );
 
         // Log but do not return errors.
-        if res.is_err() {
-            error!("{}", res.err().unwrap());
+        if let Err(e) = result {
+            error!("Redis send error: {e}");
         } else {
             info!("Data Sent");
         }
@@ -117,15 +137,20 @@ impl Messenger for RedisMessenger {
             .count(100000)
             .group(GROUP_NAME, CONSUMER_NAME);
 
+        // Setup keys and ids to read on all configured streams.
         let keys: Vec<&str> = self.streams.keys().map(|s| *s).collect();
         let ids: Vec<&str> = vec![">"; keys.len()];
 
-        self.stream_read_reply = self
+        // Read on all streams and save the reply. Log but do not return errors.
+        match self
             .connection
             .as_mut()
             .unwrap()
             .xread_options(&keys, &ids, &opts)
-            .unwrap();
+        {
+            Ok(reply) => self.stream_read_reply = reply,
+            Err(e) => error!("Redis receive error: {e}"),
+        }
 
         Ok(())
     }
@@ -133,13 +158,13 @@ impl Messenger for RedisMessenger {
     fn get<'a>(&'a mut self, stream_key: &'static str) -> Result<Vec<(i64, &[u8])>> {
         let mut data_vec = Vec::<(i64, &[u8])>::new();
 
-        let mut stream = if let Some(stream) = self.streams.get_mut(stream_key) {
-            stream
-        } else {
+        // Check if stream is configured.
+        if let None = self.streams.get_mut(stream_key) {
             error!("Cannot get data for stream key {stream_key}, it is not configured");
             return Ok(data_vec);
         };
 
+        // Parse data in stream read reply and store in Vec to return to caller.
         for StreamKey { key, ids } in self.stream_read_reply.keys.iter() {
             if key == stream_key {
                 for StreamId { id, map } in ids {

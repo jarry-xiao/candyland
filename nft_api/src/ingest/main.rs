@@ -293,10 +293,10 @@ pub async fn batch_init_service(
 async fn main() {
     // Setup Redis Messenger.
     let mut messenger = RedisMessenger::new().unwrap();
-    messenger.add_stream(ACCOUNT_STREAM, 0);
-    messenger.add_stream(SLOT_STREAM, 0);
-    messenger.add_stream(TRANSACTION_STREAM, 0);
-    messenger.add_stream(BLOCK_STREAM, 0);
+    messenger.add_stream(ACCOUNT_STREAM);
+    messenger.add_stream(SLOT_STREAM);
+    messenger.add_stream(TRANSACTION_STREAM);
+    messenger.add_stream(BLOCK_STREAM);
 
     // Setup Postgres.
     let pool = PgPoolOptions::new()

@@ -140,11 +140,14 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
 
         // Setup messenger.
         let mut messenger = T::new()?;
-        messenger.add_stream(ACCOUNT_STREAM, 0);
-        messenger.add_stream(SLOT_STREAM, 0);
-        messenger.add_stream(TRANSACTION_STREAM, 0);
-        messenger.add_stream(BLOCK_STREAM, 0);
-
+        messenger.add_stream(ACCOUNT_STREAM);
+        messenger.add_stream(SLOT_STREAM);
+        messenger.add_stream(TRANSACTION_STREAM);
+        messenger.add_stream(BLOCK_STREAM);
+        messenger.set_buffer_size(ACCOUNT_STREAM, 5000);
+        messenger.set_buffer_size(SLOT_STREAM, 5000);
+        messenger.set_buffer_size(TRANSACTION_STREAM, 5000);
+        messenger.set_buffer_size(BLOCK_STREAM, 5000);
         self.messenger = Some(messenger);
 
         Ok(())
