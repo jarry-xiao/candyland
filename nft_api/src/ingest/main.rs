@@ -4,10 +4,10 @@ use {
     flatbuffers::{ForwardsUOffset, Vector},
     gummyroll::state::change_log::ChangeLogEvent,
     lazy_static::lazy_static,
-    messenger::{Messenger, ACCOUNT_STREAM, BLOCK_STREAM, SLOT_STREAM, TRANSACTION_STREAM},
+    messenger::{ACCOUNT_STREAM, BLOCK_STREAM, SLOT_STREAM, TRANSACTION_STREAM},
     nft_api_lib::error::ApiError,
     nft_api_lib::events::handle_event,
-    plerkle::redis_messenger::RedisMessenger,
+    plerkle::async_redis_messenger::AsyncRedisMessenger,
     plerkle_serialization::transaction_info_generated::transaction_info::{
         self, root_as_transaction_info, TransactionInfo,
     },
@@ -17,8 +17,7 @@ use {
     solana_sdk::keccak,
     solana_sdk::pubkey::Pubkey,
     sqlx::{self, postgres::PgPoolOptions, Pool, Postgres},
-    std::fs::File,
-    std::io::Write,
+    std::{fs::File, io::Write},
 };
 
 mod program_ids {
@@ -159,7 +158,6 @@ async fn batch_insert_cl_records(pool: &Pool<Postgres>, records: &Vec<CLRecord>,
     let mut levels: Vec<u32> = vec![];
     let mut hashes: Vec<Vec<u8>> = vec![];
 
-    let raw: Vec<[u8; 32]> = vec![];
     for record in records.iter() {
         tree_ids.push(bs58::decode(&tree_id).into_vec().unwrap());
         node_idxs.push(record.node_idx);
@@ -291,13 +289,6 @@ pub async fn batch_init_service(
 
 #[tokio::main]
 async fn main() {
-    // Setup Redis Messenger.
-    let mut messenger = RedisMessenger::new().unwrap();
-    messenger.add_stream(ACCOUNT_STREAM);
-    messenger.add_stream(SLOT_STREAM);
-    messenger.add_stream(TRANSACTION_STREAM);
-    messenger.add_stream(BLOCK_STREAM);
-
     // Setup Postgres.
     let pool = PgPoolOptions::new()
         .max_connections(5)
@@ -305,22 +296,61 @@ async fn main() {
         .await
         .unwrap();
 
-    // Service streams.
-    loop {
-        if let Ok(_) = messenger.recv() {
-            if let Ok(data) = messenger.get(TRANSACTION_STREAM) {
-                handle_transaction(data, &pool).await;
-            }
+    let mut tasks = vec![];
 
-            // Ignore these for now.
-            let _ = messenger.get(ACCOUNT_STREAM);
-            let _ = messenger.get(SLOT_STREAM);
-            let _ = messenger.get(BLOCK_STREAM);
+    // Service streams as separate concurrent processes.
+    tasks.push(service_transaction_stream(pool.clone()).await);
+    tasks.push(service_stream(ACCOUNT_STREAM, pool.clone()).await);
+    tasks.push(service_stream(SLOT_STREAM, pool.clone()).await);
+    tasks.push(service_stream(BLOCK_STREAM, pool.clone()).await);
+
+    // Wait for ctrl-c.
+    match tokio::signal::ctrl_c().await {
+        Ok(()) => {}
+        Err(err) => {
+            println!("Unable to listen for shutdown signal: {}", err);
+            // We also shut down in case of error.
         }
+    }
+
+    // Kill all tasks.
+    for task in tasks {
+        task.abort();
     }
 }
 
-pub async fn handle_transaction(data: Vec<(i64, &[u8])>, pool: &Pool<Postgres>) {
+async fn service_transaction_stream(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut messenger = AsyncRedisMessenger::new(TRANSACTION_STREAM).await.unwrap();
+
+        loop {
+            // This call to messenger.recv() blocks with no timeout until
+            // a message is received on the stream.
+            if let Ok(data) = messenger.recv().await {
+                handle_transaction(data, &pool).await;
+            }
+        }
+    })
+}
+
+async fn service_stream(
+    stream_key: &'static str,
+    _pool: Pool<Postgres>,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut messenger = AsyncRedisMessenger::new(stream_key).await.unwrap();
+
+        loop {
+            // This call to messenger.recv() blocks with no timeout until
+            // a message is received on the stream.
+            if let Ok(_data) = messenger.recv().await {
+                ()
+            }
+        }
+    })
+}
+
+async fn handle_transaction(data: Vec<(i64, &[u8])>, pool: &Pool<Postgres>) {
     for (pid, data) in data {
         // Get root of transaction info flatbuffers object.
         let transaction = match root_as_transaction_info(data) {
