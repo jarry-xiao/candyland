@@ -61,7 +61,7 @@ async fn change_log_event_to_database(
         Ok(txn) => {
             let mut i: i64 = 0;
             for p in change_log_event.path.into_iter() {
-                //println!("level {}, node {:?}", i, p.node.inner);
+                println!("level {}, node {:?}", i, p.node.inner);
                 let tree_id = change_log_event.id.as_ref();
                 let f = sqlx::query(SET_CLSQL_ITEM)
                     .bind(&tree_id)
