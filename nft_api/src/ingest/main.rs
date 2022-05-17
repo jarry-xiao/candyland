@@ -12,17 +12,9 @@ use {
     },
     flatbuffers::{ForwardsUOffset, Vector},
     lazy_static::lazy_static,
-    messenger::{Messenger, ACCOUNT_STREAM, BLOCK_STREAM, SLOT_STREAM, TRANSACTION_STREAM},
-    nft_api_lib::error::ApiError,
-    nft_api_lib::events::handle_event,
-    plerkle::redis_messenger::RedisMessenger,
-    plerkle_serialization::transaction_info_generated::transaction_info::{
-        self, root_as_transaction_info, TransactionInfo,
-    },
-    redis::{
-        streams::{StreamId, StreamKey, StreamReadOptions, StreamReadReply},
-        Commands, Value,
-    },
+    messenger::{ACCOUNT_STREAM, BLOCK_STREAM, SLOT_STREAM, TRANSACTION_STREAM},
+    plerkle::async_redis_messenger::AsyncRedisMessenger,
+    plerkle_serialization::transaction_info_generated::transaction_info::root_as_transaction_info,
     regex::Regex,
     solana_sdk::pubkey::Pubkey,
     sqlx::{self, postgres::PgPoolOptions, Pool, Postgres},
@@ -48,13 +40,6 @@ mod program_ids {
 
 #[tokio::main]
 async fn main() {
-    // Setup Redis Messenger.
-    let mut messenger = RedisMessenger::new().unwrap();
-    messenger.add_stream(ACCOUNT_STREAM);
-    messenger.add_stream(SLOT_STREAM);
-    messenger.add_stream(TRANSACTION_STREAM);
-    messenger.add_stream(BLOCK_STREAM);
-
     // Setup Postgres.
     let pool = PgPoolOptions::new()
         .max_connections(5)
@@ -62,22 +47,61 @@ async fn main() {
         .await
         .unwrap();
 
-    // Service streams.
-    loop {
-        if let Ok(_) = messenger.recv() {
-            if let Ok(data) = messenger.get(TRANSACTION_STREAM) {
-                handle_transaction(data, &pool).await;
-            }
+    let mut tasks = vec![];
 
-            // Ignore these for now.
-            let _ = messenger.get(ACCOUNT_STREAM);
-            let _ = messenger.get(SLOT_STREAM);
-            let _ = messenger.get(BLOCK_STREAM);
+    // Service streams as separate concurrent processes.
+    tasks.push(service_transaction_stream(pool.clone()).await);
+    tasks.push(service_stream(ACCOUNT_STREAM, pool.clone()).await);
+    tasks.push(service_stream(SLOT_STREAM, pool.clone()).await);
+    tasks.push(service_stream(BLOCK_STREAM, pool.clone()).await);
+
+    // Wait for ctrl-c.
+    match tokio::signal::ctrl_c().await {
+        Ok(()) => {}
+        Err(err) => {
+            println!("Unable to listen for shutdown signal: {}", err);
+            // We also shut down in case of error.
         }
+    }
+
+    // Kill all tasks.
+    for task in tasks {
+        task.abort();
     }
 }
 
-pub async fn handle_transaction(data: Vec<(i64, &[u8])>, pool: &Pool<Postgres>) {
+async fn service_transaction_stream(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut messenger = AsyncRedisMessenger::new(TRANSACTION_STREAM).await.unwrap();
+
+        loop {
+            // This call to messenger.recv() blocks with no timeout until
+            // a message is received on the stream.
+            if let Ok(data) = messenger.recv().await {
+                handle_transaction(data, &pool).await;
+            }
+        }
+    })
+}
+
+async fn service_stream(
+    stream_key: &'static str,
+    _pool: Pool<Postgres>,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut messenger = AsyncRedisMessenger::new(stream_key).await.unwrap();
+
+        loop {
+            // This call to messenger.recv() blocks with no timeout until
+            // a message is received on the stream.
+            if let Ok(_data) = messenger.recv().await {
+                ()
+            }
+        }
+    })
+}
+
+async fn handle_transaction(data: Vec<(i64, &[u8])>, pool: &Pool<Postgres>) {
     for (pid, data) in data {
         // Get root of transaction info flatbuffers object.
         let transaction = match root_as_transaction_info(data) {

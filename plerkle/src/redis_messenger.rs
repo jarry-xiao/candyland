@@ -1,5 +1,8 @@
 use {
-    crate::error::PlerkleError,
+    crate::{
+        constants::{CONSUMER_NAME, DATA_KEY, GROUP_NAME},
+        error::PlerkleError,
+    },
     log::*,
     messenger::Messenger,
     redis::{
@@ -15,28 +18,6 @@ use {
         fmt::{Debug, Formatter},
     },
 };
-
-// Redis stream values.
-const GROUP_NAME: &str = "plerkle";
-const CONSUMER_NAME: &str = "ingester";
-const DATA_KEY: &str = "data";
-
-mod program_ids {
-    #![allow(missing_docs)]
-
-    use solana_sdk::pubkeys;
-    pubkeys!(
-        token_metadata,
-        "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
-    );
-    pubkeys!(
-        gummy_roll_crud,
-        "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
-    );
-    pubkeys!(gummy_roll, "GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD");
-    pubkeys!(token, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
-    pubkeys!(a_token, "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
-}
 
 #[derive(Default)]
 pub struct RedisMessenger {
