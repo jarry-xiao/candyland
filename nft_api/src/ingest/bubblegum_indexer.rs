@@ -82,7 +82,7 @@ pub async fn handle_bubblegum_instruction(
             let leaf_event = leaf_event_result.unwrap();
 
             let owner = pubkey_from_fb_table(keys, instruction.accounts[4] as usize);
-            let delegate = pubkey_from_fb_table(keys, instruction.accounts[4] as usize);
+            let delegate = pubkey_from_fb_table(keys, instruction.accounts[5] as usize);
 
             let data = instruction.data[8..].to_owned();
             let data_buf = &mut data.as_slice();
