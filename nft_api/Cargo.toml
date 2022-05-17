@@ -27,7 +27,8 @@ base64 = "0.13.0"
 thiserror = "1.0.30"
 tokio = { version = "1.17.0", features = ["full"] }
 gummyroll={path= "../programs/gummyroll", features = ["no-entrypoint"]}
-sqlx = {version = "0.5.11", features = ["runtime-tokio-rustls","postgres"] }
+bubblegum = {path = "../programs/bubblegum", features = ["no-entrypoint"]}
+sqlx = {version = "0.5.11", features = ["runtime-tokio-rustls","postgres","uuid"] }
 tokio-postgres = "0.7.5"
 serde = "1.0.136"
 bs58="0.4.0"
@@ -41,6 +42,7 @@ regex = "1.5.5"
 gummyroll-crud={path= "../programs/gummyroll_crud", features = ["no-entrypoint"]}
 plerkle={path= "../plerkle"}
 plerkle-serialization={path= "../plerkle_serialization"}
+uuid = "1.0.0"
 
 [dependencies.num-integer]
 version = "0.1.44"

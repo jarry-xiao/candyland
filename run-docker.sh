@@ -27,9 +27,13 @@ popd
 pushd deps/solana-program-library/token/program-2022
   cargo build-bpf
 popd
+pushd deps/solana-program-library/token/program
+  cargo build-bpf
+popd
 
 cp deps/metaplex-program-library/target/deploy/mpl_token_metadata.so docker-vol/mpl_token_metadata.so
 cp deps/solana-program-library/target/deploy/spl_token_2022.so docker-vol/spl_token_2022.so
+cp deps/solana-program-library/target/deploy/spl_token.so docker-vol/spl_token.so
 cp deps/solana-program-library/target/deploy/spl_associated_token_account.so docker-vol/spl_associated_token_account.so
 
 echo "----------------------------------------------------"
