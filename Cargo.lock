@@ -1375,6 +1375,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "gumball-machine"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "bubblegum",
+ "bytemuck",
+ "gummyroll",
+ "mpl-token-metadata",
+]
+
+[[package]]
 name = "gummyroll"
 version = "0.1.0"
 dependencies = [

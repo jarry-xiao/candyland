@@ -5,6 +5,7 @@ members = [
     "nft_ingester",
     "programs/bubblegum",
     "programs/gummyroll",
+    "programs/gumball-machine",
     "programs/gummyroll_crud",
     "messenger"
 ]
