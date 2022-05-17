@@ -20,6 +20,7 @@ hex = "0.4.3"
 routerify = "3"
 routerify-json-response = "3"
 redis = {version = "0.21.5", features = ["aio", "tokio-comp", "streams"]}
+futures = "0.3.21"
 futures-util = "0.3.0"
 hyper = "0.14"
 anchor-client = { path = "../deps/anchor/client" }

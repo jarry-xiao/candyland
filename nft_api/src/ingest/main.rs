@@ -2,6 +2,7 @@ use {
     anchor_client::anchor_lang::AnchorDeserialize,
     csv,
     flatbuffers::{ForwardsUOffset, Vector},
+    futures::future::BoxFuture,
     gummyroll::state::change_log::ChangeLogEvent,
     lazy_static::lazy_static,
     messenger::{ACCOUNT_STREAM, BLOCK_STREAM, SLOT_STREAM, TRANSACTION_STREAM},
@@ -17,7 +18,7 @@ use {
     solana_sdk::keccak,
     solana_sdk::pubkey::Pubkey,
     sqlx::{self, postgres::PgPoolOptions, Pool, Postgres},
-    std::{fs::File, io::Write},
+    std::{collections::HashMap, fs::File, io::Write},
 };
 
 mod program_ids {
@@ -287,6 +288,9 @@ pub async fn batch_init_service(
         .unwrap();
 }
 
+// Program parser function type.
+type ProgramParser = fn(Pubkey, i64, Vec<u8>, &Pool<Postgres>) -> BoxFuture<'_, ()>;
+
 #[tokio::main]
 async fn main() {
     // Setup Postgres.
@@ -296,13 +300,27 @@ async fn main() {
         .await
         .unwrap();
 
+    // Setup program parsers.
+    let mut parsers: HashMap<Pubkey, ProgramParser> = HashMap::new();
+    parsers.insert(program_ids::gummy_roll(), |key, pid, data, pool| {
+        Box::pin(gummyroll_handler(key, pid, data, pool))
+    });
+    parsers.insert(program_ids::gummy_roll_crud(), |key, pid, data, pool| {
+        Box::pin(gummyroll_crud_handler(key, pid, data, pool))
+    });
+
+    // Vector to store task handles.
     let mut tasks = vec![];
 
-    // Service streams as separate concurrent processes.
-    tasks.push(service_transaction_stream(pool.clone()).await);
-    tasks.push(service_stream(ACCOUNT_STREAM, pool.clone()).await);
-    tasks.push(service_stream(SLOT_STREAM, pool.clone()).await);
-    tasks.push(service_stream(BLOCK_STREAM, pool.clone()).await);
+    // Service streams as separate concurrent processes.  Need to clone pool and
+    // parsers so they can be moved into the tokio task.  References would need
+    // static lifetime.
+    tasks.push(service_transaction_stream(pool.clone(), parsers.clone()).await);
+
+    // These don't do anything yet except read data out of Redis.
+    tasks.push(service_stream(ACCOUNT_STREAM, pool.clone(), parsers.clone()).await);
+    tasks.push(service_stream(SLOT_STREAM, pool.clone(), parsers.clone()).await);
+    tasks.push(service_stream(BLOCK_STREAM, pool.clone(), parsers.clone()).await);
 
     // Wait for ctrl-c.
     match tokio::signal::ctrl_c().await {
@@ -319,7 +337,10 @@ async fn main() {
     }
 }
 
-async fn service_transaction_stream(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
+async fn service_transaction_stream(
+    pool: Pool<Postgres>,
+    parsers: HashMap<Pubkey, ProgramParser>,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut messenger = AsyncRedisMessenger::new(TRANSACTION_STREAM).await.unwrap();
 
@@ -327,7 +348,7 @@ async fn service_transaction_stream(pool: Pool<Postgres>) -> tokio::task::JoinHa
             // This call to messenger.recv() blocks with no timeout until
             // a message is received on the stream.
             if let Ok(data) = messenger.recv().await {
-                handle_transaction(data, &pool).await;
+                handle_transaction(data, &pool, &parsers).await;
             }
         }
     })
@@ -336,6 +357,7 @@ async fn service_transaction_stream(pool: Pool<Postgres>) -> tokio::task::JoinHa
 async fn service_stream(
     stream_key: &'static str,
     _pool: Pool<Postgres>,
+    _parsers: HashMap<Pubkey, ProgramParser>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut messenger = AsyncRedisMessenger::new(stream_key).await.unwrap();
@@ -350,7 +372,11 @@ async fn service_stream(
     })
 }
 
-async fn handle_transaction(data: Vec<(i64, &[u8])>, pool: &Pool<Postgres>) {
+async fn handle_transaction(
+    data: Vec<(i64, &[u8])>,
+    pool: &Pool<Postgres>,
+    parsers: &HashMap<Pubkey, ProgramParser>,
+) {
     for (pid, data) in data {
         // Get root of transaction info flatbuffers object.
         let transaction = match root_as_transaction_info(data) {
@@ -370,47 +396,83 @@ async fn handle_transaction(data: Vec<(i64, &[u8])>, pool: &Pool<Postgres>) {
             Some(keys) => keys,
         };
 
-        // Handle log message parsing.
-        if keys
-            .iter()
-            .any(|pubkey| pubkey.key().unwrap() == program_ids::gummy_roll().to_bytes())
-        {
-            println!("Found GM CL event");
-            // Get vector of change log events.
-            let change_log_event_vec = if let Ok(change_log_event_vec) =
-                handle_change_log_event(transaction.log_messages())
+        // Iterate through program parsers and call individual handlers.
+        for (key, handler) in parsers.iter() {
+            if keys
+                .iter()
+                .any(|pubkey| Pubkey::new(pubkey.key().unwrap()) == *key)
             {
-                change_log_event_vec
-            } else {
-                println!("Could not handle change log event vector");
-                continue;
-            };
-
-            // Get each change log event in the vector.
-            for event in change_log_event_vec {
-                let change_log_event = if let Ok(change_log_event) = handle_event(event) {
-                    change_log_event
-                } else {
-                    println!("\tBad change log event data");
-                    continue;
-                };
-
-                // Put change log event into database.
-                change_log_event_to_database(change_log_event, pid, pool).await;
+                handler(*key, pid, data.to_vec(), pool).await;
             }
         }
+    }
+}
 
-        // Handle instruction parsing.
-        let instructions = order_instructions(&transaction);
-        for program_instruction in instructions {
-            match program_instruction {
-                (program, instruction) if program == program_ids::gummy_roll_crud() => {
-                    handle_gummyroll_crud_event(&instruction, &keys, pid, pool)
-                        .await
-                        .unwrap();
-                }
-                _ => {}
+async fn gummyroll_handler(_key: Pubkey, pid: i64, data: Vec<u8>, pool: &Pool<Postgres>) {
+    // Handle log message parsing.
+    println!("Found GM CL event");
+    // Get root of transaction info flatbuffers object.
+    let transaction = match root_as_transaction_info(&data) {
+        Err(err) => {
+            println!("Flatbuffers TransactionInfo deserialization error: {err}");
+            return;
+        }
+        Ok(transaction) => transaction,
+    };
+
+    // Get vector of change log events.
+    let change_log_event_vec =
+        if let Ok(change_log_event_vec) = handle_change_log_event(transaction.log_messages()) {
+            change_log_event_vec
+        } else {
+            println!("Could not handle change log event vector");
+            return;
+        };
+
+    // Get each change log event in the vector.
+    for event in change_log_event_vec {
+        let change_log_event = if let Ok(change_log_event) = handle_event(event) {
+            change_log_event
+        } else {
+            println!("\tBad change log event data");
+            continue;
+        };
+
+        // Put change log event into database.
+        change_log_event_to_database(change_log_event, pid, pool).await;
+    }
+}
+
+async fn gummyroll_crud_handler(key: Pubkey, pid: i64, data: Vec<u8>, pool: &Pool<Postgres>) {
+    // Get root of transaction info flatbuffers object.
+    let transaction = match root_as_transaction_info(&data) {
+        Err(err) => {
+            println!("Flatbuffers TransactionInfo deserialization error: {err}");
+            return;
+        }
+        Ok(transaction) => transaction,
+    };
+
+    // Get account keys flatbuffers object.
+    let keys = match transaction.account_keys() {
+        None => {
+            println!("Flatbuffers account_keys missing");
+            return;
+        }
+        Some(keys) => keys,
+    };
+
+    let instructions = order_instructions(&transaction);
+
+    // Handle instruction parsing.
+    for program_instruction in instructions {
+        match program_instruction {
+            (program, instruction) if program == key => {
+                handle_gummyroll_crud_event(&instruction, &keys, pid, pool)
+                    .await
+                    .unwrap();
             }
+            _ => {}
         }
     }
 }
