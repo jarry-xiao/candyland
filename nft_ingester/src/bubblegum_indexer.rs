@@ -3,7 +3,7 @@ use {
     anchor_client::anchor_lang::AnchorDeserialize,
     bubblegum::state::leaf_schema::LeafSchemaEvent,
     flatbuffers::{ForwardsUOffset, Vector},
-    nft_api_lib::events::handle_event,
+    nft_ingester::events::handle_event,
     plerkle_serialization::transaction_info_generated::transaction_info::{self},
     solana_sdk,
     sqlx::{self, types::Uuid, Pool, Postgres},

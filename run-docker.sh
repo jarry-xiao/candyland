@@ -9,8 +9,9 @@ cp target/deploy/bubblegum.so docker-vol/bubblegum.so
 
 # Off Chain Setup
 # Speed up by using cargo remote
-cargo build --target x86_64-unknown-linux-gnu --package nft_api
+cargo build --target x86_64-unknown-linux-gnu --package nft-api
 cp target/x86_64-unknown-linux-gnu/debug/api target/debug/api
+cargo build --target x86_64-unknown-linux-gnu --package nft-ingester
 cp target/x86_64-unknown-linux-gnu/debug/ingest target/debug/ingest
 
 # Validator setup

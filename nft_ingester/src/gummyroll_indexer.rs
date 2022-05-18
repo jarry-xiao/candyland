@@ -1,7 +1,7 @@
 use {
     crate::filter_events_from_logs,
     gummyroll::state::change_log::ChangeLogEvent,
-    nft_api_lib::events::handle_event,
+    nft_ingester::events::handle_event,
     serde::Deserialize,
     sqlx::{self, Pool, Postgres},
     std::fs::File,

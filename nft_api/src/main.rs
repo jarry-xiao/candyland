@@ -23,10 +23,8 @@ use std::ops::Index;
 use std::str::FromStr;
 
 mod error;
-mod events;
 
 use error::ApiError;
-use events::handle_event;
 use tokio::{join, task};
 
 async fn logger(req: Request<Body>) -> Result<Request<Body>, routerify_json_response::Error> {

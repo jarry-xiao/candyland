@@ -2029,7 +2029,41 @@ dependencies = [
 ]
 
 [[package]]
-name = "nft_api"
+name = "nft-api"
+version = "0.1.0"
+dependencies = [
+ "anchor-client",
+ "base64 0.13.0",
+ "bs58 0.4.0",
+ "bubblegum",
+ "csv",
+ "flatbuffers",
+ "futures-util",
+ "gummyroll",
+ "gummyroll-crud",
+ "hex",
+ "hyper",
+ "lazy_static",
+ "messenger",
+ "num-integer",
+ "plerkle",
+ "plerkle-serialization",
+ "redis",
+ "regex",
+ "reqwest",
+ "routerify",
+ "routerify-json-response",
+ "serde",
+ "solana-sdk",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "tokio-postgres",
+ "uuid 1.0.0",
+]
+
+[[package]]
+name = "nft-ingester"
 version = "0.1.0"
 dependencies = [
  "anchor-client",
