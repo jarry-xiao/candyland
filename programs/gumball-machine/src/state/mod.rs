@@ -1,50 +1,37 @@
 use crate::utils::error_msg;
-use anchor_lang::{
-    prelude::*,
-    solana_program::{keccak::hashv, log::sol_log_compute_units},
-};
-use borsh::{BorshDeserialize, BorshSerialize};
+use anchor_lang::prelude::*;
 use bytemuck::{Pod, Zeroable};
-use mpl_token_metadata::state::Creator;
-use std::convert::AsRef;
 use std::mem::size_of;
 
-#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy)]
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Zeroable, Pod)]
+#[repr(C)]
 pub struct GumballMachineHeader {
-    // TODO: Add more fields 
-    pub url_base: [u8; 32],
+    // TODO: Add more fields
+    pub url_base: [u8; 64],
     pub name_base: [u8; 32],
     pub symbol: [u8; 32],
     pub seller_fee_basis_points: u16,
-    pub is_mutable: bool,
+    pub is_mutable: u8,
+    pub retain_authority: u8,
+    pub use_method: u8,
+    pub _padding: [u8; 3],
+    pub use_method_remaining: u64,
+    pub use_method_total: u64,
     pub price: u64,
-    pub retain_authority: bool,
     pub go_live_date: i64,
     pub mint: Pubkey,
+    pub bot_wallet: Pubkey,
+    pub authority: Pubkey,
+    pub collection_key: Pubkey,
     // Force a single creator (use Hydra)
     pub creator_address: Pubkey,
-    pub items_available: u64,
-    pub total_items: u64,
-    pub available_items: u64,
+    pub extension_len: usize,
+    pub remaining: usize,
+    pub max_items: u64,
+    pub total_items_added: usize,
 }
 
-#[derive(Copy, Clone)]
-pub struct ConfigLine {
-    // Arweave extensions are 32 bytes
-    pub id: u64,
-    pub extension: [u8; 32],
-}
-
-#[derive(Copy, Clone)]
-pub struct GumballMachine<const SIZE: usize> {
-    pub remaining: u64,
-    pub config_lines: [ConfigLine; SIZE],
-}
-
-unsafe impl<const SIZE: usize> Zeroable for GumballMachine<SIZE> {}
-unsafe impl<const SIZE: usize> Pod for GumballMachine<SIZE> {}
-impl<const SIZE: usize> ZeroCopy for GumballMachine<SIZE> {}
-
+impl ZeroCopy for GumballMachineHeader {}
 pub trait ZeroCopy: Pod {
     fn load_mut_bytes<'a>(data: &'a mut [u8]) -> Result<&'a mut Self> {
         let size = size_of::<Self>();
@@ -53,13 +40,5 @@ pub trait ZeroCopy: Pod {
         Ok(bytemuck::try_from_bytes_mut(&mut data[..size])
             .map_err(error_msg::<Self>(data_len))
             .unwrap())
-    }
-}
-
-impl<const SIZE: usize> GumballMachine<SIZE> {
-    pub fn sample(&mut self, entropy: u64) {
-        let i = entropy % self.remaining;
-        (&mut self.config_lines).swap(i as usize, self.remaining as usize - 1);
-        self.remaining -= 1;
     }
 }
