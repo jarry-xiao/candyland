@@ -26,6 +26,7 @@ pub struct GumballMachineHeader {
     // Force a single creator (use Hydra)
     pub creator_address: Pubkey,
     pub extension_len: usize,
+    pub max_mint_size: u64,
     pub remaining: usize,
     pub max_items: u64,
     pub total_items_added: usize,

@@ -1,6 +1,6 @@
 use anchor_lang::{
     prelude::*,
-    solana_program::{sysvar, sysvar::SysvarId},
+    solana_program::{keccak::hashv, sysvar, sysvar::SysvarId},
 };
 use anchor_spl::token::Mint;
 use bubblegum::program::Bubblegum;
@@ -23,17 +23,17 @@ pub struct InitGumballMachine<'info> {
     gumball_machine: AccountInfo<'info>,
     creator: Signer<'info>,
     mint: Account<'info, Mint>,
+    /// CHECK: Mint/append authority to the merkle slab
     #[account(
         seeds = [gumball_machine.key().as_ref()],
         bump,
     )]
-    /// CHECK: Mint/append authority to the merkle slab
     willy_wonka: AccountInfo<'info>,
     /// CHECK: Tree authority to the merkle slab
     bubblegum_authority: AccountInfo<'info>,
     gummyroll: Program<'info, Gummyroll>,
-    #[account(zero)]
     /// CHECK: Empty merkle slab
+    #[account(zero)]
     merkle_slab: AccountInfo<'info>,
     bubblegum: Program<'info, Bubblegum>,
 }
@@ -64,8 +64,10 @@ pub struct Dispense<'info> {
         seeds = [gumball_machine.key().as_ref()],
         bump,
     )]
+    /// CHECK: Address is verified
     #[account(address = SlotHashes::id())]
     recent_blockhashes: UncheckedAccount<'info>,
+    /// CHECK: Address is verified
     #[account(address = sysvar::instructions::id())]
     instruction_sysvar_account: UncheckedAccount<'info>,
     /// CHECK: PDA is checked on CPI for mint
@@ -109,6 +111,7 @@ pub mod gumball_machine {
         collection_key: Pubkey,
         uses: Option<Uses>,
         extension_len: u64,
+        max_mint_size: u64,
         max_items: u64,
     ) -> Result<()> {
         let mut gumball_machine_data = ctx.accounts.gumball_machine.try_borrow_mut_data()?;
@@ -139,6 +142,7 @@ pub mod gumball_machine {
             collection_key,
             creator_address: ctx.accounts.creator.key(),
             extension_len: extension_len as usize,
+            max_mint_size: max_mint_size.max(1).min(max_items),
             remaining: size,
             max_items,
             total_items_added: 0,
@@ -183,6 +187,7 @@ pub mod gumball_machine {
         let line_size = gumball_header.extension_len;
         let num_lines = new_config_lines_data.len() / line_size;
         let start_index = gumball_header.total_items_added;
+        assert_eq!(gumball_header.authority, ctx.accounts.authority.key());
         assert_eq!(new_config_lines_data.len() % line_size, 0);
         assert!(config_data.len() == index_array_size + config_size);
         assert_eq!(new_config_lines_data.len(), num_lines * line_size);
@@ -212,6 +217,7 @@ pub mod gumball_machine {
         let config_size = gumball_header.extension_len * size;
         let line_size = gumball_header.extension_len;
         let num_lines = new_config_lines_data.len() / line_size;
+        assert_eq!(gumball_header.authority, ctx.accounts.authority.key());
         assert_eq!(new_config_lines_data.len() % line_size, 0);
         assert!(config_data.len() == index_array_size + config_size);
         assert_eq!(new_config_lines_data.len(), num_lines * line_size);
@@ -238,6 +244,7 @@ pub mod gumball_machine {
         authority: Option<Pubkey>,
         bot_wallet: Option<Pubkey>,
         uses: Option<Uses>,
+        max_mint_size: Option<u64>,
     ) -> Result<()> {
         let mut gumball_machine_data = ctx.accounts.gumball_machine.try_borrow_mut_data()?;
         let (mut header_bytes, _) =
@@ -284,6 +291,12 @@ pub mod gumball_machine {
             Some(bw) => gumball_machine.bot_wallet = bw,
             None => {}
         }
+        match max_mint_size {
+            Some(mms) => {
+                gumball_machine.max_mint_size = mms.max(1).min(gumball_machine.max_items)
+            }
+            None => {}
+        }
         match uses {
             Some(u) => {
                 gumball_machine.use_method = u.use_method.to_u8();
@@ -299,7 +312,7 @@ pub mod gumball_machine {
         Ok(())
     }
 
-    pub fn dispense(ctx: Context<Dispense>) -> Result<()> {
+    pub fn dispense(ctx: Context<Dispense>, num_items: usize) -> Result<()> {
         // Load all data
         let mut gumball_machine_data = ctx.accounts.gumball_machine.try_borrow_mut_data()?;
         let (mut header_bytes, config_data) =
@@ -318,64 +331,71 @@ pub mod gumball_machine {
         // TODO: Validate data
 
         let mut indices = cast_slice_mut::<u8, u32>(indices_data);
-        // Get 8 bytes of entropy from the SlotHashes sysvar
-        let data = ctx.accounts.recent_blockhashes.data.borrow();
-        let mut most_recent: [u8; 8] = [0; 8];
-        most_recent.copy_from_slice(&data[4..12]);
-        let entropy = u64::from_le_bytes(most_recent);
-        // Shuffle the list of indices using Fisher-Yates
-        let selected = entropy % gumball_header.remaining as u64;
-        gumball_header.remaining -= 1;
-        (&mut indices).swap(selected as usize, gumball_header.remaining);
-        // Pull out config line from the data
-        let random_config_index = indices[gumball_header.remaining] as usize * line_size;
-        let config_line =
-            config_lines_data[random_config_index..random_config_index + line_size].to_vec();
-
-        let uses = match gumball_header.use_method {
-            0 => None,
-            _ => Some(Uses {
-                use_method: UseMethod::from_u8(gumball_header.use_method)?,
-                remaining: gumball_header.use_method_remaining,
-                total: gumball_header.use_method_total,
-            }),
-        };
-
-        let message = get_metadata_args(
-            gumball_header.url_base,
-            gumball_header.name_base,
-            gumball_header.symbol,
-            gumball_header.seller_fee_basis_points,
-            gumball_header.is_mutable != 0,
-            gumball_header.collection_key,
-            uses,
-            gumball_header.creator_address,
-            random_config_index,
-            config_line,
-        );
-
-        let seed = ctx.accounts.gumball_machine.key();
-        let seeds = &[seed.as_ref(), &[*ctx.bumps.get("willy_wonka").unwrap()]];
-        let authority_pda_signer = &[&seeds[..]];
-        let cpi_ctx = CpiContext::new_with_signer(
-            ctx.accounts.bubblegum.to_account_info(),
-            bubblegum::cpi::accounts::Mint {
-                mint_authority: ctx.accounts.willy_wonka.to_account_info(),
-                authority: ctx.accounts.bubblegum_authority.to_account_info(),
-                nonce: ctx.accounts.nonce.to_account_info(),
-                gummyroll_program: ctx.accounts.gummyroll.to_account_info(),
-                owner: ctx.accounts.payer.to_account_info(),
-                delegate: ctx.accounts.payer.to_account_info(),
-                merkle_slab: ctx.accounts.merkle_slab.to_account_info(),
-            },
-            authority_pda_signer,
-        );
-        bubblegum::cpi::mint(cpi_ctx, message)
+        for _ in 0..num_items.max(1).min(gumball_header.remaining) {
+            // Get 8 bytes of entropy from the SlotHashes sysvar
+            let mut buf: [u8; 8] = [0; 8];
+            buf.copy_from_slice(
+                &hashv(&[
+                    &ctx.accounts.recent_blockhashes.data.borrow(),
+                    &gumball_header.remaining.to_le_bytes(),
+                ]).as_ref()[..8],
+            );
+            let entropy = u64::from_le_bytes(buf);
+            // Shuffle the list of indices using Fisher-Yates
+            let selected = entropy % gumball_header.remaining as u64;
+            gumball_header.remaining -= 1;
+            (&mut indices).swap(selected as usize, gumball_header.remaining);
+            // Pull out config line from the data
+            let random_config_index = indices[gumball_header.remaining] as usize * line_size;
+            let config_line =
+                config_lines_data[random_config_index..random_config_index + line_size].to_vec();
+    
+            let uses = match gumball_header.use_method {
+                0 => None,
+                _ => Some(Uses {
+                    use_method: UseMethod::from_u8(gumball_header.use_method)?,
+                    remaining: gumball_header.use_method_remaining,
+                    total: gumball_header.use_method_total,
+                }),
+            };
+    
+            let message = get_metadata_args(
+                gumball_header.url_base,
+                gumball_header.name_base,
+                gumball_header.symbol,
+                gumball_header.seller_fee_basis_points,
+                gumball_header.is_mutable != 0,
+                gumball_header.collection_key,
+                uses,
+                gumball_header.creator_address,
+                random_config_index,
+                config_line,
+            );
+    
+            let seed = ctx.accounts.gumball_machine.key();
+            let seeds = &[seed.as_ref(), &[*ctx.bumps.get("willy_wonka").unwrap()]];
+            let authority_pda_signer = &[&seeds[..]];
+            let cpi_ctx = CpiContext::new_with_signer(
+                ctx.accounts.bubblegum.to_account_info(),
+                bubblegum::cpi::accounts::Mint {
+                    mint_authority: ctx.accounts.willy_wonka.to_account_info(),
+                    authority: ctx.accounts.bubblegum_authority.to_account_info(),
+                    nonce: ctx.accounts.nonce.to_account_info(),
+                    gummyroll_program: ctx.accounts.gummyroll.to_account_info(),
+                    owner: ctx.accounts.payer.to_account_info(),
+                    delegate: ctx.accounts.payer.to_account_info(),
+                    merkle_slab: ctx.accounts.merkle_slab.to_account_info(),
+                },
+                authority_pda_signer,
+            );
+            bubblegum::cpi::mint(cpi_ctx, message)?;
+        } 
+        Ok(())
     }
 
     pub fn destroy(ctx: Context<Destroy>) -> Result<()> {
         let mut gumball_machine_data = ctx.accounts.gumball_machine.try_borrow_mut_data()?;
-        let (mut header_bytes, config_data) =
+        let (mut header_bytes, _) =
             gumball_machine_data.split_at_mut(std::mem::size_of::<GumballMachineHeader>());
         let gumball_header = GumballMachineHeader::load_mut_bytes(&mut header_bytes)?;
         assert!(gumball_header.authority == ctx.accounts.authority.key());

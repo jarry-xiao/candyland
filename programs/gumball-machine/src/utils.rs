@@ -39,6 +39,7 @@ pub fn get_metadata_args(
     let name_base = std::str::from_utf8(&name_base).unwrap().trim_matches(zero);
     let symbol = std::str::from_utf8(&symbol).unwrap().trim_matches(zero);
     let uri_base = std::str::from_utf8(&url_base).unwrap().trim_matches(zero);
+    let system_program_id = anchor_lang::system_program::ID;
 
     MetadataArgs {
         name: name_base.to_owned() + " #" + &index.to_string(),
@@ -49,10 +50,15 @@ pub fn get_metadata_args(
         is_mutable,
         edition_nonce: None,
         token_standard: None,
-        collection: Some(Collection {
-            verified: true,
-            key: collection,
-        }),
+        collection: if collection == system_program_id {
+            // Treat the SystemProgram as a the null case
+            None
+        } else {
+            Some(Collection {
+                verified: true,
+                key: collection,
+            })
+        },
         uses,
         token_program_version: TokenProgramVersion::Token2022,
         creators: vec![Creator {
