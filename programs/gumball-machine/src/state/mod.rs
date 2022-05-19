@@ -7,19 +7,26 @@ use std::mem::size_of;
 #[repr(C)]
 pub struct GumballMachineHeader {
     // TODO: Add more fields
+    // Used to programmatically create the url and name for each field.
+    // Unlike candy machine, each NFT minted has its url programmatically generated 
+    // from the config line index as format!("{} #{}", url_base, index)
     pub url_base: [u8; 64],
+    // Unlike candy machine, each NFT minted has its name programmatically generated 
+    // from the config line index as format!("{} #{}", name_base, index)
     pub name_base: [u8; 32],
     pub symbol: [u8; 32],
     pub seller_fee_basis_points: u16,
     pub is_mutable: u8,
     pub retain_authority: u8,
     pub use_method: u8,
+    // Used for 8-byte aligning zero copy structs
     pub _padding: [u8; 3],
     pub use_method_remaining: u64,
     pub use_method_total: u64,
     pub price: u64,
     pub go_live_date: i64,
     pub mint: Pubkey,
+    // Used to collect bot fees
     pub bot_wallet: Pubkey,
     pub authority: Pubkey,
     pub collection_key: Pubkey,

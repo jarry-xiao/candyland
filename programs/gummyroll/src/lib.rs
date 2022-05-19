@@ -146,8 +146,8 @@ pub mod gummyroll {
         root: Node,
         leaf: Node,
         index: u32,
-        _changelog_db_uri: String,
-        _metadata_db_uri: String,
+        changelog_db_uri: String,
+        metadata_db_uri: String,
     ) -> ProgramResult {
         let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
 

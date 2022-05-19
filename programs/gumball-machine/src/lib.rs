@@ -143,7 +143,7 @@ pub mod gumball_machine {
             creator_address: ctx.accounts.creator.key(),
             extension_len: extension_len as usize,
             max_mint_size: max_mint_size.max(1).min(max_items),
-            remaining: size,
+            remaining: 0,
             max_items,
             total_items_added: 0,
         };
@@ -199,6 +199,7 @@ pub mod gumball_machine {
             .enumerate()
             .for_each(|(i, l)| *l = new_config_lines_data[i]);
         gumball_header.total_items_added += num_lines;
+        gumball_header.remaining += num_lines;
         Ok(())
     }
 
@@ -393,6 +394,7 @@ pub mod gumball_machine {
         Ok(())
     }
 
+    /// Reclaim gumball_machine lamports to authority
     pub fn destroy(ctx: Context<Destroy>) -> Result<()> {
         let mut gumball_machine_data = ctx.accounts.gumball_machine.try_borrow_mut_data()?;
         let (mut header_bytes, _) =
