@@ -4,10 +4,6 @@ use anchor_lang::{
 };
 use anchor_spl::token::Mint;
 use bubblegum::program::Bubblegum;
-use bubblegum::state::metaplex_adapter::Collection;
-use bubblegum::state::metaplex_adapter::Creator;
-use bubblegum::state::metaplex_adapter::MetadataArgs;
-use bubblegum::state::metaplex_adapter::TokenProgramVersion;
 use bubblegum::state::metaplex_adapter::UseMethod;
 use bubblegum::state::metaplex_adapter::Uses;
 use bytemuck::cast_slice_mut;
@@ -305,6 +301,8 @@ pub mod gumball_machine {
         let (mut header_bytes, config_data) =
             gumball_machine_data.split_at_mut(std::mem::size_of::<GumballMachineHeader>());
         let gumball_header = GumballMachineHeader::load_mut_bytes(&mut header_bytes)?;
+        let clock = Clock::get()?;
+        assert!(clock.unix_timestamp > gumball_header.go_live_date);
         let size = gumball_header.max_items as usize;
         let index_array_size = std::mem::size_of::<u32>() * size;
         let config_size = gumball_header.extension_len * size;

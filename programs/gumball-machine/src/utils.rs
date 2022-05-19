@@ -1,4 +1,12 @@
-use anchor_lang::solana_program::{msg, program_error::ProgramError};
+use anchor_lang::{
+    prelude::*,
+    solana_program::{msg, program_error::ProgramError},
+};
+use bubblegum::state::metaplex_adapter::Collection;
+use bubblegum::state::metaplex_adapter::Creator;
+use bubblegum::state::metaplex_adapter::MetadataArgs;
+use bubblegum::state::metaplex_adapter::TokenProgramVersion;
+use bubblegum::state::metaplex_adapter::Uses;
 use bytemuck::PodCastError;
 use std::any::type_name;
 use std::mem::size_of;
@@ -46,7 +54,7 @@ pub fn get_metadata_args(
             key: collection,
         }),
         uses,
-        token_program_version: TokenProgramVersion::Original,
+        token_program_version: TokenProgramVersion::Token2022,
         creators: vec![Creator {
             address: creator,
             verified: true,
