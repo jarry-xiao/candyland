@@ -82,7 +82,11 @@ pub struct Dispense<'info> {
 }
 
 #[derive(Accounts)]
-pub struct Destroy {}
+pub struct Destroy<'info> {
+    /// CHECK: Validation occurs in instruction
+    gumball_machine: AccountInfo<'info>,
+    authority: Signer<'info>,
+}
 
 #[program]
 pub mod gumball_machine {
@@ -369,8 +373,17 @@ pub mod gumball_machine {
         bubblegum::cpi::mint(cpi_ctx, message)
     }
 
-    pub fn destroy(_ctx: Context<Destroy>) -> Result<()> {
+    pub fn destroy(ctx: Context<Destroy>) -> Result<()> {
+        let mut gumball_machine_data = ctx.accounts.gumball_machine.try_borrow_mut_data()?;
+        let (mut header_bytes, config_data) =
+            gumball_machine_data.split_at_mut(std::mem::size_of::<GumballMachineHeader>());
+        let gumball_header = GumballMachineHeader::load_mut_bytes(&mut header_bytes)?;
+        assert!(gumball_header.authority == ctx.accounts.authority.key());
+        let dest_starting_lamports = ctx.accounts.authority.lamports();
+        **ctx.accounts.authority.lamports.borrow_mut() = dest_starting_lamports
+            .checked_add(ctx.accounts.gumball_machine.lamports())
+            .ok_or(ProgramError::InvalidAccountData)?;
+        **ctx.accounts.gumball_machine.lamports.borrow_mut() = 0;
         Ok(())
     }
 }
-
