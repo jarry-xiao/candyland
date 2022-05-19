@@ -5,7 +5,7 @@ use {
     },
     flatbuffers::{ForwardsUOffset, Vector},
     lazy_static::lazy_static,
-    nft_api_lib::error::ApiError,
+    nft_ingester::error::IngesterError,
     plerkle_serialization::transaction_info_generated::transaction_info::{self, TransactionInfo},
     regex::Regex,
     solana_sdk::pubkey::Pubkey,
@@ -19,7 +19,7 @@ pub struct AppSpecificRev {
     pub revision: i64,
 }
 
-pub async fn write_assets_to_file(uri: &str, tree_id: &str, key: &str) -> Result<String, ApiError> {
+pub async fn write_assets_to_file(uri: &str, tree_id: &str, key: &str) -> Result<String, IngesterError> {
     println!("Requesting to see arweave link for {}", key);
     let fname = format!("{}-{}.csv", tree_id, key);
     let body = reqwest::get(uri).await?.text().await?;
