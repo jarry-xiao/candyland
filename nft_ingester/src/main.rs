@@ -14,22 +14,8 @@ use nft_ingester::utils::{order_instructions, parse_logs};
 use plerkle_serialization::account_info_generated::account_info::root_as_account_info;
 
 
-mod program_ids {
-    #![allow(missing_docs)]
-
-    use solana_sdk::pubkeys;
-    pubkeys!(
-        token_metadata,
-        "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
-    );
-
-    pubkeys!(gummyroll, "GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD");
-    pubkeys!(token, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
-    pubkeys!(a_token, "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
-}
-
 async fn setup_manager<'c>(mut manager: ProgramHandlerManager<'c>) -> ProgramHandlerManager<'c> {
-    // TODO setup figment
+    // TODO setup figment gor db configuration
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect("postgres://solana:solana@db/solana")
