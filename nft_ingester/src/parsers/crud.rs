@@ -1,3 +1,4 @@
+use crate::parsers::batch_init_service;
 use {
     crate::utils::{pubkey_from_fb_table, un_jank_message, AppSpecificRev},
     anchor_client::anchor_lang::AnchorDeserialize,
@@ -7,7 +8,6 @@ use {
     solana_sdk::keccak,
     sqlx::{self, Pool, Postgres},
 };
-use crate::parsers::batch_init_service;
 
 #[derive(Default)]
 struct AppEvent {
@@ -300,4 +300,3 @@ pub async fn batch_insert_app_specific_records(
         }
     }
 }
-

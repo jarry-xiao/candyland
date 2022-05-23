@@ -1,6 +1,7 @@
+#!/bin/bash
 # Exit on failure
 set -e
-
+export RUSTFLAGS='--cfg procmacro2_semver_exempt'
 # Build on-chain programs first
 anchor build
 cp target/deploy/gummyroll.so docker-vol/gummyroll.so

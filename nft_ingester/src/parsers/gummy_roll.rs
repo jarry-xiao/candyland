@@ -1,18 +1,21 @@
-use std::sync::Arc;
+use crate::error::IngesterError;
+use crate::events::handle_event;
+use crate::parsers::{
+    batch_insert_app_specific_records, InstructionBundle, ProgramHandler, ProgramHandlerConfig,
+    SET_OWNERSHIP_APPSQL,
+};
+use crate::utils::{filter_events_from_logs, write_assets_to_file};
+use async_trait::async_trait;
 use lazy_static::lazy_static;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::pubkeys;
+use std::sync::Arc;
 use {
     gummyroll::state::change_log::ChangeLogEvent,
     serde::Deserialize,
     sqlx::{self, Pool, Postgres},
     std::fs::File,
 };
-use crate::error::IngesterError;
-use crate::events::handle_event;
-use crate::parsers::{batch_insert_app_specific_records, InstructionBundle, ProgramHandler, ProgramHandlerConfig, SET_OWNERSHIP_APPSQL};
-use crate::utils::{filter_events_from_logs, write_assets_to_file};
-use async_trait::async_trait;
 
 const SET_CLSQL_ITEM: &str =
     "INSERT INTO cl_items (tree, seq, level, hash, node_idx) VALUES ($1,$2,$3,$4,$5)";
@@ -30,7 +33,10 @@ pub struct CLRecord {
     hash: String,
 }
 
-pubkeys!(GummyRollProgramID, "BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o");
+pubkeys!(
+    GummyRollProgramID,
+    "BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o"
+);
 
 pub struct GummyRollHandler {
     id: Pubkey,
@@ -58,7 +64,8 @@ impl ProgramHandler for GummyRollHandler {
             &bundle.instruction_logs,
             bundle.message_id,
             self.storage.as_ref(),
-        ).await
+        )
+        .await
     }
 }
 
@@ -70,7 +77,6 @@ impl GummyRollHandler {
         }
     }
 }
-
 
 pub async fn handle_gummyroll_instruction(
     logs: &Vec<&str>,
@@ -190,7 +196,6 @@ pub async fn batch_insert_cl_records(
     }
 }
 
-
 pub async fn batch_init_service(
     pool: &Pool<Postgres>,
     authority: &str,
@@ -226,7 +231,6 @@ pub async fn batch_init_service(
         .await
         .unwrap();
 }
-
 
 pub async fn insert_csv_metadata(
     pool: &Pool<Postgres>,

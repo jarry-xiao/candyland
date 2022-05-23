@@ -8,7 +8,11 @@ pub struct AppSpecificRev {
     pub revision: i64,
 }
 
-pub async fn write_assets_to_file(uri: &str, tree_id: &str, key: &str) -> Result<String, IngesterError> {
+pub async fn write_assets_to_file(
+    uri: &str,
+    tree_id: &str,
+    key: &str,
+) -> Result<String, IngesterError> {
     println!("Requesting to see arweave link for {}", key);
     let fname = format!("{}-{}.csv", tree_id, key);
     let body = reqwest::get(uri).await?.text().await?;

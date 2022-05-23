@@ -1,13 +1,13 @@
-use std::sync::Arc;
 use anchor_client::anchor_lang::prelude::Pubkey;
 use lazy_static::lazy_static;
 use solana_sdk::pubkeys;
+use std::sync::Arc;
 use {
+    crate::events::handle_event,
     crate::utils::{filter_events_from_logs, pubkey_from_fb_table},
     anchor_client::anchor_lang::AnchorDeserialize,
     bubblegum::state::leaf_schema::LeafSchemaEvent,
     flatbuffers::{ForwardsUOffset, Vector},
-    crate::events::handle_event,
     plerkle_serialization::transaction_info_generated::transaction_info::{self},
     solana_sdk,
     sqlx::{self, types::Uuid, Pool, Postgres},
@@ -17,7 +17,10 @@ use crate::error::IngesterError;
 use crate::parsers::{InstructionBundle, ProgramHandler, ProgramHandlerConfig};
 use async_trait::async_trait;
 
-pubkeys!(BubblegumProgramID, "BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o");
+pubkeys!(
+    BubblegumProgramID,
+    "BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o"
+);
 
 const SET_NFT_APPSQL: &str = r#"
     INSERT INTO nft_metadata (
@@ -34,7 +37,6 @@ const SET_NFT_APPSQL: &str = r#"
     )
     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
     "#;
-
 
 pub struct BubblegumHandler {
     id: Pubkey,
@@ -58,7 +60,14 @@ impl ProgramHandler for BubblegumHandler {
     }
 
     async fn handle_instruction(&self, bundle: &InstructionBundle) -> Result<(), IngesterError> {
-        handle_bubblegum_instruction(&bundle.instruction, &bundle.instruction_logs, &bundle.keys, bundle.message_id, self.storage.as_ref()).await
+        handle_bubblegum_instruction(
+            &bundle.instruction,
+            &bundle.instruction_logs,
+            &bundle.keys,
+            bundle.message_id,
+            self.storage.as_ref(),
+        )
+        .await
     }
 }
 
@@ -70,7 +79,6 @@ impl BubblegumHandler {
         }
     }
 }
-
 
 fn get_bubblegum_leaf_event(logs: &Vec<&str>) -> Result<LeafSchemaEvent, ()> {
     let event_logs = filter_events_from_logs(logs);
