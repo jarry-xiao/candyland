@@ -1,13 +1,13 @@
 use {
-    crate::utils::{batch_init_service, pubkey_from_fb_table, un_jank_message, AppSpecificRev},
+    crate::utils::{pubkey_from_fb_table, un_jank_message, AppSpecificRev},
     anchor_client::anchor_lang::AnchorDeserialize,
     flatbuffers::{ForwardsUOffset, Vector},
     plerkle_serialization::transaction_info_generated::transaction_info::{self},
     serde::Deserialize,
     solana_sdk::keccak,
     sqlx::{self, Pool, Postgres},
-    std::fs::File,
 };
+use crate::parsers::batch_init_service;
 
 #[derive(Default)]
 struct AppEvent {
@@ -36,7 +36,7 @@ pub const SET_OWNERSHIP_APPSQL: &str = r#"INSERT INTO app_specific_ownership (tr
                             DO UPDATE SET authority = excluded.authority"#;
 const GET_APPSQL: &str = "SELECT revision FROM app_specific WHERE msg = $1 AND tree_id = $2";
 const DEL_APPSQL: &str = "DELETE FROM app_specific WHERE leaf = $1 AND tree_id = $2";
-const BATCH_INSERT_APPSQL: &str = r#"INSERT INTO app_specific (msg, leaf, owner, tree_id, revision) 
+const BATCH_INSERT_APPSQL: &str = r#"INSERT INTO app_specific (msg, leaf, owner, tree_id, revision)
     SELECT msg, leaf, owner, tree_id, revision
     FROM UNNEST($1,$2,$3,$4,$5) as a(msg, leaf, owner, tree_id, revision)
     RETURNING msg, leaf, owner, tree_id, revision
@@ -301,32 +301,3 @@ pub async fn batch_insert_app_specific_records(
     }
 }
 
-pub async fn insert_csv_metadata(
-    pool: &Pool<Postgres>,
-    fname: &str,
-    batch_size: usize,
-    tree_id: &str,
-) {
-    let tmp_file = File::open(fname).unwrap();
-    let mut reader = csv::Reader::from_reader(tmp_file);
-
-    let mut batch = vec![];
-    let mut num_batches = 0;
-    for result in reader.deserialize() {
-        let record = result.unwrap();
-        println!("Record: {:?}", record);
-        batch.push(record);
-
-        if batch.len() == batch_size {
-            println!("Executing batch write: {}", num_batches);
-            batch_insert_app_specific_records(pool, &batch, tree_id).await;
-            batch = vec![];
-            num_batches += 1;
-        }
-    }
-    if batch.len() > 0 {
-        batch_insert_app_specific_records(pool, &batch, tree_id).await;
-        num_batches += 1;
-    }
-    println!("Uploaded to db in {} batches", num_batches);
-}

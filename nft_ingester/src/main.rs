@@ -1,24 +1,18 @@
-mod bubblegum_indexer;
-mod crud_indexer;
-mod gummyroll_indexer;
-mod utils;
+use std::sync::Arc;
+use futures_util::TryFutureExt;
+use solana_sdk::pubkey::Pubkey;
 
 use {
-    crate::{
-        bubblegum_indexer::handle_bubblegum_instruction,
-        crud_indexer::handle_gummyroll_crud_instruction,
-        gummyroll_indexer::handle_gummyroll_instruction,
-        utils::{filter_events_from_logs, order_instructions},
-    },
-    flatbuffers::{ForwardsUOffset, Vector},
-    lazy_static::lazy_static,
-    messenger::{ACCOUNT_STREAM, BLOCK_STREAM, SLOT_STREAM, TRANSACTION_STREAM},
+    messenger::{TRANSACTION_STREAM},
     plerkle::async_redis_messenger::AsyncRedisMessenger,
     plerkle_serialization::transaction_info_generated::transaction_info::root_as_transaction_info,
-    regex::Regex,
-    solana_sdk::pubkey::Pubkey,
     sqlx::{self, postgres::PgPoolOptions, Pool, Postgres},
 };
+use messenger::ACCOUNT_STREAM;
+use nft_ingester::parsers::{BubblegumHandler, GummyRollHandler, InstructionBundle, ProgramHandler, ProgramHandlerManager};
+use nft_ingester::utils::{order_instructions, parse_logs};
+use plerkle_serialization::account_info_generated::account_info::root_as_account_info;
+
 
 mod program_ids {
     #![allow(missing_docs)]
@@ -28,32 +22,39 @@ mod program_ids {
         token_metadata,
         "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
     );
-    pubkeys!(
-        gummyroll_crud,
-        "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
-    );
-    pubkeys!(bubblegum, "BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o");
+
     pubkeys!(gummyroll, "GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD");
     pubkeys!(token, "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
     pubkeys!(a_token, "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 }
 
-#[tokio::main]
-async fn main() {
-    // Setup Postgres.
+async fn setup_manager<'c>(mut manager: ProgramHandlerManager<'c>) -> ProgramHandlerManager<'c> {
+    // TODO setup figment
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect("postgres://solana:solana@db/solana")
         .await
         .unwrap();
+    let pool_ref = Arc::new(pool);
+    let bubblegum_parser = BubblegumHandler::new(pool_ref.clone());
+    let gummyroll_parser = GummyRollHandler::new(pool_ref.clone());
+    manager.register_parser(
+        Box::new(bubblegum_parser),
+    );
+    manager.register_parser(
+        Box::new(gummyroll_parser),
+    );
+    manager
+}
 
+#[tokio::main]
+async fn main() {
+    // Setup Postgres.
     let mut tasks = vec![];
 
     // Service streams as separate concurrent processes.
-    tasks.push(service_transaction_stream(pool.clone()).await);
-    tasks.push(service_stream(ACCOUNT_STREAM, pool.clone()).await);
-    tasks.push(service_stream(SLOT_STREAM, pool.clone()).await);
-    tasks.push(service_stream(BLOCK_STREAM, pool.clone()).await);
+    tasks.push(service_transaction_stream().await);
+
 
     // Wait for ctrl-c.
     match tokio::signal::ctrl_c().await {
@@ -70,39 +71,75 @@ async fn main() {
     }
 }
 
-async fn service_transaction_stream(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
+async fn service_transaction_stream() -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
+        let mut manager = ProgramHandlerManager::new();
+        manager = setup_manager(manager).await;
         let mut messenger = AsyncRedisMessenger::new(TRANSACTION_STREAM).await.unwrap();
+        loop {
+            // This call to messenger.recv() blocks with no timeout until
+            // a message is received on the stream.
+            if let Ok(data) = messenger.recv().await {
+                handle_transaction(&manager, data).await;
+            }
+        }
+    })
+}
+
+
+async fn service_account_stream() -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        let mut manager = ProgramHandlerManager::new();
+        manager = setup_manager(manager).await;
+        let mut messenger = AsyncRedisMessenger::new(ACCOUNT_STREAM).await.unwrap();
 
         loop {
             // This call to messenger.recv() blocks with no timeout until
             // a message is received on the stream.
             if let Ok(data) = messenger.recv().await {
-                handle_transaction(data, &pool).await;
+                handle_account(&manager, data).await
             }
         }
     })
 }
 
-async fn service_stream(
-    stream_key: &'static str,
-    _pool: Pool<Postgres>,
-) -> tokio::task::JoinHandle<()> {
-    tokio::spawn(async move {
-        let mut messenger = AsyncRedisMessenger::new(stream_key).await.unwrap();
-
-        loop {
-            // This call to messenger.recv() blocks with no timeout until
-            // a message is received on the stream.
-            if let Ok(_data) = messenger.recv().await {
-                ()
+async fn handle_account(manager: &ProgramHandlerManager<'static>, data: Vec<(i64, &[u8])>) {
+    for (message_id, data) in data {
+        // Get root of account info flatbuffers object.
+        let account_update = match root_as_account_info(data) {
+            Err(err) => {
+                println!("Flatbuffers AccountInfo deserialization error: {err}");
+                continue;
+            }
+            Ok(account_update) => account_update,
+        };
+        let program_id = account_update.owner();
+        let parser = manager.match_program(program_id.unwrap());
+        match parser {
+            Some(p) if p.config().responds_to_account == true => {
+                let _ = p.handle_account(&account_update).map_err(|e| {
+                    println!("Error in instruction handling {:?}", e);
+                    e
+                }).map_err(|e| {
+                    println!("Error in instruction handling {:?}", e);
+                    e
+                });
+            }
+            _ => {
+                println!("Program Handler not found for program id {:?}", program_id.map(|p| Pubkey::new(p)));
             }
         }
-    })
+    }
 }
 
-async fn handle_transaction(data: Vec<(i64, &[u8])>, pool: &Pool<Postgres>) {
-    for (pid, data) in data {
+async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<(i64, &[u8])>) {
+    for (message_id, data) in data {
+
+        //TODO -> Dedupe the stream, the stream could have duplicates as a way of ensuring fault tolerance if one validator node goes down.
+        //  Possible solution is dedup on the plerkle side but this doesnt follow our principle of getting messages out of the validator asd fast as possible.
+        //  Consider a Messenger Implementation detail the deduping of whats in this stream so that
+        //  1. only 1 ingest instance picks it up, two the stream coming out of the ingester can be considered deduped
+
         // Get root of transaction info flatbuffers object.
         let transaction = match root_as_transaction_info(data) {
             Err(err) => {
@@ -120,72 +157,39 @@ async fn handle_transaction(data: Vec<(i64, &[u8])>, pool: &Pool<Postgres>) {
             }
             Some(keys) => keys,
         };
-
         // Update metadata associated with the programs that store data in leaves
         let instructions = order_instructions(&transaction);
         let parsed_logs = parse_logs(transaction.log_messages()).unwrap();
         for (program_instruction, parsed_log) in std::iter::zip(instructions, parsed_logs) {
             // Sanity check that instructions and logs were parsed correctly
-            assert!(
-                program_instruction.0 == parsed_log.0,
-                "expected {:?}, but program log was {:?}",
-                program_instruction.0,
-                parsed_log.0
+            assert_eq!(program_instruction.0.key().unwrap(),
+                       parsed_log.0.to_bytes(),
+                       "expected {:?}, but program log was {:?}",
+                       program_instruction.0,
+                       parsed_log.0
             );
 
-            match program_instruction {
-                (program, _instruction) if program == program_ids::gummyroll() => {
-                    handle_gummyroll_instruction(&parsed_log.1, pid, pool)
-                        .await
-                        .unwrap();
+            let (program, instruction) = program_instruction;
+            let parser = manager.match_program(program.key().unwrap());
+            match parser {
+                Some(p) if p.config().responds_to_instruction == true => {
+                    let _ = p.handle_instruction(&InstructionBundle {
+                        message_id,
+                        txn_id: "".to_string(),
+                        instruction,
+                        keys,
+                        instruction_logs: parsed_log.1,
+                    })
+                        .map_err(|e| {
+                            println!("Error in instruction handling {:?}", e);
+                            e
+                        });
                 }
-                (program, instruction) if program == program_ids::gummyroll_crud() => {
-                    handle_gummyroll_crud_instruction(&instruction, &keys, pid, pool)
-                        .await
-                        .unwrap();
+                _ => {
+                    println!("Program Handler not found for program id {:?}", program);
                 }
-                (program, instruction) if program == program_ids::bubblegum() => {
-                    handle_bubblegum_instruction(&instruction, &parsed_log.1, &keys, pid, pool)
-                        .await
-                        .unwrap();
-                }
-                _ => {}
             }
         }
     }
 }
 // Associates logs with the given program ID
-fn parse_logs(
-    log_messages: Option<Vector<ForwardsUOffset<&str>>>,
-) -> Result<Vec<(Pubkey, Vec<String>)>, ()> {
-    lazy_static! {
-        static ref PLRE: Regex = Regex::new(r"Program (\w*) invoke \[(\d)\]").unwrap();
-    }
-    let mut program_logs: Vec<(Pubkey, Vec<String>)> = vec![];
-
-    match log_messages {
-        Some(logs) => {
-            for log in logs {
-                let captures = PLRE.captures(log);
-                let pubkey_bytes = captures
-                    .and_then(|c| c.get(1))
-                    .map(|c| bs58::decode(&c.as_str()).into_vec().unwrap());
-
-                match pubkey_bytes {
-                    None => {
-                        let last_program_log = program_logs.last_mut().unwrap();
-                        (*last_program_log).1.push(log.parse().unwrap());
-                    }
-                    Some(bytes) => {
-                        program_logs.push((Pubkey::new(&bytes), vec![]));
-                    }
-                }
-            }
-            Ok(program_logs)
-        }
-        None => {
-            println!("No logs found in transaction info!");
-            Err(())
-        }
-    }
-}
