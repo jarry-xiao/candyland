@@ -16,8 +16,6 @@ async function succeedOrThrow(txId: string, connection: Connection) {
   }
 }
 
-const GUMMYROLL_PROGRAM_ID = new PublicKey("GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD");
-const BUBBLEGUM_PROGRAM_ID = new PublicKey("BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o");
 
 function getMerkleRollAccountSize(maxDepth: number, maxBufferSize: number): number {
   let headerSize = 8 + 32 + 32;
@@ -33,6 +31,7 @@ async function initMerkleTreeInstruction(
   connection: Connection,
   merkleRoll: PublicKey,
   payer: PublicKey,
+  gummyrollProgramId: PublicKey,
 ): Promise<TransactionInstruction> {
   const requiredSpace = getMerkleRollAccountSize(maxDepth, maxBufferSize);
   return SystemProgram.createAccount({
@@ -43,7 +42,7 @@ async function initMerkleTreeInstruction(
         requiredSpace
       ),
     space: requiredSpace,
-    programId: GUMMYROLL_PROGRAM_ID,
+    programId: gummyrollProgramId,
   });
 }
 
@@ -57,22 +56,22 @@ async function getDistributor(payer: PublicKey, gumdropId: PublicKey): Promise<[
   );
 }
 
-async function getBubblegumNonce(): Promise<PublicKey> {
+async function getBubblegumNonce(bubblegumProgramId: PublicKey): Promise<PublicKey> {
   const [nonce, _] = await PublicKey.findProgramAddress(
     [
       Buffer.from("bubblegum")
     ],
-    BUBBLEGUM_PROGRAM_ID,
+    bubblegumProgramId,
   );
   return nonce;
 }
 
-async function getBubblegumTreeAuthority(tree: PublicKey): Promise<PublicKey> {
+async function getBubblegumTreeAuthority(tree: PublicKey, bubblegumProgramId: PublicKey): Promise<PublicKey> {
   return (await PublicKey.findProgramAddress(
     [
       tree.toBuffer(),
     ],
-    BUBBLEGUM_PROGRAM_ID,
+    bubblegumProgramId,
   ))[0];
 }
 
@@ -252,24 +251,20 @@ function initBubblegumNonce(nonce: PublicKey, payer: PublicKey): TransactionInst
         isWritable: false,
       }
     ],
-    programId: BUBBLEGUM_PROGRAM_ID,
+    programId: bubblegumProgramId,
     data: Buffer.from(Uint8Array.from([64, 206, 214, 231, 20, 15, 231, 41]))
   });
 }
 
 describe('Airdropping compressed NFTs with Gumdrop', () => {
-  const connection = new Connection("http://127.0.0.1:8899", { commitment: "confirmed" });
+  const connection = new Connection("http://localhost:8899", { commitment: "confirmed" });
   const payer = Keypair.generate();
 
   it("Works for at least 5 NFTs", async () => {
-
     const sig = await connection.requestAirdrop(payer.publicKey, 5 * 1e9);
     await connection.confirmTransaction(sig);
 
     const wallet = new NodeWallet(payer);
-    // Initialize program-wide nonce
-    const nonce = await getBubblegumNonce();
-    const initNonceIx = initBubblegumNonce(nonce, payer.publicKey);
 
     // Generate Merkle Slab Keypair
     const merkleRollKeypair = Keypair.generate();
@@ -280,11 +275,27 @@ describe('Airdropping compressed NFTs with Gumdrop', () => {
     const gumdropTree = buildGumdropTree(merkleRollKeypair.publicKey, payer.publicKey);
     console.log("Gumdrop 🌲 root:", new PublicKey(gumdropTree.getRoot()).toString());
 
+    anchor.setProvider(
+      new anchor.Provider(
+        connection,
+        wallet,
+        { commitment: "confirmed", skipPreflight: true })
+    );
     const gumdrop = anchor.workspace.Gumdrop as anchor.Program<Gumdrop>;
-    // const gumdrop = await Program.at("gdrpGjVffourzkdDRrQmySw4aTHr8a3xmQzzxSwFD1a", provider);
-    const allocAccountIx = await initMerkleTreeInstruction(maxDepth, maxBufferSize, connection, merkleRollKeypair.publicKey, payer.publicKey);
+    const BUBBLEGUM_PROGRAM_ID = anchor.workspace.Bubblegum.programId;
+    const GUMMYROLL_PROGRAM_ID = anchor.workspace.Gummyroll.programId;
+    console.log(".....");
+    console.log(BUBBLEGUM_PROGRAM_ID.toString(), GUMMYROLL_PROGRAM_ID.toString());
+    console.log(".....");
+
+    // Initialize program-wide nonce
+    const nonce = await getBubblegumNonce(BUBBLEGUM_PROGRAM_ID);
+    const initNonceIx = initBubblegumNonce(nonce, payer.publicKey);
+
+    // Init merkle tree
+    const allocAccountIx = await initMerkleTreeInstruction(maxDepth, maxBufferSize, connection, merkleRollKeypair.publicKey, payer.publicKey, GUMMYROLL_PROGRAM_ID);
     const [distributor, distributorBump] = await getDistributor(payer.publicKey, gumdrop.programId);
-    const bubblegumTreeAuthority = await getBubblegumTreeAuthority(merkleRollKeypair.publicKey);
+    const bubblegumTreeAuthority = await getBubblegumTreeAuthority(merkleRollKeypair.publicKey, BUBBLEGUM_PROGRAM_ID);
 
     const temporal = payer.publicKey;
     const createDistributorIx = gumdrop.instruction.newDistributorCompressed(
