@@ -1,10 +1,10 @@
 [package]
-name = "nft-api"
+name = "nft-ingester"
 version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "api"
+name = "ingest"
 path = "src/main.rs"
 
 [dependencies]

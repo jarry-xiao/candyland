@@ -1375,6 +1375,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "gumball-machine"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "anchor-spl",
+ "bubblegum",
+ "bytemuck",
+ "gummyroll",
+ "mpl-token-metadata",
+]
+
+[[package]]
 name = "gummyroll"
 version = "0.1.0"
 dependencies = [
@@ -2029,12 +2041,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "nft_api"
+name = "nft-api"
 version = "0.1.0"
 dependencies = [
  "anchor-client",
  "base64 0.13.0",
  "bs58 0.4.0",
+ "bubblegum",
  "csv",
  "flatbuffers",
  "futures-util",
@@ -2058,6 +2071,41 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-postgres",
+ "uuid 1.0.0",
+]
+
+[[package]]
+name = "nft-ingester"
+version = "0.1.0"
+dependencies = [
+ "anchor-client",
+ "base64 0.13.0",
+ "bs58 0.4.0",
+ "bubblegum",
+ "csv",
+ "flatbuffers",
+ "futures-util",
+ "gummyroll",
+ "gummyroll-crud",
+ "hex",
+ "hyper",
+ "lazy_static",
+ "messenger",
+ "num-integer",
+ "plerkle",
+ "plerkle-serialization",
+ "redis",
+ "regex",
+ "reqwest",
+ "routerify",
+ "routerify-json-response",
+ "serde",
+ "solana-sdk",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "tokio-postgres",
+ "uuid 1.0.0",
 ]
 
 [[package]]
@@ -4186,6 +4234,7 @@ dependencies = [
  "thiserror",
  "tokio-stream",
  "url",
+ "uuid 0.8.2",
  "webpki 0.21.4",
  "webpki-roots 0.21.1",
  "whoami",
@@ -4733,6 +4782,18 @@ name = "utf-8"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9"
+
+[[package]]
+name = "uuid"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
+
+[[package]]
+name = "uuid"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8cfcd319456c4d6ea10087ed423473267e1a071f3bc0aa89f80d60997843c6f0"
 
 [[package]]
 name = "vcpkg"

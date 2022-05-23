@@ -18,11 +18,8 @@ pub struct GumballMachineHeader {
     pub seller_fee_basis_points: u16,
     pub is_mutable: u8,
     pub retain_authority: u8,
-    pub use_method: u8,
     // Used for 8-byte aligning zero copy structs
-    pub _padding: [u8; 3],
-    pub use_method_remaining: u64,
-    pub use_method_total: u64,
+    pub _padding: [u8; 4],
     pub price: u64,
     pub go_live_date: i64,
     pub mint: Pubkey,

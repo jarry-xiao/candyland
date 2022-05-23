@@ -9,8 +9,9 @@ cp target/deploy/bubblegum.so docker-vol/bubblegum.so
 
 # Off Chain Setup
 # Speed up by using cargo remote
-cargo build --target x86_64-unknown-linux-gnu --package nft_api
+cargo build --target x86_64-unknown-linux-gnu --package nft-api
 cp target/x86_64-unknown-linux-gnu/debug/api target/debug/api
+cargo build --target x86_64-unknown-linux-gnu --package nft-ingester
 cp target/x86_64-unknown-linux-gnu/debug/ingest target/debug/ingest
 
 # Validator setup
@@ -27,9 +28,13 @@ popd
 pushd deps/solana-program-library/token/program-2022
   cargo build-bpf
 popd
+pushd deps/solana-program-library/token/program
+  cargo build-bpf
+popd
 
 cp deps/metaplex-program-library/target/deploy/mpl_token_metadata.so docker-vol/mpl_token_metadata.so
 cp deps/solana-program-library/target/deploy/spl_token_2022.so docker-vol/spl_token_2022.so
+cp deps/solana-program-library/target/deploy/spl_token.so docker-vol/spl_token.so
 cp deps/solana-program-library/target/deploy/spl_associated_token_account.so docker-vol/spl_associated_token_account.so
 
 echo "----------------------------------------------------"

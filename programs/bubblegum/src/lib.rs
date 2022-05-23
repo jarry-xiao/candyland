@@ -265,6 +265,36 @@ pub struct Compress<'info> {
     pub gummyroll_program: Program<'info, Gummyroll>,
 }
 
+pub fn hash_metadata(metadata: &MetadataArgs) -> Result<[u8; 32]> {
+    Ok(keccak::hashv(&[metadata.try_to_vec()?.as_slice()]).to_bytes())
+}
+
+pub enum InstructionName {
+    Unknown,
+    Mint,
+    Redeem,
+    CancelRedeem,
+    Transfer,
+    Delegate,
+    Decompress,
+}
+pub fn get_instruction_type(full_bytes: &Vec<u8>) -> InstructionName {
+    let disc: [u8; 8] = {
+        let mut disc = [0; 8];
+        disc.copy_from_slice(&full_bytes[..8]);
+        disc
+    };
+    match disc {
+        [51, 57, 225, 47, 182, 146, 137, 166] => InstructionName::Mint,
+        [111, 76, 232, 50, 39, 175, 48, 242] => InstructionName::CancelRedeem,
+        [184, 12, 86, 149, 70, 196, 97, 225] => InstructionName::Redeem,
+        [163, 52, 200, 231, 140, 3, 69, 186] => InstructionName::Transfer,
+        [90, 147, 75, 178, 85, 88, 4, 137] => InstructionName::Delegate,
+        [74, 60, 49, 197, 18, 110, 93, 154] => InstructionName::Decompress,
+        _ => InstructionName::Unknown,
+    }
+}
+
 #[program]
 pub mod bubblegum {
     use super::*;
@@ -460,7 +490,7 @@ pub mod bubblegum {
 
     pub fn decompress(ctx: Context<Decompress>, metadata: MetadataArgs) -> Result<()> {
         // Allocate and create mint
-        let data_hash = keccak::hashv(&[metadata.try_to_vec()?.as_slice()]).to_bytes();
+        let data_hash = hash_metadata(&metadata)?;
         assert_eq!(ctx.accounts.voucher.leaf_schema.data_hash, data_hash);
         match metadata.token_program_version {
             TokenProgramVersion::Original => {

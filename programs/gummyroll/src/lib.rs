@@ -79,6 +79,7 @@ macro_rules! merkle_roll_apply_fn {
     ($header:ident, $emit_msg:ident, $id:ident, $bytes:ident, $func:ident, $($arg:tt)*) => {
         // Note: max_buffer_size MUST be a power of 2
         match ($header.max_depth, $header.max_buffer_size) {
+            (3, 8) => merkle_roll_depth_size_apply_fn!(3, 8, $emit_msg, $id, $bytes, $func, $($arg)*),
             (14, 64) => merkle_roll_depth_size_apply_fn!(14, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
             (14, 256) => merkle_roll_depth_size_apply_fn!(14, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
             (14, 1024) => merkle_roll_depth_size_apply_fn!(14, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
@@ -132,7 +133,6 @@ pub mod gummyroll {
         let id = ctx.accounts.merkle_roll.key();
         match merkle_roll_apply_fn!(header, true, id, roll_bytes, initialize,) {
             Some(new_root) => {
-                msg!("New Root: {:?}", new_root);
                 Ok(())
             }
             None => Err(ProgramError::InvalidInstructionData),
@@ -184,7 +184,6 @@ pub mod gummyroll {
             index
         ) {
             Some(new_root) => {
-                msg!("New Root: {:?}", new_root);
                 Ok(())
             }
             None => Err(ProgramError::InvalidInstructionData),
@@ -207,10 +206,8 @@ pub mod gummyroll {
 
         let mut proof = vec![];
         for (i, node) in ctx.remaining_accounts.iter().enumerate() {
-            msg!("{}: {}", i, node.key());
             proof.push(Node::new(node.key().to_bytes()));
         }
-        msg!("Current root: {:?}", root.inner);
 
         let id = ctx.accounts.merkle_roll.key();
         // A call is made to MerkleRoll::set_leaf(root, previous_leaf, new_leaf, proof, index)
@@ -227,7 +224,6 @@ pub mod gummyroll {
             index
         ) {
             Some(new_root) => {
-                msg!("New Root: {:?}", new_root);
                 Ok(())
             }
             None => Err(ProgramError::InvalidInstructionData),
@@ -246,7 +242,6 @@ pub mod gummyroll {
         let id = ctx.accounts.merkle_roll.key();
         match merkle_roll_apply_fn!(header, true, id, roll_bytes, append, leaf) {
             Some(new_root) => {
-                msg!("New Root: {:?}", new_root);
                 Ok(())
             }
             None => Err(ProgramError::InvalidInstructionData),
@@ -285,10 +280,9 @@ pub mod gummyroll {
             index
         ) {
             Some(new_root) => {
-                msg!("New Root: {:?}", new_root);
+                Ok(())
             }
-            None => return Err(ProgramError::InvalidInstructionData),
+            None => Err(ProgramError::InvalidInstructionData),
         }
-        Ok(())
     }
 }

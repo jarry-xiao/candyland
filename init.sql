@@ -15,6 +15,7 @@ CREATE INDEX cl_items_node_idx ON cl_items (node_idx);
 CREATE INDEX cl_items_uniq_operation_idx ON cl_items (tree, level, seq);
 CREATE INDEX cl_items__tree_node ON cl_items (tree, node_idx);
 
+-- START CRUD
 create table app_specific
 (
     leaf    bytea not null,
@@ -34,3 +35,56 @@ create table app_specific_ownership
 );
 
 create index app_specific_shizzle_mynizzle On app_specific_ownership (authority);
+-- END CRUD
+
+-- START NFT METADATA
+create table nft_uuid
+(
+    nonce uuid PRIMARY KEY,
+    tree_id bytea not null,
+    leaf bytea not null,
+    revision bigint not null
+);
+
+create table nft_metadata
+(
+    owner      bytea not null,
+    delegate   bytea,
+    nonce      uuid PRIMARY KEY,
+    revision   bigint not null,
+
+    name       text not null,
+    symbol     text not null,
+    uri        text not null,
+    sellerFeeBasisPoints int,
+    primarySaleHappened boolean,
+    isMutable boolean
+);
+
+create table nft_creators (
+    nonce uuid PRIMARY KEY,
+    creator bytea not null,
+    revision bigint not null
+);
+
+create index nft_uuid_uuid On nft_uuid (tree_id);
+create index nft_uuid_leaf On nft_uuid (leaf);
+create index nft_uuid_nonce On nft_uuid (nonce);
+create index nft_uuid_revision On nft_uuid (revision);
+
+create index nft_metadata_owner On nft_metadata (owner);
+create index nft_metadata_delegate On nft_metadata (delegate);
+
+create index nft_creators_nonce On nft_creators (nonce);
+create index nft_creators_creator On nft_creators (creator);
+create index nft_creators_revision On nft_creators (revision);
+
+-- To Be Added:
+--    editionNonce bigint not null,
+--    tokenStandard: null,
+--     tokenProgramVersion: {
+--     original: {},
+--     },
+--     collections: null,
+--     uses: null,
+--     creators: [],
