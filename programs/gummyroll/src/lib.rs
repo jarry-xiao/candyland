@@ -47,11 +47,11 @@ pub struct Append<'info> {
 macro_rules! merkle_roll_depth_size_apply_fn {
     ($max_depth:literal, $max_size:literal, $emit_msg:ident, $id:ident, $bytes:ident, $func:ident, $($arg:tt)*) => {
         if size_of::<MerkleRoll::<$max_depth, $max_size>>() != $bytes.len() {
-            msg!("{} {}", size_of::<MerkleRoll::<$max_depth, $max_size>>(), $bytes.len());
-            msg!("Received account of invalid length");
+            //msg!("{} {}", size_of::<MerkleRoll::<$max_depth, $max_size>>(), $bytes.len());
+            //msg!("Received account of invalid length");
             let expected_bytes = size_of::<MerkleRoll::<$max_depth, $max_size>>();
             let bytes_received = $bytes.len();
-            msg!("Expected: {}, received: {}", expected_bytes, bytes_received);
+            //msg!("Expected: {}, received: {}", expected_bytes, bytes_received);
             None
         } else {
             match MerkleRoll::<$max_depth, $max_size>::load_mut_bytes($bytes) {
@@ -67,7 +67,7 @@ macro_rules! merkle_roll_depth_size_apply_fn {
                     }
                 }
                 Err(e) => {
-                    msg!("Error zero copying merkle roll {}", e);
+                    //msg!("Error zero copying merkle roll {}", e);
                     None
                 }
             }
@@ -100,7 +100,7 @@ macro_rules! merkle_roll_apply_fn {
             (22, 1024) => merkle_roll_depth_size_apply_fn!(22, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
             (22, 2048) => merkle_roll_depth_size_apply_fn!(22, 2048, $emit_msg, $id, $bytes, $func, $($arg)*),
             _ => {
-                msg!("Failed to apply {} on merkle roll with max depth {} and max buffer size {}", stringify!($func), $header.max_depth, $header.max_buffer_size);
+                //msg!("Failed to apply {} on merkle roll with max depth {} and max buffer size {}", stringify!($func), $header.max_depth, $header.max_buffer_size);
                 None
             }
         }
@@ -132,7 +132,7 @@ pub mod gummyroll {
         let id = ctx.accounts.merkle_roll.key();
         match merkle_roll_apply_fn!(header, true, id, roll_bytes, initialize,) {
             Some(new_root) => {
-                msg!("New Root: {:?}", new_root);
+                //msg!("New Root: {:?}", new_root);
                 Ok(())
             }
             None => Err(ProgramError::InvalidInstructionData),
@@ -184,7 +184,7 @@ pub mod gummyroll {
             index
         ) {
             Some(new_root) => {
-                msg!("New Root: {:?}", new_root);
+                //msg!("New Root: {:?}", new_root);
                 Ok(())
             }
             None => Err(ProgramError::InvalidInstructionData),
@@ -207,10 +207,10 @@ pub mod gummyroll {
 
         let mut proof = vec![];
         for (i, node) in ctx.remaining_accounts.iter().enumerate() {
-            msg!("{}: {}", i, node.key());
+            //msg!("{}: {}", i, node.key());
             proof.push(Node::new(node.key().to_bytes()));
         }
-        msg!("Current root: {:?}", root.inner);
+        //msg!("Current root: {:?}", root.inner);
 
         let id = ctx.accounts.merkle_roll.key();
         // A call is made to MerkleRoll::set_leaf(root, previous_leaf, new_leaf, proof, index)
@@ -227,7 +227,7 @@ pub mod gummyroll {
             index
         ) {
             Some(new_root) => {
-                msg!("New Root: {:?}", new_root);
+                //msg!("New Root: {:?}", new_root);
                 Ok(())
             }
             None => Err(ProgramError::InvalidInstructionData),
@@ -246,7 +246,7 @@ pub mod gummyroll {
         let id = ctx.accounts.merkle_roll.key();
         match merkle_roll_apply_fn!(header, true, id, roll_bytes, append, leaf) {
             Some(new_root) => {
-                msg!("New Root: {:?}", new_root);
+                //msg!("New Root: {:?}", new_root);
                 Ok(())
             }
             None => Err(ProgramError::InvalidInstructionData),
@@ -285,7 +285,7 @@ pub mod gummyroll {
             index
         ) {
             Some(new_root) => {
-                msg!("New Root: {:?}", new_root);
+                //msg!("New Root: {:?}", new_root);
             }
             None => return Err(ProgramError::InvalidInstructionData),
         }
