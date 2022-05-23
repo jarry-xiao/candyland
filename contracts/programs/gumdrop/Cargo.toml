@@ -1,0 +1,29 @@
+[package]
+name = "mpl_gumdrop"
+version = "0.1.0"
+authors = ["Metaplex Developers <dev@metaplex.com>"]
+repository = "https://github.com/metaplex-foundation/metaplex-program-library"
+license = "AGPL-3.0"
+edition = "2021"
+keywords = ["solana", "merkle", "distributor"]
+
+[profile.release]
+overflow-checks = true
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "mpl_gumdrop"
+
+[features]
+no-entrypoint = []
+no-idl = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dependencies]
+anchor-lang = { path="../../deps/anchor/lang" }
+anchor-spl = { path="../../deps/anchor/spl" }
+solana-program = "1.10.10"
+spl-token = "3.3.0"
+spl-associated-token-account = { version = "=1.0.5", features = [ "no-entrypoint" ] }
+mpl-token-metadata = { git = "https://github.com/jarry-xiao/metaplex-program-library", rev="7e2810a", features = [ "no-entrypoint" ] }
