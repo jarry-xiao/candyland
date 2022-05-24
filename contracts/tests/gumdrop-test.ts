@@ -209,7 +209,6 @@ function serializeMetadata(metadata: Metadata): Buffer {
 
 function hashLeaf(leaf: GumdropLeaf, index: number, bubblegumTree: PublicKey): Buffer {
   const metadata = serializeMetadata(leaf.metadata);
-  console.log("Metadata:", metadata);
   return Buffer.concat([
     // index
     (new anchor.BN(index)).toBuffer("le", 8),
@@ -233,7 +232,7 @@ function buildGumdropTree(bubblegumTree: PublicKey, claimer: PublicKey): MerkleT
   return new MerkleTree(leaves);
 }
 
-function initBubblegumNonce(nonce: PublicKey, payer: PublicKey): TransactionInstruction {
+function initBubblegumNonce(nonce: PublicKey, payer: PublicKey, bubblegumProgramId: PublicKey): TransactionInstruction {
   return new TransactionInstruction({
     keys: [
       {
@@ -259,38 +258,42 @@ function initBubblegumNonce(nonce: PublicKey, payer: PublicKey): TransactionInst
 describe('Airdropping compressed NFTs with Gumdrop', () => {
   const connection = new Connection("http://localhost:8899", { commitment: "confirmed" });
   const payer = Keypair.generate();
+  const wallet = new NodeWallet(payer);
+  anchor.setProvider(
+    new anchor.Provider(
+      connection,
+      wallet,
+      { commitment: "confirmed", skipPreflight: true })
+  );
+  const gumdrop = anchor.workspace.Gumdrop as anchor.Program<Gumdrop>;
+  const BUBBLEGUM_PROGRAM_ID = anchor.workspace.Bubblegum.programId;
+  const GUMMYROLL_PROGRAM_ID = anchor.workspace.Gummyroll.programId;
+  console.log(".....");
+  console.log(gumdrop.programId.toString());
+  console.log(BUBBLEGUM_PROGRAM_ID.toString(), GUMMYROLL_PROGRAM_ID.toString());
+  console.log(".....");
 
-  it("Works for at least 5 NFTs", async () => {
+  const maxDepth = 20;
+  const maxBufferSize = 64;
+  let merkleRollKeypair: Keypair;
+  let gumdropTree: MerkleTree;
+
+  beforeEach(async () => {
     const sig = await connection.requestAirdrop(payer.publicKey, 5 * 1e9);
     await connection.confirmTransaction(sig);
+  });
 
-    const wallet = new NodeWallet(payer);
-
+  it("Works for at least 5 NFTs", async () => {
     // Generate Merkle Slab Keypair
-    const merkleRollKeypair = Keypair.generate();
-    const maxDepth = 20;
-    const maxBufferSize = 64;
+    merkleRollKeypair = Keypair.generate();
 
     // This has to be done after the keypair is known
-    const gumdropTree = buildGumdropTree(merkleRollKeypair.publicKey, payer.publicKey);
+    gumdropTree = buildGumdropTree(merkleRollKeypair.publicKey, payer.publicKey);
     console.log("Gumdrop 🌲 root:", new PublicKey(gumdropTree.getRoot()).toString());
-
-    anchor.setProvider(
-      new anchor.Provider(
-        connection,
-        wallet,
-        { commitment: "confirmed", skipPreflight: true })
-    );
-    const gumdrop = anchor.workspace.Gumdrop as anchor.Program<Gumdrop>;
-    const BUBBLEGUM_PROGRAM_ID = anchor.workspace.Bubblegum.programId;
-    const GUMMYROLL_PROGRAM_ID = anchor.workspace.Gummyroll.programId;
-    console.log(".....");
-    console.log(BUBBLEGUM_PROGRAM_ID.toString(), GUMMYROLL_PROGRAM_ID.toString());
-    console.log(".....");
 
     // Initialize program-wide nonce
     const nonce = await getBubblegumNonce(BUBBLEGUM_PROGRAM_ID);
-    const initNonceIx = initBubblegumNonce(nonce, payer.publicKey);
+    const initNonceIx = initBubblegumNonce(nonce, payer.publicKey, BUBBLEGUM_PROGRAM_ID);
 
     // Init merkle tree
     const allocAccountIx = await initMerkleTreeInstruction(maxDepth, maxBufferSize, connection, merkleRollKeypair.publicKey, payer.publicKey, GUMMYROLL_PROGRAM_ID);
@@ -321,13 +324,18 @@ describe('Airdropping compressed NFTs with Gumdrop', () => {
         ]
       }
     );
-    const tx = new Transaction().add(initNonceIx).add(allocAccountIx).add(createDistributorIx);
-    tx.feePayer = payer.publicKey;
-    tx.recentBlockhash = (await connection.getRecentBlockhash("confirmed")).blockhash;
-    console.log(tx);
-    const txId = await connection.sendTransaction(tx, [merkleRollKeypair, payer], {
+    const tx = new Transaction()
+      .add(initNonceIx)
+      .add(allocAccountIx)
+      .add(createDistributorIx);
+
+    // tx.feePayer = payer.publicKey;
+    // tx.recentBlockhash = (await connection.getRecentBlockhash("confirmed")).blockhash;
+    // console.log(tx);
+    const txId = await gumdrop.provider.send(tx, [merkleRollKeypair, payer], {
       skipPreflight: true
     });
+    console.log(`${txId} sent`);
     await succeedOrThrow(txId, connection);
     console.log("Compressed tree init succeeded 😎");
 
@@ -336,9 +344,9 @@ describe('Airdropping compressed NFTs with Gumdrop', () => {
     while (index < METADATA.length) {
       const nftMetadata = METADATA[index];
       const proof = gumdropTree.getProof(index);
-      console.log("Verified proof:", gumdropTree.verifyProof(index, proof, gumdropTree.getRoot()));
-      const leafHash = gumdropTree.layers[0][0].buffer;
-      console.log("\nLeaf hash:", leafHash.slice(0, 32), "\n\n");
+      console.log("\nVerified proof:", gumdropTree.verifyProof(index, proof, gumdropTree.getRoot()));
+      const leafHash = gumdropTree.layers[0][index].buffer;
+      console.log("Leaf hash:", leafHash.slice(0, 32));
 
       const indexBuf = (new anchor.BN(index)).toBuffer("le", 8);
       const [claimCount, claimBump] = await PublicKey.findProgramAddress(
@@ -382,7 +390,7 @@ describe('Airdropping compressed NFTs with Gumdrop', () => {
         skipPreflight: true
       });
       await succeedOrThrow(txId, connection);
-      console.log("Succesfully airdropped compressed NFT @ index:", index);
+      console.log(`Succesfully airdropped compressed NFT @ index: ${index}\n`);
       index++;
     }
   });
