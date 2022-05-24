@@ -268,10 +268,6 @@ describe('Airdropping compressed NFTs with Gumdrop', () => {
   const gumdrop = anchor.workspace.Gumdrop as anchor.Program<Gumdrop>;
   const BUBBLEGUM_PROGRAM_ID = anchor.workspace.Bubblegum.programId;
   const GUMMYROLL_PROGRAM_ID = anchor.workspace.Gummyroll.programId;
-  console.log(".....");
-  console.log(gumdrop.programId.toString());
-  console.log(BUBBLEGUM_PROGRAM_ID.toString(), GUMMYROLL_PROGRAM_ID.toString());
-  console.log(".....");
 
   const maxDepth = 20;
   const maxBufferSize = 64;
@@ -329,9 +325,6 @@ describe('Airdropping compressed NFTs with Gumdrop', () => {
       .add(allocAccountIx)
       .add(createDistributorIx);
 
-    // tx.feePayer = payer.publicKey;
-    // tx.recentBlockhash = (await connection.getRecentBlockhash("confirmed")).blockhash;
-    // console.log(tx);
     const txId = await gumdrop.provider.send(tx, [merkleRollKeypair, payer], {
       skipPreflight: true
     });
