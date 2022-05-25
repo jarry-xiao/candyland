@@ -7,6 +7,7 @@ pub struct LeafSchemaEvent {
     pub delegate: Pubkey, // Defaults to owner
     pub nonce: u128,
     pub data_hash: [u8; 32],
+    pub creator_hash: [u8; 32],
 }
 
 #[derive(AnchorDeserialize, AnchorSerialize, Clone, Copy, Default, Debug)]
@@ -15,15 +16,17 @@ pub struct LeafSchema {
     pub delegate: Pubkey, // Defaults to owner
     pub nonce: u128,
     pub data_hash: [u8; 32],
+    pub creator_hash: [u8; 32],
 }
 
 impl LeafSchema {
-    pub fn new(owner: Pubkey, delegate: Pubkey, nonce: u128, data_hash: [u8; 32]) -> Self {
+    pub fn new(owner: Pubkey, delegate: Pubkey, nonce: u128, data_hash: [u8; 32], creator_hash: [u8; 32]) -> Self {
         Self {
             owner,
             delegate,
             nonce,
             data_hash,
+            creator_hash,
         }
     }
 
@@ -33,6 +36,7 @@ impl LeafSchema {
             delegate: self.delegate,
             nonce: self.nonce,
             data_hash: self.data_hash,
+            creator_hash: self.creator_hash,
         }
     }
 
@@ -42,6 +46,7 @@ impl LeafSchema {
             self.delegate.as_ref(),
             self.nonce.to_le_bytes().as_ref(),
             self.data_hash.as_ref(),
+            self.creator_hash.as_ref(),
         ])
         .to_bytes();
         Node::new(hashed_leaf)

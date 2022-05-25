@@ -222,6 +222,7 @@ describe("bubblegum", () => {
         }
       );
       const leafHash = Buffer.from(keccak_256.digest(mintIx.data.slice(8)));
+      const creatorHash = Buffer.from(keccak_256.digest([]));
       let merkleRollAccount =
         await Bubblegum.provider.connection.getAccountInfo(
           merkleRollKeypair.publicKey
@@ -234,6 +235,7 @@ describe("bubblegum", () => {
       let transferTx = await Bubblegum.rpc.transfer(
         onChainRoot,
         leafHash,
+        creatorHash,
         new BN(0),
         0,
         {
@@ -260,6 +262,7 @@ describe("bubblegum", () => {
       let delegateTx = await Bubblegum.rpc.delegate(
         onChainRoot,
         leafHash,
+        creatorHash,
         new BN(0),
         0,
         {
@@ -286,6 +289,7 @@ describe("bubblegum", () => {
       let delTransferIx = await Bubblegum.instruction.transfer(
         onChainRoot,
         leafHash,
+        creatorHash,
         new BN(0),
         0,
         {
@@ -325,6 +329,7 @@ describe("bubblegum", () => {
       let redeemIx = await Bubblegum.instruction.redeem(
         onChainRoot,
         leafHash,
+        creatorHash,
         new BN(0),
         0,
         {
@@ -374,6 +379,7 @@ describe("bubblegum", () => {
       redeemIx = await Bubblegum.instruction.redeem(
         onChainRoot,
         leafHash,
+        creatorHash,
         new BN(0),
         0,
         {
