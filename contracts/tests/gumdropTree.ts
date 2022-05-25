@@ -1,3 +1,4 @@
+/// Stolen from https://github.com/metaplex-foundation/gumdrop/blob/main/packages/gumdrop/src/utils/merkleTree.ts
 import { keccak_256 } from 'js-sha3';
 
 export class MerkleTree {

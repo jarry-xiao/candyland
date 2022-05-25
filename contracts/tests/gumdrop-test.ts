@@ -4,26 +4,8 @@ import NodeWallet from '@project-serum/anchor/dist/cjs/nodewallet';
 import { Gumdrop } from "../target/types/gumdrop";
 import { MerkleTree } from './gumdropTree';
 import { BinaryWriter } from 'borsh'
-
-async function delay(ms: number) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function succeedOrThrow(txId: string, connection: Connection) {
-  const err = (await connection.confirmTransaction(txId, "confirmed")).value.err
-  if (err) {
-    throw new Error(`${txId} failed: \n${JSON.stringify(err)}\n`);
-  }
-}
-
-
-function getMerkleRollAccountSize(maxDepth: number, maxBufferSize: number): number {
-  let headerSize = 8 + 32 + 32;
-  let changeLogSize = (maxDepth * 32 + 32 + 4 + 4) * maxBufferSize;
-  let rightMostPathSize = maxDepth * 32 + 32 + 4 + 4;
-  let merkleRollSize = 8 + 8 + 16 + changeLogSize + rightMostPathSize;
-  return merkleRollSize + headerSize;
-}
+import { getMerkleRollAccountSize } from './merkle-roll-serde';
+import { succeedOrThrow } from './utils';
 
 async function initMerkleTreeInstruction(
   maxDepth: number,
@@ -76,7 +58,7 @@ async function getBubblegumTreeAuthority(tree: PublicKey, bubblegumProgramId: Pu
 }
 
 type GumdropLeaf = {
-  metadata: Metadata,
+  metadata: TokenMetadata,
   publicKey: PublicKey,
 };
 
@@ -84,7 +66,7 @@ type Creator = {
   creator: PublicKey,
   share: number,
 };
-type Metadata = {
+type TokenMetadata = {
   name: string,
   symbol: string,
   uri: string,
@@ -101,7 +83,7 @@ type Metadata = {
   creators: Creator[],
 };
 
-const METADATA = [
+const TOKEN_METADATA = [
   {
     name: "A",
     symbol: "A",
@@ -184,7 +166,7 @@ const METADATA = [
   },
 ];
 
-function serializeMetadata(metadata: Metadata): Buffer {
+function serializeMetadata(metadata: TokenMetadata): Buffer {
   let writer = new BinaryWriter();
   writer.writeString(metadata.name)
   writer.writeString(metadata.symbol)
@@ -223,7 +205,7 @@ function hashLeaf(leaf: GumdropLeaf, index: number, bubblegumTree: PublicKey): B
 
 function buildGumdropTree(bubblegumTree: PublicKey, claimer: PublicKey): MerkleTree {
   let leaves: Buffer[] = [];
-  METADATA.forEach((metadata, index) => {
+  TOKEN_METADATA.forEach((metadata, index) => {
     leaves.push(hashLeaf({
       metadata,
       publicKey: claimer
@@ -328,14 +310,13 @@ describe('Airdropping compressed NFTs with Gumdrop', () => {
     const txId = await gumdrop.provider.send(tx, [merkleRollKeypair, payer], {
       skipPreflight: true
     });
-    console.log(`${txId} sent`);
     await succeedOrThrow(txId, connection);
     console.log("Compressed tree init succeeded 😎");
 
     // Get nonce key for all compressed NFTs
     let index = 0;
-    while (index < METADATA.length) {
-      const nftMetadata = METADATA[index];
+    while (index < TOKEN_METADATA.length) {
+      const nftMetadata = TOKEN_METADATA[index];
       const proof = gumdropTree.getProof(index);
       console.log("\nVerified proof:", gumdropTree.verifyProof(index, proof, gumdropTree.getRoot()));
       const leafHash = gumdropTree.layers[0][index].buffer;
