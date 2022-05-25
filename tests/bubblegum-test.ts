@@ -193,7 +193,7 @@ describe("bubblegum", () => {
         tokenProgramVersion: {
           original: {},
         },
-        collections: null,
+        collection: null,
         uses: null,
         creators: [],
       };
@@ -210,9 +210,6 @@ describe("bubblegum", () => {
         },
         signers: [payer],
       });
-      // Hack to get this to work
-      let buf = Buffer.alloc(2);
-      mintIx.data = Buffer.concat([mintIx.data, buf]);
       console.log(" - Minting to tree");
       const mintTx = await Bubblegum.provider.send(
         new Transaction().add(mintIx),
@@ -465,9 +462,6 @@ describe("bubblegum", () => {
         signers: [payer],
       });
 
-      // Hack to get this to work
-      buf = Buffer.alloc(2);
-      decompressIx.data = Buffer.concat([decompressIx.data, buf]);
       decompressIx.keys[3].isSigner = true;
       let decompressTx = await Bubblegum.provider.send(
         new Transaction().add(decompressIx),
