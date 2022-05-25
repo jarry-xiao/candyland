@@ -16,7 +16,7 @@ pub mod utils;
 
 use crate::state::metaplex_anchor::MplTokenMetadata;
 use crate::state::{
-    leaf_schema::LeafSchema,
+    leaf_schema::{LeafSchema, Version},
     metaplex_adapter::{MetadataArgs, TokenProgramVersion},
     metaplex_anchor::{MasterEdition, TokenMetadata},
     Nonce, Voucher,
@@ -24,7 +24,7 @@ use crate::state::{
 use crate::utils::{append_leaf, insert_or_append_leaf, replace_leaf};
 
 const NONCE_SIZE: usize = 8 + 16;
-const VOUCHER_SIZE: usize = 8 + 32 + 32 + 16 + 32 + 4 + 32;
+const VOUCHER_SIZE: usize = 8 + 1 + 32 + 32 + 16 + 32 + 4 + 32 + 32;
 const NONCE_PREFIX: &str = "bubblegum";
 
 declare_id!("BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o");
@@ -142,7 +142,14 @@ pub struct Delegate<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(_root: [u8; 32], _data_hash: [u8; 32], nonce: u128, _index: u32)]
+#[instruction(
+    _version: Version,
+    _root: [u8; 32],
+    _data_hash: [u8; 32],
+    _creator_hash: [u8; 32],
+    nonce: u128,
+    _index: u32,
+)]
 pub struct Redeem<'info> {
     #[account(
         seeds = [merkle_slab.key().as_ref()],
@@ -324,7 +331,7 @@ pub mod bubblegum {
         gummyroll::cpi::init_empty_gummyroll(cpi_ctx, max_depth, max_buffer_size)
     }
 
-    pub fn mint(ctx: Context<Mint>, message: MetadataArgs) -> Result<()> {
+    pub fn mint(ctx: Context<Mint>, version: Version, message: MetadataArgs) -> Result<()> {
         let owner = ctx.accounts.owner.key();
         let delegate = ctx.accounts.delegate.key();
         let merkle_slab = ctx.accounts.merkle_slab.to_account_info();
@@ -343,6 +350,7 @@ pub mod bubblegum {
                 .as_ref(),
         );
         let leaf = LeafSchema::new(
+            version,
             owner,
             delegate,
             nonce.count,
@@ -364,6 +372,7 @@ pub mod bubblegum {
 
     pub fn transfer<'info>(
         ctx: Context<'_, '_, '_, 'info, Transfer<'info>>,
+        version: Version,
         root: [u8; 32],
         data_hash: [u8; 32],
         creator_hash: [u8; 32],
@@ -376,10 +385,23 @@ pub mod bubblegum {
         // Transfers must be initiated either by the leaf owner or leaf delegate
         assert!(owner.is_signer || delegate.is_signer);
         let new_owner = ctx.accounts.new_owner.key();
-        let previous_leaf =
-            LeafSchema::new(owner.key(), delegate.key(), nonce, data_hash, creator_hash);
+        let previous_leaf = LeafSchema::new(
+            version,
+            owner.key(),
+            delegate.key(),
+            nonce,
+            data_hash,
+            creator_hash,
+        );
         // New leafs are instantiated with no delegate
-        let new_leaf = LeafSchema::new(new_owner, new_owner, nonce, data_hash, creator_hash);
+        let new_leaf = LeafSchema::new(
+            version,
+            new_owner,
+            new_owner,
+            nonce,
+            data_hash,
+            creator_hash,
+        );
         emit!(new_leaf.to_event());
         let root_node = Node::new(root);
         replace_leaf(
@@ -398,6 +420,7 @@ pub mod bubblegum {
 
     pub fn delegate<'info>(
         ctx: Context<'_, '_, '_, 'info, Delegate<'info>>,
+        version: Version,
         root: [u8; 32],
         data_hash: [u8; 32],
         creator_hash: [u8; 32],
@@ -408,9 +431,16 @@ pub mod bubblegum {
         let owner = ctx.accounts.owner.key();
         let previous_delegate = ctx.accounts.previous_delegate.key();
         let new_delegate = ctx.accounts.new_delegate.key();
-        let previous_leaf =
-            LeafSchema::new(owner, previous_delegate, nonce, data_hash, creator_hash);
-        let new_leaf = LeafSchema::new(owner, new_delegate, nonce, data_hash, creator_hash);
+        let previous_leaf = LeafSchema::new(
+            version,
+            owner,
+            previous_delegate,
+            nonce,
+            data_hash,
+            creator_hash,
+        );
+        let new_leaf =
+            LeafSchema::new(version, owner, new_delegate, nonce, data_hash, creator_hash);
         emit!(new_leaf.to_event());
         let root_node = Node::new(root);
         replace_leaf(
@@ -429,6 +459,7 @@ pub mod bubblegum {
 
     pub fn burn<'info>(
         ctx: Context<'_, '_, '_, 'info, Burn<'info>>,
+        version: Version,
         root: [u8; 32],
         data_hash: [u8; 32],
         creator_hash: [u8; 32],
@@ -439,8 +470,14 @@ pub mod bubblegum {
         let delegate = ctx.accounts.delegate.to_account_info();
         assert!(owner.is_signer || delegate.is_signer);
         let merkle_slab = ctx.accounts.merkle_slab.to_account_info();
-        let previous_leaf =
-            LeafSchema::new(owner.key(), delegate.key(), nonce, data_hash, creator_hash);
+        let previous_leaf = LeafSchema::new(
+            version,
+            owner.key(),
+            delegate.key(),
+            nonce,
+            data_hash,
+            creator_hash,
+        );
         emit!(previous_leaf.to_event());
         let new_leaf = Node::default();
         let root_node = Node::new(root);
@@ -460,6 +497,7 @@ pub mod bubblegum {
 
     pub fn redeem<'info>(
         ctx: Context<'_, '_, '_, 'info, Redeem<'info>>,
+        version: Version,
         root: [u8; 32],
         data_hash: [u8; 32],
         creator_hash: [u8; 32],
@@ -469,10 +507,12 @@ pub mod bubblegum {
         let owner = ctx.accounts.owner.key();
         let delegate = ctx.accounts.delegate.key();
         let merkle_slab = ctx.accounts.merkle_slab.to_account_info();
-        let previous_leaf = LeafSchema::new(owner, delegate, nonce, data_hash, creator_hash);
+        let previous_leaf =
+            LeafSchema::new(version, owner, delegate, nonce, data_hash, creator_hash);
         emit!(previous_leaf.to_event());
         let new_leaf = Node::default();
         let root_node = Node::new(root);
+        msg!("{}", ctx.accounts.authority.key());
         replace_leaf(
             &merkle_slab.key(),
             *ctx.bumps.get("authority").unwrap(),
