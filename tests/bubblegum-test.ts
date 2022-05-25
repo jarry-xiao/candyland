@@ -26,11 +26,17 @@ import {
   TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
 import { logTx } from "./utils";
+import { sleep } from "../deps/metaplex-program-library/metaplex/js/test/utils";
 
 // @ts-ignore
 let Bubblegum;
 // @ts-ignore
 let GummyrollProgramId;
+
+enum TokenProgramVersion {
+  Original,
+  Token22
+}
 
 describe("bubblegum", () => {
   // Configure the client to use the local cluster.
@@ -209,18 +215,28 @@ describe("bubblegum", () => {
         },
         signers: [payer],
       });
+      console.log("Mint ix length:", mintIx.data.length);
+      console.log("Mint ix data:", mintIx.data.slice(0, 8));
+      console.log("Mint ix data:", mintIx.data.slice(30, 55));
       // Hack to get this to work
-      let buf = Buffer.alloc(2);
-      mintIx.data = Buffer.concat([mintIx.data, buf]);
+      // let buf = Buffer.alloc(6);
+      // mintIx.data = Buffer.concat([mintIx.data, buf]);
       console.log(" - Minting to tree");
-      const mintTx = await Bubblegum.provider.send(
-        new Transaction().add(mintIx),
-        [payer],
-        {
-          skipPreflight: true,
-          commitment: "confirmed",
-        }
-      );
+
+      try {
+        const mintTx = await Bubblegum.provider.send(
+          new Transaction().add(mintIx),
+          [payer],
+          {
+            skipPreflight: true,
+            commitment: "confirmed",
+          }
+        );
+      } catch (e) {
+        console.log(e);
+        await sleep(60 * 1000);
+      }
+
       const leafHash = Buffer.from(keccak_256.digest(mintIx.data.slice(8)));
       let merkleRollAccount =
         await Bubblegum.provider.connection.getAccountInfo(
