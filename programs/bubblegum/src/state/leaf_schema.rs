@@ -9,6 +9,7 @@ pub struct LeafSchemaEvent {
     pub nonce: u128,
     pub data_hash: [u8; 32],
     pub creator_hash: [u8; 32],
+    pub leaf_hash: [u8; 32],
 }
 #[derive(AnchorDeserialize, AnchorSerialize, Clone, Copy, Debug)]
 
@@ -67,6 +68,7 @@ impl LeafSchema {
             nonce: self.nonce,
             data_hash: self.data_hash,
             creator_hash: self.creator_hash,
+            leaf_hash: self.to_node().inner,
         }
     }
 

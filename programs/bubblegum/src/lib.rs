@@ -24,7 +24,7 @@ use crate::state::{
 use crate::utils::{append_leaf, insert_or_append_leaf, replace_leaf};
 
 const NONCE_SIZE: usize = 8 + 16;
-const VOUCHER_SIZE: usize = 8 + 1 + 32 + 32 + 16 + 32 + 4 + 32 + 32;
+const VOUCHER_SIZE: usize = 8 + 1 + 32 + 32 + 16 + 32 + 4 + 32 + 32 + 32;
 const NONCE_PREFIX: &str = "bubblegum";
 
 declare_id!("BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o");
