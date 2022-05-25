@@ -197,7 +197,8 @@ describe("bubblegum", () => {
         uses: null,
         creators: [],
       };
-      let mintIx = await Bubblegum.instruction.mint(metadata, {
+      let version = { v0: {} };
+      let mintIx = await Bubblegum.instruction.mint(version, metadata, {
         accounts: {
           mintAuthority: payer.publicKey,
           authority: treeAuthority,
@@ -221,7 +222,8 @@ describe("bubblegum", () => {
           commitment: "confirmed",
         }
       );
-      const leafHash = Buffer.from(keccak_256.digest(mintIx.data.slice(8)));
+      const leafHash = Buffer.from(keccak_256.digest(mintIx.data.slice(9)));
+      const creatorHash = Buffer.from(keccak_256.digest([]));
       let merkleRollAccount =
         await Bubblegum.provider.connection.getAccountInfo(
           merkleRollKeypair.publicKey
@@ -232,8 +234,10 @@ describe("bubblegum", () => {
 
       console.log(" - Transferring Ownership");
       let transferTx = await Bubblegum.rpc.transfer(
+        version,
         onChainRoot,
         leafHash,
+        creatorHash,
         new BN(0),
         0,
         {
@@ -258,8 +262,10 @@ describe("bubblegum", () => {
 
       console.log(" - Delegating Ownership");
       let delegateTx = await Bubblegum.rpc.delegate(
+        version,
         onChainRoot,
         leafHash,
+        creatorHash,
         new BN(0),
         0,
         {
@@ -284,8 +290,10 @@ describe("bubblegum", () => {
 
       console.log(" - Transferring Ownership (through delegate)");
       let delTransferIx = await Bubblegum.instruction.transfer(
+        version,
         onChainRoot,
         leafHash,
+        creatorHash,
         new BN(0),
         0,
         {
@@ -321,10 +329,12 @@ describe("bubblegum", () => {
         Bubblegum.programId
       );
 
-      console.log(" - Redeeming Leaf");
+      console.log(" - Redeeming Leaf", voucher.toBase58());
       let redeemIx = await Bubblegum.instruction.redeem(
+        version,
         onChainRoot,
         leafHash,
+        creatorHash,
         new BN(0),
         0,
         {
@@ -372,8 +382,10 @@ describe("bubblegum", () => {
 
       console.log(" - Decompressing leaf");
       redeemIx = await Bubblegum.instruction.redeem(
+        version,
         onChainRoot,
         leafHash,
+        creatorHash,
         new BN(0),
         0,
         {
@@ -464,7 +476,6 @@ describe("bubblegum", () => {
           commitment: "confirmed",
         }
       );
-
     });
   });
 });

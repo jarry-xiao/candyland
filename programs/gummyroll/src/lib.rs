@@ -132,9 +132,7 @@ pub mod gummyroll {
         header.serialize(&mut header_bytes)?;
         let id = ctx.accounts.merkle_roll.key();
         match merkle_roll_apply_fn!(header, true, id, roll_bytes, initialize,) {
-            Some(new_root) => {
-                Ok(())
-            }
+            Some(_) => Ok(()),
             None => Err(ProgramError::InvalidInstructionData),
         }
     }
@@ -183,9 +181,7 @@ pub mod gummyroll {
             proof,
             index
         ) {
-            Some(new_root) => {
-                Ok(())
-            }
+            Some(_) => Ok(()),
             None => Err(ProgramError::InvalidInstructionData),
         }
     }
@@ -205,7 +201,7 @@ pub mod gummyroll {
         assert_eq!(header.authority, ctx.accounts.authority.key());
 
         let mut proof = vec![];
-        for (i, node) in ctx.remaining_accounts.iter().enumerate() {
+        for node in ctx.remaining_accounts.iter() {
             proof.push(Node::new(node.key().to_bytes()));
         }
 
@@ -223,9 +219,7 @@ pub mod gummyroll {
             proof,
             index
         ) {
-            Some(new_root) => {
-                Ok(())
-            }
+            Some(_) => Ok(()),
             None => Err(ProgramError::InvalidInstructionData),
         }
     }
@@ -241,9 +235,7 @@ pub mod gummyroll {
 
         let id = ctx.accounts.merkle_roll.key();
         match merkle_roll_apply_fn!(header, true, id, roll_bytes, append, leaf) {
-            Some(new_root) => {
-                Ok(())
-            }
+            Some(_) => Ok(()),
             None => Err(ProgramError::InvalidInstructionData),
         }
     }
@@ -279,9 +271,7 @@ pub mod gummyroll {
             proof,
             index
         ) {
-            Some(new_root) => {
-                Ok(())
-            }
+            Some(_) => Ok(()),
             None => Err(ProgramError::InvalidInstructionData),
         }
     }
