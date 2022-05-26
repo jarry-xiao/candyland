@@ -1,5 +1,5 @@
 import { Program } from '@project-serum/anchor';
-import { Gummyroll } from "../../../contracts/target/types/gummyroll";
+import { Gummyroll } from "../../../target/types/gummyroll";
 import { Keypair, PublicKey, TransactionInstruction } from '@solana/web3.js';
 
 export function createReplaceIx(
@@ -20,9 +20,9 @@ export function createReplaceIx(
         };
     });
     return gummyroll.instruction.replaceLeaf(
-        { inner: Array.from(treeRoot) },
-        { inner: Array.from(previousLeaf) },
-        { inner: Array.from(newLeaf) },
+        Array.from(treeRoot),
+        Array.from(previousLeaf),
+        Array.from(newLeaf),
         index,
         {
             accounts: {
@@ -43,7 +43,7 @@ export function createAppendIx(
     merkleRoll: PublicKey,
 ): TransactionInstruction {
     return gummyroll.instruction.append(
-        { inner: Array.from(newLeaf) },
+        Array.from(newLeaf),
         {
             accounts: {
                 merkleRoll,
@@ -51,6 +51,26 @@ export function createAppendIx(
                 appendAuthority: appendAuthority.publicKey,
             },
             signers: [authority, appendAuthority],
+        }
+    );
+}
+
+export function createTransferAuthorityIx(
+    gummyroll: Program<Gummyroll>,
+    authority: Keypair,
+    merkleRoll: PublicKey,
+    newAuthority: PublicKey | null,
+    newAppendAuthority: PublicKey | null,
+): TransactionInstruction {
+    return gummyroll.instruction.transferAuthority(
+        newAuthority,
+        newAppendAuthority,
+        {
+            accounts: {
+                merkleRoll,
+                authority: authority.publicKey,
+            },
+            signers: [authority],
         }
     );
 }
