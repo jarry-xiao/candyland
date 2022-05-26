@@ -108,10 +108,6 @@ async fn handle_account(manager: &ProgramHandlerManager<'static>, data: Vec<(i64
                         println!("Error in instruction handling {:?}", e);
                         e
                     })
-                    .map_err(|e| {
-                        println!("Error in instruction handling {:?}", e);
-                        e
-                    });
             }
             _ => {
                 println!(
