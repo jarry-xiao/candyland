@@ -6,6 +6,7 @@
 # in the PATH, or that `cargo build` ran successfully
 # change
 #
+
 set -e
 cat << EOL > config.yaml
 json_rpc_url: http://localhost:8899
@@ -15,7 +16,7 @@ EOL
 
 cat << EOL > accountsdb-plugin-config.json
 {
-    "libpath": "/so/plugin.so",
+    "libpath": "/plugin/plugin.so",
     "accounts_selector" : {
         "accounts" : [
             "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
@@ -44,6 +45,7 @@ ledgerDir=$PWD/config/ledger
 mkdir -p "$dataDir" "$ledgerDir"
 echo $ledgerDir
 echo $dataDir
+ls -la /so/
 args=(
   --config config.yaml
   --log
@@ -59,5 +61,6 @@ args=(
   --geyser-plugin-config accountsdb-plugin-config.json
 )
 # shellcheck disable=SC2086
+cat accountsdb-plugin-config.json
 echo "${args[@]}" $SOLANA_RUN_SH_VALIDATOR_ARGS
 solana-test-validator "${args[@]}" $SOLANA_RUN_SH_VALIDATOR_ARGS

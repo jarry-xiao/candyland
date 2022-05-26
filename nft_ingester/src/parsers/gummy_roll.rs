@@ -35,7 +35,7 @@ pub struct CLRecord {
 
 pubkeys!(
     GummyRollProgramID,
-    "BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o"
+    "GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD"
 );
 
 pub struct GummyRollHandler {

@@ -3,13 +3,13 @@ services:
   ingester:
     volumes:
       - ./target/debug/ingest:/bin/ingest
-    environment:
-      BIN: /bin/ingest
     depends_on:
       - api
       - redis
     restart: always
-    image: candyland_api
+    build:
+      context: .
+      dockerfile: Ingest.Dockerfile
   api:
     volumes:
       - ./target/debug/api:/bin/api
@@ -20,7 +20,6 @@ services:
     ports:
       - "9090:9090"
   redis:
-    cpu_count: 2
     image: "redis:alpine"
     ports:
       - "6379:6379"
@@ -33,15 +32,13 @@ services:
       POSTGRES_PASSWORD: solana # The PostgreSQL password (useful to connect to the database)
       POSTGRES_DB: solana
     volumes:
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-      - ./db-data/:/var/lib/postgresql/data/
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./db-data/:/var/lib/postgresql/data/:rw
   solana:
     build:
-      context: docker
-      dockerfile: Dockerfile
+      dockerfile: Solana.Dockerfile
     volumes:
     - ./ledger:/config:rw
-    - ./docker-vol:/so:rw
     environment:
       RUST_LOG: warn
     ports:

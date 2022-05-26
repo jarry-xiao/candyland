@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "gummyroll",
+    "gummyroll_crud",
+    "bubblegum"
+]

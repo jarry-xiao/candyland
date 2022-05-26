@@ -3,21 +3,22 @@ ARG MODE=debug
 RUN apt-get update -y && \
     apt-get install -y build-essential make git
 WORKDIR /rust
-RUN USER=root cargo new --lib nft_api
+RUN USER=root cargo new --lib nft_ingester
 COPY programs /rust/programs
 COPY Anchor.toml /rust/programs/
-COPY deps /rust/deps
 COPY plerkle /rust/plerkle
+COPY deps /rust/deps
 COPY plerkle_serialization /rust/plerkle_serialization
 COPY messenger /rust/messenger
-WORKDIR /rust/nft_api
-COPY ./nft_api/Cargo.toml ./Cargo.toml
+WORKDIR /rust/nft_ingester
+COPY ./nft_ingester/Cargo.toml ./Cargo.toml
 
 RUN cargo build
 
-COPY ./nft_api .
+COPY ./nft_ingester .
+RUN ls -la
 RUN cargo build
-RUN cp -r /rust/nft_api/target/$MODE /rust/bin
+RUN cp -r /rust/nft_ingester/target/$MODE /rust/bin
 
 FROM rust:1.61-slim-bullseye
 ARG APP=/usr/src/app
@@ -33,4 +34,4 @@ COPY --from=builder /rust/bin ${APP}
 RUN chown -R $APP_USER:$APP_USER ${APP}
 USER $APP_USER
 WORKDIR ${APP}
-CMD /usr/src/app/nft_api
+CMD /usr/src/app/nft_ingester

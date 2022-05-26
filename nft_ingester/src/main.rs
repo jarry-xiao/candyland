@@ -1,11 +1,15 @@
+pub mod error;
+pub mod events;
+pub mod parsers;
+pub mod utils;
+
 use {
     futures_util::TryFutureExt,
     messenger::{ACCOUNT_STREAM, TRANSACTION_STREAM},
-    nft_ingester::parsers::{
-        BubblegumHandler, GummyRollHandler, InstructionBundle, ProgramHandler,
-        ProgramHandlerManager,
+    crate::{
+        parsers::*,
+        utils::{order_instructions, parse_logs}
     },
-    nft_ingester::utils::{order_instructions, parse_logs},
     plerkle::async_redis_messenger::AsyncRedisMessenger,
     plerkle_serialization::account_info_generated::account_info::root_as_account_info,
     plerkle_serialization::transaction_info_generated::transaction_info::root_as_transaction_info,
@@ -14,7 +18,7 @@ use {
     std::sync::Arc,
 };
 
-async fn setup_manager<'c>(mut manager: ProgramHandlerManager<'c>) -> ProgramHandlerManager<'c> {
+async fn setup_manager(mut manager: ProgramHandlerManager<'_>) -> ProgramHandlerManager<'_> {
     // TODO setup figment gor db configuration
     let pool = PgPoolOptions::new()
         .max_connections(5)
@@ -58,6 +62,7 @@ async fn service_transaction_stream() -> tokio::task::JoinHandle<()> {
         manager = setup_manager(manager).await;
         let mut messenger = AsyncRedisMessenger::new(TRANSACTION_STREAM).await.unwrap();
         loop {
+            println!("RECV");
             // This call to messenger.recv() blocks with no timeout until
             // a message is received on the stream.
             if let Ok(data) = messenger.recv().await {
@@ -120,6 +125,7 @@ async fn handle_account(manager: &ProgramHandlerManager<'static>, data: Vec<(i64
 
 async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<(i64, &[u8])>) {
     for (message_id, data) in data {
+        println!("RECV");
         //TODO -> Dedupe the stream, the stream could have duplicates as a way of ensuring fault tolerance if one validator node goes down.
         //  Possible solution is dedup on the plerkle side but this doesnt follow our principle of getting messages out of the validator asd fast as possible.
         //  Consider a Messenger Implementation detail the deduping of whats in this stream so that
@@ -166,8 +172,9 @@ async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<
                             instruction,
                             keys,
                             instruction_logs: parsed_log.1,
-                        })
+                        }).await
                         .map_err(|e| {
+                            // Just for logging
                             println!("Error in instruction handling {:?}", e);
                             e
                         });
