@@ -3,12 +3,13 @@ pub mod events;
 pub mod parsers;
 pub mod utils;
 
+use sqlx::{Pool, Postgres};
 use {
     futures_util::TryFutureExt,
     messenger::{ACCOUNT_STREAM, TRANSACTION_STREAM},
     crate::{
         parsers::*,
-        utils::{order_instructions, parse_logs}
+        utils::{order_instructions, parse_logs},
     },
     plerkle::async_redis_messenger::AsyncRedisMessenger,
     plerkle_serialization::account_info_generated::account_info::root_as_account_info,
@@ -18,16 +19,10 @@ use {
     std::sync::Arc,
 };
 
-async fn setup_manager(mut manager: ProgramHandlerManager<'_>) -> ProgramHandlerManager<'_> {
+async fn setup_manager<'a, 'b>(mut manager: ProgramHandlerManager<'a>, pool: Pool<Postgres>) -> ProgramHandlerManager<'a> {
     // TODO setup figment gor db configuration
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect("postgres://solana:solana@db/solana")
-        .await
-        .unwrap();
-    let pool_ref = Arc::new(pool);
-    let bubblegum_parser = BubblegumHandler::new(pool_ref.clone());
-    let gummyroll_parser = GummyRollHandler::new(pool_ref.clone());
+    let bubblegum_parser = BubblegumHandler::new(pool.clone());
+    let gummyroll_parser = GummyRollHandler::new(pool.clone());
     manager.register_parser(Box::new(bubblegum_parser));
     manager.register_parser(Box::new(gummyroll_parser));
     manager
@@ -37,10 +32,13 @@ async fn setup_manager(mut manager: ProgramHandlerManager<'_>) -> ProgramHandler
 async fn main() {
     // Setup Postgres.
     let mut tasks = vec![];
-
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect("postgres://solana:solana@db/solana")
+        .await
+        .unwrap();
     // Service streams as separate concurrent processes.
-    tasks.push(service_transaction_stream().await);
-
+    tasks.push(service_transaction_stream(pool).await);
     // Wait for ctrl-c.
     match tokio::signal::ctrl_c().await {
         Ok(()) => {}
@@ -56,10 +54,10 @@ async fn main() {
     }
 }
 
-async fn service_transaction_stream() -> tokio::task::JoinHandle<()> {
+async fn service_transaction_stream(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut manager = ProgramHandlerManager::new();
-        manager = setup_manager(manager).await;
+        manager = setup_manager(manager, pool).await;
         let mut messenger = AsyncRedisMessenger::new(TRANSACTION_STREAM).await.unwrap();
         loop {
             println!("RECV");
@@ -72,10 +70,10 @@ async fn service_transaction_stream() -> tokio::task::JoinHandle<()> {
     })
 }
 
-async fn service_account_stream() -> tokio::task::JoinHandle<()> {
+async fn service_account_stream(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut manager = ProgramHandlerManager::new();
-        manager = setup_manager(manager).await;
+        manager = setup_manager(manager, pool).await;
         let mut messenger = AsyncRedisMessenger::new(ACCOUNT_STREAM).await.unwrap();
 
         loop {
@@ -107,7 +105,7 @@ async fn handle_account(manager: &ProgramHandlerManager<'static>, data: Vec<(i64
                     .map_err(|e| {
                         println!("Error in instruction handling {:?}", e);
                         e
-                    })
+                    });
             }
             _ => {
                 println!(

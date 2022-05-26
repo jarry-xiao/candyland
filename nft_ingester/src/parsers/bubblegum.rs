@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use anchor_client::anchor_lang::prelude::Pubkey;
 use lazy_static::lazy_static;
 use solana_sdk::pubkeys;
@@ -40,7 +41,7 @@ const SET_NFT_APPSQL: &str = r#"
 
 pub struct BubblegumHandler {
     id: Pubkey,
-    storage: Arc<Pool<Postgres>>,
+    storage: Pool<Postgres>,
 }
 
 #[async_trait]
@@ -65,14 +66,14 @@ impl ProgramHandler for BubblegumHandler {
             &bundle.instruction_logs,
             &bundle.keys,
             bundle.message_id,
-            self.storage.as_ref(),
+            &self.storage,
         )
         .await
     }
 }
 
 impl BubblegumHandler {
-    pub fn new(pool: Arc<Pool<Postgres>>) -> Self {
+    pub fn new(pool: Pool<Postgres>) -> Self {
         BubblegumHandler {
             id: BubblegumProgramID(),
             storage: pool,

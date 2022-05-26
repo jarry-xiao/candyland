@@ -40,7 +40,7 @@ pubkeys!(
 
 pub struct GummyRollHandler {
     id: Pubkey,
-    storage: Arc<Pool<Postgres>>,
+    storage: Pool<Postgres>,
 }
 
 #[async_trait]
@@ -63,14 +63,14 @@ impl ProgramHandler for GummyRollHandler {
         handle_gummyroll_instruction(
             &bundle.instruction_logs,
             bundle.message_id,
-            self.storage.as_ref(),
+            &self.storage,
         )
         .await
     }
 }
 
 impl GummyRollHandler {
-    pub fn new(pool: Arc<Pool<Postgres>>) -> Self {
+    pub fn new(pool: Pool<Postgres>) -> Self {
         GummyRollHandler {
             id: GummyRollProgramID(),
             storage: pool,
@@ -86,7 +86,7 @@ pub async fn handle_gummyroll_instruction(
     let change_log_event_vec = if let Ok(change_log_event_vec) = filter_events_from_logs(logs) {
         change_log_event_vec
     } else {
-        println!("Could find emitted program data");
+        println!("Could not find emitted program data");
         return Err(IngesterError::ChangeLogEventMalformed);
     };
 
