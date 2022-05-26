@@ -1,23 +1,23 @@
 use hyper::{header, Body, Request, Response, Server, StatusCode};
 // Import the routerify prelude traits.
 use anchor_client::solana_sdk::pubkey::Pubkey;
-use futures_util::future::join3;
+
 use futures_util::StreamExt;
-use gummyroll::state::change_log::{ChangeLogEvent, PathNode};
+
 use gummyroll::utils::empty_node;
 use hyper::header::HeaderValue;
-use redis::streams::{StreamId, StreamKey, StreamMaxlen, StreamReadOptions, StreamReadReply};
-use redis::{Commands, RedisResult, Value};
+
+use redis::{Commands};
 use routerify::prelude::*;
-use routerify::{Middleware, RequestInfo, Router, RouterService};
+use routerify::{Middleware, Router, RouterService};
 use routerify_json_response::{json_failed_resp, json_failed_resp_with_message, json_success_resp};
-use serde::{Deserialize, Serialize};
+use serde::{Serialize};
 use sqlx;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Pool, Postgres};
-use std::borrow::Borrow;
-use std::convert::Infallible;
-use std::io;
+
+
+
 use std::net::SocketAddr;
 use std::ops::Index;
 use std::str::FromStr;
@@ -25,7 +25,7 @@ use std::str::FromStr;
 mod error;
 
 use error::ApiError;
-use tokio::{join, task};
+
 
 async fn logger(req: Request<Body>) -> Result<Request<Body>, routerify_json_response::Error> {
     println!(
