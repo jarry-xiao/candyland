@@ -8,4 +8,3 @@ pub enum ApiError {
     #[error("Request Error {status:?}, reason {msg:?} ")]
     ResponseError { status: StatusCode, msg: String },
 }
-

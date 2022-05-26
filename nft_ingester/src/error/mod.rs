@@ -1,4 +1,3 @@
-use hyper::StatusCode;
 use thiserror::Error;
 
 #[derive(Error, Debug)]

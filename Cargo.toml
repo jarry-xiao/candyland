@@ -1,14 +1,11 @@
 [workspace]
 members = [
-    "programs/bubblegum",
-    "programs/gummyroll",
-    "programs/gummyroll_crud",
-]
-exclude = [
-    "deps",
     "plerkle",
     "nft_api",
     "nft_ingester",
-    "messenger",
-    "programs/"
+    "messenger"
+]
+exclude = [
+    "deps",
+    "programs",
 ]

@@ -285,7 +285,7 @@ pub enum InstructionName {
     Delegate,
     Decompress,
 }
-pub fn get_instruction_type(full_bytes: &Vec<u8>) -> InstructionName {
+pub fn get_instruction_type(full_bytes: &[u8]) -> InstructionName {
     let disc: [u8; 8] = {
         let mut disc = [0; 8];
         disc.copy_from_slice(&full_bytes[..8]);

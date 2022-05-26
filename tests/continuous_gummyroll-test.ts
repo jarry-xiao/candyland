@@ -14,7 +14,7 @@ import { buildTree, getProofOfLeaf, updateTree, Tree, getProofOfAssetFromServer,
 import { decodeMerkleRoll, getMerkleRollAccountSize } from "./merkle-roll-serde";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 
-const HOST = "<undefined>";
+const HOST = "127.0.0.1";
 const TREE_RPC_HOST = HOST;
 const CONNECTION_URL = `http://${HOST}:8899`;
 const TREE_RPC_PORT = "9090";
@@ -31,7 +31,7 @@ function chunk<T>(arr: T[], size: number): T[][] {
   );
 }
 
-describe.skip("gummyroll-continuous", () => {
+describe("gummyroll-continuous", () => {
   let connection: web3Connection;
   let wallet: NodeWallet;
   let offChainTree: ReturnType<typeof buildTree>;
@@ -78,6 +78,7 @@ describe.skip("gummyroll-continuous", () => {
       commitment: "confirmed",
       skipPreflight: true,
     });
+    console.log(txid);
     return merkleRollKeypair
   }
 
