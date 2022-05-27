@@ -20,10 +20,10 @@ import {
   getMerkleRollAccountSize,
 } from "./merkle-roll-serde";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
-import { getAssociatedTokenAddress } from "../deps/solana-program-library/token/js/src";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  Token
 } from "@solana/spl-token";
 import { logTx } from "./utils";
 
@@ -445,7 +445,9 @@ describe("bubblegum", () => {
         accounts: {
           voucher: voucher,
           owner: payer.publicKey,
-          tokenAccount: await getAssociatedTokenAddress(
+          tokenAccount: await Token.getAssociatedTokenAddress(
+            ASSOCIATED_TOKEN_PROGRAM_ID,
+            TOKEN_PROGRAM_ID,
             tokenMint.publicKey,
             payer.publicKey
           ),
