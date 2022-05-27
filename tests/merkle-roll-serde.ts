@@ -1,14 +1,11 @@
 import { assertConfirmedTransaction } from '@metaplex-foundation/amman';
 import {
-    PublicKey
+    PublicKey,
+    Connection,
 } from '@solana/web3.js';
 import * as borsh from 'borsh';
 import { BN } from '@project-serum/anchor';
-
-
-    // maxDepth: number, // u32
-    // maxBufferSize: number, // u32
-    // authority: PublicKey,
+import { assert } from "chai";
 
 /**
  * Manually create a model for MerkleRoll in order to deserialize correctly
@@ -26,7 +23,7 @@ type MerkleRollHeader = {
 }
 
 type MerkleRoll = {
-    sequenceNumber: BN, // u64
+    sequenceNumber: BN, // u128
     activeIndex: number, // u64
     bufferSize: number, // u64
     changeLogs: ChangeLog[],
@@ -114,9 +111,40 @@ export function decodeMerkleRoll(buffer: Buffer): OnChainMerkleRoll {
 }
 
 export function getMerkleRollAccountSize(maxDepth: number, maxBufferSize: number): number {
-  let headerSize = 8 + 32 + 32;
-  let changeLogSize = (maxDepth * 32 + 32 + 4 + 4) * maxBufferSize;
-  let rightMostPathSize = maxDepth * 32 + 32 + 4 + 4;
-  let merkleRollSize = 8 + 8 + 16 + changeLogSize + rightMostPathSize;
-  return merkleRollSize + headerSize; 
+    let headerSize = 8 + 32 + 32;
+    let changeLogSize = (maxDepth * 32 + 32 + 4 + 4) * maxBufferSize;
+    let rightMostPathSize = maxDepth * 32 + 32 + 4 + 4;
+    let merkleRollSize = 8 + 8 + 16 + changeLogSize + rightMostPathSize;
+    return merkleRollSize + headerSize; 
+}
+
+export async function assertOnChainMerkleRollProperties(
+    connection: Connection,
+    expectedMaxDepth: number,
+    expectedMaxBufferSize: number,
+    expectedAuthority: PublicKey,
+    expectedRoot: PublicKey,
+    merkleRollPubkey: PublicKey
+) {
+    const merkleRoll = await connection.getAccountInfo(merkleRollPubkey);
+    const merkleRollAcct = decodeMerkleRoll(merkleRoll.data);
+    
+    assert(
+        merkleRollAcct.header.maxDepth === expectedMaxDepth,
+        `Max depth does not match ${merkleRollAcct.header.maxDepth}, expected ${expectedMaxDepth}`
+    );
+    assert(
+        merkleRollAcct.header.maxBufferSize === expectedMaxBufferSize,
+        `Max buffer size does not match ${merkleRollAcct.header.maxBufferSize}, expected ${expectedMaxBufferSize}`
+    );
+
+    assert(
+        merkleRollAcct.header.authority.equals(expectedAuthority),
+        "Failed to write auth pubkey"
+    );
+
+    assert(
+        merkleRollAcct.roll.changeLogs[0].root.equals(expectedRoot),
+        "On chain root does not match root passed in instruction"
+    );
 }

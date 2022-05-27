@@ -29,7 +29,7 @@ pub struct InitGumballMachine<'info> {
         bump,
     )]
     willy_wonka: AccountInfo<'info>,
-    /// CHECK: Tree authority to the merkle slab
+    /// CHECK: Tree authority to the merkle slab, PDA owned by BubbleGum
     bubblegum_authority: AccountInfo<'info>,
     gummyroll: Program<'info, Gummyroll>,
     /// CHECK: Empty merkle slab
@@ -47,7 +47,7 @@ pub struct UpdateConfigLine<'info> {
 }
 
 #[derive(Accounts)]
-pub struct UpdateConfigMetadata<'info> {
+pub struct UpdateHeaderMetadata<'info> {
     /// CHECK: Validation occurs in instruction
     #[account(mut)]
     gumball_machine: AccountInfo<'info>,
@@ -59,26 +59,30 @@ pub struct Dispense<'info> {
     /// CHECK: Validation occurs in instruction
     #[account(mut)]
     gumball_machine: AccountInfo<'info>,
+
+    #[account(mut)]
     payer: Signer<'info>,
     #[account(
         seeds = [gumball_machine.key().as_ref()],
         bump,
     )]
+    /// CHECK: PDA is checked on CPI for mint
+    willy_wonka: AccountInfo<'info>,
     /// CHECK: Address is verified
     #[account(address = SlotHashes::id())]
     recent_blockhashes: UncheckedAccount<'info>,
     /// CHECK: Address is verified
     #[account(address = sysvar::instructions::id())]
     instruction_sysvar_account: UncheckedAccount<'info>,
-    /// CHECK: PDA is checked on CPI for mint
-    willy_wonka: AccountInfo<'info>,
     /// CHECK: PDA is checked in CPI from Bubblegum to Gummyroll
     /// This key must sign for all write operations to the NFT Metadata stored in the Merkle slab
     bubblegum_authority: AccountInfo<'info>,
     /// CHECK: PDA is checked in Bubblegum
+    #[account(mut)]
     nonce: AccountInfo<'info>,
     gummyroll: Program<'info, Gummyroll>,
     /// CHECK: Validation occurs in Gummyroll
+    #[account(mut)]
     merkle_slab: AccountInfo<'info>,
     bubblegum: Program<'info, Bubblegum>,
 }
@@ -86,7 +90,9 @@ pub struct Dispense<'info> {
 #[derive(Accounts)]
 pub struct Destroy<'info> {
     /// CHECK: Validation occurs in instruction
+    #[account(mut)]
     gumball_machine: AccountInfo<'info>,
+    #[account(mut)]
     authority: Signer<'info>,
 }
 
@@ -177,17 +183,15 @@ pub mod gumball_machine {
         let index_array_size = std::mem::size_of::<u32>() * size;
         let config_size = gumball_header.extension_len * size;
         let line_size = gumball_header.extension_len;
-        let num_lines = new_config_lines_data.len() / line_size;
+        let num_lines = new_config_lines_data.len() / line_size; // unchecked divide by zero? maybe we don't care since this will throw and the instr will fail
         let start_index = gumball_header.total_items_added;
         assert_eq!(gumball_header.authority, ctx.accounts.authority.key());
         assert_eq!(new_config_lines_data.len() % line_size, 0);
-        assert!(config_data.len() == index_array_size + config_size);
-        assert_eq!(new_config_lines_data.len(), num_lines * line_size);
         assert!(start_index + num_lines <= gumball_header.max_items as usize);
         let (_, config_lines_data) = config_data.split_at_mut(index_array_size);
         config_lines_data[start_index..]
             .iter_mut()
-            .take(num_lines)
+            .take(new_config_lines_data.len())
             .enumerate()
             .for_each(|(i, l)| *l = new_config_lines_data[i]);
         gumball_header.total_items_added += num_lines;
@@ -209,7 +213,7 @@ pub mod gumball_machine {
         let index_array_size = std::mem::size_of::<u32>() * size;
         let config_size = gumball_header.extension_len * size;
         let line_size = gumball_header.extension_len;
-        let num_lines = new_config_lines_data.len() / line_size;
+        let num_lines = new_config_lines_data.len() / line_size; // unchecked divide by zero? maybe we don't care since this will throw and the instr will fail
         assert_eq!(gumball_header.authority, ctx.accounts.authority.key());
         assert_eq!(new_config_lines_data.len() % line_size, 0);
         assert!(config_data.len() == index_array_size + config_size);
@@ -218,24 +222,24 @@ pub mod gumball_machine {
         let (_, config_lines_data) = config_data.split_at_mut(index_array_size);
         config_lines_data[starting_line as usize * line_size..]
             .iter_mut()
-            .take(num_lines)
+            .take(new_config_lines_data.len())
             .enumerate()
             .for_each(|(i, l)| *l = new_config_lines_data[i]);
         Ok(())
     }
 
-    pub fn update_config_metadata(
-        ctx: Context<UpdateConfigMetadata>,
+    pub fn update_header_metadata(
+        ctx: Context<UpdateHeaderMetadata>,
         url_base: Option<[u8; 64]>,
         name_base: Option<[u8; 32]>,
         symbol: Option<[u8; 32]>,
         seller_fee_basis_points: Option<u16>,
         is_mutable: Option<bool>,
-        price: Option<u64>,
         retain_authority: Option<bool>,
+        price: Option<u64>,
         go_live_date: Option<i64>,
-        authority: Option<Pubkey>,
         bot_wallet: Option<Pubkey>,
+        authority: Option<Pubkey>,
         max_mint_size: Option<u64>,
     ) -> Result<()> {
         let mut gumball_machine_data = ctx.accounts.gumball_machine.try_borrow_mut_data()?;
@@ -272,7 +276,7 @@ pub mod gumball_machine {
             None => {}
         }
         match go_live_date {
-            Some(gld) => gumball_machine.go_live_date = gld,
+            Some(gld) => gumball_machine.go_live_date = gld, // Are we worried about clock drift and ppl trying to hit the machine close to when this goes live, and projects updating close to go live date?
             None => {}
         }
         match authority {
@@ -290,6 +294,7 @@ pub mod gumball_machine {
         Ok(())
     }
 
+    // TODO(sorend): implement payments (standard token transfer if anything but native sol, if native sol then system_instruction)
     pub fn dispense(ctx: Context<Dispense>, num_items: u64) -> Result<()> {
         // Load all data
         let mut gumball_machine_data = ctx.accounts.gumball_machine.try_borrow_mut_data()?;

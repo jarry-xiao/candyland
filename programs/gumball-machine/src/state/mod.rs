@@ -5,6 +5,7 @@ use std::mem::size_of;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, Zeroable, Pod)]
 #[repr(C)]
+// Current Size: 352 bytes
 pub struct GumballMachineHeader {
     // TODO: Add more fields
     // Used to programmatically create the url and name for each field.
@@ -22,6 +23,7 @@ pub struct GumballMachineHeader {
     pub _padding: [u8; 4],
     pub price: u64,
     pub go_live_date: i64,
+    // Mint of the Token used to purchase NFTs
     pub mint: Pubkey,
     // Used to collect bot fees
     pub bot_wallet: Pubkey,
