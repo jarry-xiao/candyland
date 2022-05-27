@@ -1,7 +1,8 @@
+#![cfg(feature = "redis")]
+
 use {
     crate::{
-        constants::{CONSUMER_NAME, DATA_KEY, GROUP_NAME},
-        error::PlerkleError,
+        error::MessengerError,
     },
     log::*,
     redis::{
@@ -15,6 +16,11 @@ use {
         pin::Pin,
     },
 };
+
+// Redis stream values.
+pub const GROUP_NAME: &str = "plerkle";
+pub const CONSUMER_NAME: &str = "ingester";
+pub const DATA_KEY: &str = "data";
 
 pub struct AsyncRedisMessenger {
     connection: Option<redis::aio::Connection<Pin<Box<dyn AsyncStream + Send + Sync>>>>,
@@ -30,7 +36,7 @@ impl AsyncRedisMessenger {
         // Get connection.
         let connection = client.get_tokio_connection().await.map_err(|e| {
             error!("{}", e.to_string());
-            GeyserPluginError::Custom(Box::new(PlerkleError::ConfigurationError {
+            GeyserPluginError::Custom(Box::new(MessengerError::ConfigurationError {
                 msg: e.to_string(),
             }))
         })?;

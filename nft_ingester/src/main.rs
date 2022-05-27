@@ -6,12 +6,11 @@ pub mod utils;
 use sqlx::{Pool, Postgres};
 use {
     futures_util::TryFutureExt,
-    messenger::{ACCOUNT_STREAM, TRANSACTION_STREAM},
+    messenger::{AsyncRedisMessenger, ACCOUNT_STREAM, TRANSACTION_STREAM},
     crate::{
         parsers::*,
         utils::{order_instructions, parse_logs},
     },
-    plerkle::async_redis_messenger::AsyncRedisMessenger,
     plerkle_serialization::account_info_generated::account_info::root_as_account_info,
     plerkle_serialization::transaction_info_generated::transaction_info::root_as_transaction_info,
     solana_sdk::pubkey::Pubkey,

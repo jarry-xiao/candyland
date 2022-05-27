@@ -1906,8 +1906,11 @@ dependencies = [
 name = "messenger"
 version = "0.1.0"
 dependencies = [
+ "log",
  "plerkle-serialization",
+ "redis",
  "solana-geyser-plugin-interface",
+ "thiserror",
 ]
 
 [[package]]
@@ -2449,7 +2452,6 @@ dependencies = [
  "messenger",
  "num-integer",
  "plerkle-serialization",
- "redis",
  "regex",
  "serde",
  "serde_derive",

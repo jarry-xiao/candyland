@@ -1,10 +1,11 @@
+#![cfg(feature = "redis")]
+
 use {
     crate::{
-        constants::{CONSUMER_NAME, DATA_KEY, GROUP_NAME},
-        error::PlerkleError,
+        error::MessengerError,
+        messenger::Messenger,
     },
     log::*,
-    messenger::Messenger,
     redis::{
         Value,
         {
@@ -18,6 +19,11 @@ use {
         fmt::{Debug, Formatter},
     },
 };
+
+// Redis stream values.
+pub const GROUP_NAME: &str = "plerkle";
+pub const CONSUMER_NAME: &str = "ingester";
+pub const DATA_KEY: &str = "data";
 
 #[derive(Default)]
 pub struct RedisMessenger {
@@ -38,7 +44,7 @@ impl Messenger for RedisMessenger {
         // Get connection.
         let connection = client.get_connection().map_err(|e| {
             error!("{}", e.to_string());
-            GeyserPluginError::Custom(Box::new(PlerkleError::ConfigurationError {
+            GeyserPluginError::Custom(Box::new(MessengerError::ConfigurationError {
                 msg: e.to_string(),
             }))
         })?;

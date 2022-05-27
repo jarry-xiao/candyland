@@ -2,7 +2,6 @@ use {
     crate::{
         accounts_selector::AccountsSelector,
         error::PlerkleError,
-        redis_messenger::RedisMessenger,
         serializer::{
             serialize_account, serialize_block, serialize_slot_status, serialize_transaction,
         },
@@ -10,7 +9,7 @@ use {
     },
     flatbuffers::FlatBufferBuilder,
     log::*,
-    messenger::{Messenger, ACCOUNT_STREAM, BLOCK_STREAM, SLOT_STREAM, TRANSACTION_STREAM},
+    messenger::{Messenger, ACCOUNT_STREAM, BLOCK_STREAM, SLOT_STREAM, TRANSACTION_STREAM, RedisMessenger},
     solana_geyser_plugin_interface::geyser_plugin_interface::{
         GeyserPlugin, GeyserPluginError, ReplicaAccountInfoVersions, ReplicaBlockInfoVersions,
         ReplicaTransactionInfoVersions, Result, SlotStatus,
