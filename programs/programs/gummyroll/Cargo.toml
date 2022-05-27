@@ -1,12 +1,12 @@
 [package]
-name = "gummyroll-crud"
+name = "gummyroll"
 version = "0.1.0"
 description = "Created with Anchor"
 edition = "2018"
 
 [lib]
 crate-type = ["cdylib", "lib"]
-name = "gummyroll_crud"
+name = "gummyroll"
 
 [features]
 no-entrypoint = []
@@ -16,7 +16,5 @@ cpi = ["no-entrypoint"]
 default = []
 
 [dependencies]
-anchor-lang = { path="../../deps/anchor/lang" }
-gummyroll = { path = "../gummyroll", features = ["cpi"] }
+anchor-lang = { version = "0.24.2" }
 bytemuck = "1.8.0"
-

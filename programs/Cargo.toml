@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "gummyroll",
-    "gummyroll_crud",
-    "bubblegum"
+    "programs/gummyroll",
+    "programs/gummyroll_crud",
+    "programs/bubblegum"
 ]
