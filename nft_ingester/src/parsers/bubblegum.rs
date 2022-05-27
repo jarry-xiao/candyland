@@ -3,23 +3,25 @@ use anchor_client::anchor_lang::prelude::Pubkey;
 use lazy_static::lazy_static;
 use solana_sdk::pubkeys;
 use std::sync::Arc;
+use sqlx::Acquire;
 use {
-    crate::events::handle_event,
-    crate::utils::{filter_events_from_logs, pubkey_from_fb_table},
+    crate::{
+        events::handle_event,
+        parsers::{InstructionBundle, ProgramHandler, ProgramHandlerConfig},
+        utils::{filter_events_from_logs, pubkey_from_fb_table},
+        error::IngesterError
+    },
     anchor_client::anchor_lang::AnchorDeserialize,
     bubblegum::state::leaf_schema::LeafSchemaEvent,
     flatbuffers::{ForwardsUOffset, Vector},
     plerkle_serialization::transaction_info_generated::transaction_info::{self},
     solana_sdk,
     sqlx::{self, types::Uuid, Pool, Postgres},
+    async_trait::async_trait
 };
 
-use crate::error::IngesterError;
-use crate::parsers::{InstructionBundle, ProgramHandler, ProgramHandlerConfig};
-use async_trait::async_trait;
-
 pubkeys!(
-    BubblegumProgramID,
+    Bubblegum_Program_ID,
     "BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o"
 );
 
@@ -75,7 +77,7 @@ impl ProgramHandler for BubblegumHandler {
 impl BubblegumHandler {
     pub fn new(pool: Pool<Postgres>) -> Self {
         BubblegumHandler {
-            id: BubblegumProgramID(),
+            id: Bubblegum_Program_ID(),
             storage: pool,
         }
     }
@@ -121,6 +123,8 @@ async fn handle_bubblegum_instruction<'a, 'b>(
     pid: i64,
     pool: &Pool<Postgres>,
 ) -> Result<(), IngesterError> {
+    println!("{:?}", logs);
+    let txn = pool.begin().await.unwrap();
     match bubblegum::get_instruction_type(instruction.data().unwrap()) {
         bubblegum::InstructionName::Transfer => {
             println!("Bubblegum: Transfer");
