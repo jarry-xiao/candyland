@@ -4,8 +4,7 @@ RUN apt-get update -y && \
     apt-get install -y build-essential make git
 WORKDIR /rust
 RUN USER=root cargo new --lib nft_api
-COPY programs /rust/programs
-COPY Anchor.toml /rust/programs/
+COPY contracts /rust/contracts
 COPY deps /rust/deps
 COPY plerkle /rust/plerkle
 COPY plerkle_serialization /rust/plerkle_serialization
