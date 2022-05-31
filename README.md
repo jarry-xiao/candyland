@@ -68,8 +68,23 @@ This is the bread and butter of this project. Gummyroll relies on RPC indexers t
 | `messenger` | Traits needed to generalize messaging bus for NFT related indexing | tbd |
 
 ## Getting Started
+```
+cd candyland/
+git submodule update --init --recursive
+yarn install
+cd contracts/
+anchor build
+cd ..
+docker compose up --build --force-recreate
+```
 
-`git submodule init --update && yarn install`
+#### In another terminal:
+```
+cd candyland/contracts/
+yarn
+yarn run ts-mocha -t 1000000 tests/bubblegum-test.ts
+yarn run ts-mocha -t 1000000 tests/continuous_gummyroll-test.ts
+```
 
 ## Running Tests
 
