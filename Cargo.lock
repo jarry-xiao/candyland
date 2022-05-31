@@ -644,6 +644,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "concurrent-merkle-tree"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "solana-program",
+]
+
+[[package]]
 name = "console"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1380,6 +1388,7 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "bytemuck",
+ "concurrent-merkle-tree",
 ]
 
 [[package]]
