@@ -5,6 +5,7 @@ RUN apt-get update -y && \
 WORKDIR /rust
 RUN USER=root cargo new --lib nft_ingester
 COPY contracts /rust/contracts
+COPY lib /rust/lib
 COPY plerkle /rust/plerkle
 COPY deps /rust/deps
 COPY plerkle_serialization /rust/plerkle_serialization

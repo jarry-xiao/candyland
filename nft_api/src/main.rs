@@ -4,19 +4,17 @@ use anchor_client::solana_sdk::pubkey::Pubkey;
 
 use futures_util::StreamExt;
 
-use gummyroll::utils::empty_node;
+use concurrent_merkle_tree::utils::empty_node;
 use hyper::header::HeaderValue;
 
-use redis::{Commands};
+use redis::Commands;
 use routerify::prelude::*;
 use routerify::{Middleware, Router, RouterService};
 use routerify_json_response::{json_failed_resp, json_failed_resp_with_message, json_success_resp};
-use serde::{Serialize};
+use serde::Serialize;
 use sqlx;
 use sqlx::postgres::PgPoolOptions;
 use sqlx::{Pool, Postgres};
-
-
 
 use std::net::SocketAddr;
 use std::ops::Index;
@@ -25,7 +23,6 @@ use std::str::FromStr;
 mod error;
 
 use error::ApiError;
-
 
 async fn logger(req: Request<Body>) -> Result<Request<Body>, routerify_json_response::Error> {
     println!(

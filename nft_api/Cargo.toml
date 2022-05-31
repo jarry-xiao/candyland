@@ -32,6 +32,7 @@ uuid = "1.0.0"
 gummyroll = { path = "../contracts/programs/gummyroll", features = ["no-entrypoint"] }
 gummyroll-crud = { path = "../contracts/programs/gummyroll_crud", features = ["no-entrypoint"] }
 bubblegum = { path = "../contracts/programs/bubblegum", features = ["no-entrypoint"] }
+concurrent-merkle-tree = { path = "../lib/concurrent-merkle-tree" }
 
 [dependencies.num-integer]
 version = "0.1.44"
