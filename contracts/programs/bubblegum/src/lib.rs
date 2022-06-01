@@ -359,6 +359,7 @@ pub mod bubblegum {
         );
         emit!(leaf.to_event());
         nonce.count = nonce.count.saturating_add(1);
+        msg!("yeehaw");
         append_leaf(
             &merkle_slab.key(),
             *ctx.bumps.get("authority").unwrap(),

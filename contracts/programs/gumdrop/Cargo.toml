@@ -21,8 +21,8 @@ cpi = ["no-entrypoint"]
 default = []
 
 [dependencies]
-anchor-lang = { path="../../deps/anchor/lang" }
-anchor-spl = { path="../../deps/anchor/spl" }
+anchor-lang = { path="../../../deps/anchor/lang" }
+anchor-spl = { path="../../../deps/anchor/spl" }
 solana-program = "1.10.10"
 spl-token = "3.3.0"
 spl-associated-token-account = { version = "=1.0.5", features = [ "no-entrypoint" ] }

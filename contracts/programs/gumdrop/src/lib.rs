@@ -707,7 +707,10 @@ pub mod gumdrop {
         );
 
         // This user is whitelisted to mint at most `amount` NFTs from the candy machine
-        require!(claim_count.count < (amount as u64), GumdropError::DropAlreadyClaimed);
+        require!(
+            claim_count.count < (amount as u64),
+            GumdropError::DropAlreadyClaimed
+        );
 
         // Mark it claimed
         claim_count.count = claim_count
@@ -723,6 +726,7 @@ pub mod gumdrop {
             &ctx.accounts.bubblegum_tree_authority,
             &ctx.accounts.bubblegum_program,
             &ctx.accounts.gummyroll_program,
+            0,
             nft_metadata,
         )?;
 
@@ -852,7 +856,7 @@ fn create_new_compressed_tree<'info>(
         // merkle slab
         merkle_slab.clone(),
     ];
-    
+
     msg!("Invoking cpi to bubblegum");
     invoke_signed(
         &Instruction {
@@ -878,6 +882,7 @@ fn issue_compressed_nft<'info>(
     merkle_tree_auth: &AccountInfo<'info>,
     bubblegum_program: &AccountInfo<'info>,
     gummyroll_program: &AccountInfo<'info>,
+    version: u8,
     metadata_data: Vec<u8>,
 ) -> Result<()> {
     verify_bubblegum(&bubblegum_program.key())?;
@@ -888,6 +893,7 @@ fn issue_compressed_nft<'info>(
     // Prepend mint discriminant to metadata
     // TODO(ngundotra): global::mint_compressed_nft ix
     let mut ix_data = vec![51, 57, 225, 47, 182, 146, 137, 166];
+    ix_data.push(version);
     ix_data.extend(metadata_data.iter());
 
     let distributor_seeds = [

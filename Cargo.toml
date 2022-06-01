@@ -3,13 +3,6 @@ members = [
     "plerkle",
     "nft_api",
     "nft_ingester",
-<<<<<<< HEAD
-=======
-    "programs/bubblegum",
-    "programs/gumdrop",
-    "programs/gummyroll",
-    "programs/gummyroll_crud",
->>>>>>> c8404ec (add gumdrop for batchminting)
     "messenger"
 ]
 exclude = [
