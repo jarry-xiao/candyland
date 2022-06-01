@@ -11,7 +11,7 @@ use solana_sdk::pubkey::Pubkey;
 use solana_sdk::pubkeys;
 use std::sync::Arc;
 use {
-    gummyroll::state::change_log::ChangeLogEvent,
+    gummyroll::state::ChangeLogEvent,
     serde::Deserialize,
     sqlx::{self, Pool, Postgres},
     std::fs::File,
@@ -60,12 +60,8 @@ impl ProgramHandler for GummyRollHandler {
     }
 
     async fn handle_instruction(&self, bundle: &InstructionBundle) -> Result<(), IngesterError> {
-        handle_gummyroll_instruction(
-            &bundle.instruction_logs,
-            bundle.message_id,
-            &self.storage,
-        )
-        .await
+        handle_gummyroll_instruction(&bundle.instruction_logs, bundle.message_id, &self.storage)
+            .await
     }
 }
 
@@ -116,13 +112,13 @@ async fn change_log_event_to_database(
         Ok(txn) => {
             let mut i: i64 = 0;
             for p in change_log_event.path.into_iter() {
-                println!("level {}, node {:?}", i, p.node.inner);
+                println!("level {}, node {:?}", i, p.node);
                 let tree_id = change_log_event.id.as_ref();
                 let f = sqlx::query(SET_CLSQL_ITEM)
                     .bind(&tree_id)
                     .bind(&pid + i)
                     .bind(&i)
-                    .bind(&p.node.inner.as_ref())
+                    .bind(&p.node.as_ref())
                     .bind(&(p.index as i64))
                     .execute(pool)
                     .await;

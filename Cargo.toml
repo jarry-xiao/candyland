@@ -8,4 +8,5 @@ members = [
 exclude = [
     "deps",
     "contracts",
+    "lib"
 ]

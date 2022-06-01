@@ -2046,6 +2046,7 @@ dependencies = [
  "base64 0.13.0",
  "bs58 0.4.0",
  "bubblegum",
+ "concurrent-merkle-tree",
  "csv",
  "flatbuffers",
  "futures-util",

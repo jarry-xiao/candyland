@@ -249,7 +249,7 @@ async fn handle_get_asset_proof(
     let string: String;
     if result.is_err() {
         println!("Could not find asset...\n");
-        let empty_leaf = empty_node(0).inner.to_vec();
+        let empty_leaf = empty_node(0).to_vec();
         string = bs58::encode(empty_leaf).into_string();
     } else {
         string = result.unwrap().hash.clone();
@@ -415,7 +415,7 @@ fn make_empty_node(lvl: i64, node_index: i64) -> NodeDAO {
     NodeDAO {
         node_idx: node_index,
         level: lvl,
-        hash: empty_node(lvl as u32).inner.to_vec(),
+        hash: empty_node(lvl as u32).to_vec(),
         seq: 0,
     }
 }
