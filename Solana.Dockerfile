@@ -14,7 +14,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 WORKDIR /rust/
 COPY deps /rust/deps
 COPY contracts /rust/contracts
-#COPY programs/Anchor.toml /rust/programs/
+COPY lib /rust/lib
 RUN ls -la /rust/contracts
 
 WORKDIR /rust/deps/metaplex-program-library/token-metadata/program

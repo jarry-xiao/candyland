@@ -1,0 +1,18 @@
+[workspace]
+[package]
+name = "concurrent-merkle-tree"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+sol-log = []
+
+[dependencies]
+solana-program = "1.10.10"
+bytemuck = "1.8.0"
+thiserror = "1.0.30"
+
+[dev-dependencies]
+rand_distr = "0.4.3"
+rand = "0.7"
+merkle-tree-reference = { path = "../merkle-tree-reference" }
