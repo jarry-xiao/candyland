@@ -530,6 +530,7 @@ describe("gumball-machine", () => {
     let gumballMachineAcctKeypair: Keypair;
     let merkleRollKeypair: Keypair;
     let noncePDAKey: PublicKey;
+    let nftBuyer: Keypair;
     const GUMBALL_MACHINE_ACCT_HEADER_SIZE = 384;
     const GUMBALL_MACHINE_ACCT_CONFIG_INDEX_ARRAY_SIZE = 1000;
     const GUMBALL_MACHINE_ACCT_CONFIG_LINES_SIZE = 7000;
@@ -566,87 +567,14 @@ describe("gumball-machine", () => {
       }
     });
 
-    describe("creator instructions", async () => {
+    describe("native sol projects", async () => {
+      let creatorPaymentWallet: Keypair;
       beforeEach(async () => {
         creatorAddress = Keypair.generate();
-  
-        baseGumballMachineHeader = {
-          urlBase: Buffer.from("https://arweave.net/Rmg4pcIv-0FQ7M7X838p2r592Q4NU63Fj7o7XsvBHEEl"),
-          nameBase: Buffer.from("zfgfsxrwieciemyavrpkuqehkmhqmnim"),
-          symbol: Buffer.from("pehjjqmrjpfcnttlierdqkxjueqjqjsf"), 
-          sellerFeeBasisPoints: 100,
-          isMutable: true,
-          retainAuthority: true,
-          price: new BN(10),
-          goLiveDate: new BN(1234.0),
-          mint: NATIVE_MINT,
-          botWallet: Keypair.generate().publicKey,
-          receiver: Keypair.generate().publicKey,
-          authority: creatorAddress.publicKey,
-          collectionKey: SystemProgram.programId, // 0x0 -> no collection key
-          creatorAddress: creatorAddress.publicKey,
-          extensionLen: new BN(28),
-          maxMintSize: new BN(10),
-          maxItems: new BN(250)
-        };
-  
-        // Give creator enough funds to produce accounts for NFT
-        await GumballMachine.provider.connection.confirmTransaction(
-          await GumballMachine.provider.connection.requestAirdrop(creatorAddress.publicKey, LAMPORTS_PER_SOL),
-          "confirmed"
-        );
-  
-        gumballMachineAcctKeypair = Keypair.generate();
-        merkleRollKeypair = Keypair.generate();
-        await initializeGumballMachine(creatorAddress, gumballMachineAcctKeypair, GUMBALL_MACHINE_ACCT_SIZE, merkleRollKeypair, MERKLE_ROLL_ACCT_SIZE, baseGumballMachineHeader, 3, 8);
-        await addConfigLines(creatorAddress, gumballMachineAcctKeypair.publicKey, GUMBALL_MACHINE_ACCT_SIZE, GUMBALL_MACHINE_ACCT_CONFIG_INDEX_ARRAY_SIZE, GUMBALL_MACHINE_ACCT_CONFIG_LINES_SIZE, Buffer.from("uluvnpwncgchwnbqfpbtdlcpdthc"), Buffer.from("uluvnpwncgchwnbqfpbtdlcpdthc"));
-      });
-  
-      it("Can update config lines", async () => {
-        await updateConfigLines(creatorAddress, gumballMachineAcctKeypair.publicKey, GUMBALL_MACHINE_ACCT_SIZE, GUMBALL_MACHINE_ACCT_CONFIG_INDEX_ARRAY_SIZE, GUMBALL_MACHINE_ACCT_CONFIG_LINES_SIZE, Buffer.from("aaavnpwncgchwnbqfpbtdlcpdaaa"), Buffer.from("aaavnpwncgchwnbqfpbtdlcpdaaa"), new BN(0));
-      });
-      it("Can update gumball header", async () => {
-        const newGumballMachineHeader: InitGumballMachineProps = {
-          urlBase: Buffer.from("https://arweave.net/bzdjillretjcraaxawlnhqrhmexzbsixyajrlzhfcvcc"),
-          nameBase: Buffer.from("wmqeslreeondhmcmtfebrwqnqcoasbye"),
-          symbol: Buffer.from("wmqeslreeondhmcmtfebrwqnqcoasbye"), 
-          sellerFeeBasisPoints: 50,
-          isMutable: false,
-          retainAuthority: false,
-          price: new BN(100),
-          goLiveDate: new BN(5678.0),
-          mint: baseGumballMachineHeader.mint,                     // Cannot be modified after init
-          botWallet: Keypair.generate().publicKey,
-          receiver: baseGumballMachineHeader.receiver,             // FOR NOW: Cannot be modified after init
-          authority: Keypair.generate().publicKey,
-          collectionKey: baseGumballMachineHeader.collectionKey,   // Cannot be modified after init
-          creatorAddress: baseGumballMachineHeader.creatorAddress, // Cannot be modified after init
-          extensionLen: baseGumballMachineHeader.extensionLen,     // Cannot be modified after init
-          maxMintSize: new BN(15),
-          maxItems: baseGumballMachineHeader.maxItems              // Cannot be modified after init
-        };
-        await updateHeaderMetadata(creatorAddress, gumballMachineAcctKeypair.publicKey, GUMBALL_MACHINE_ACCT_SIZE, newGumballMachineHeader);
-      });
-      it("Can destroy gumball machine and reclaim lamports", async () => {
-        await destroyGumballMachine(gumballMachineAcctKeypair, creatorAddress);
-      });
-    });
-
-    describe("buyer instructions", async () => {
-      let nftBuyer: Keypair;
-      beforeEach(async () => {
-        creatorAddress = Keypair.generate();
-        // Give creator enough funds to produce accounts for gumball-machine
-        await GumballMachine.provider.connection.confirmTransaction(
-          await GumballMachine.provider.connection.requestAirdrop(creatorAddress.publicKey, 4 * LAMPORTS_PER_SOL),
-          "confirmed"
-        );
-        gumballMachineAcctKeypair = Keypair.generate();
-        merkleRollKeypair = Keypair.generate();
+        creatorPaymentWallet = Keypair.generate();
         nftBuyer = Keypair.generate();
-      });
-      it("Can dispense single NFT paid in sol", async () => {
-        let creatorPaymentWallet = Keypair.generate();
+        gumballMachineAcctKeypair = Keypair.generate();
+        merkleRollKeypair = Keypair.generate();
 
         baseGumballMachineHeader = {
           urlBase: Buffer.from("https://arweave.net/Rmg4pcIv-0FQ7M7X838p2r592Q4NU63Fj7o7XsvBHEEl"),
@@ -667,42 +595,146 @@ describe("gumball-machine", () => {
           maxMintSize: new BN(10),
           maxItems: new BN(250)
         };
-
-        // Initialize gumball-machine and add config lines to mint from
+  
+        // Give creator enough funds to produce accounts for NFT
+        await GumballMachine.provider.connection.confirmTransaction(
+          await GumballMachine.provider.connection.requestAirdrop(creatorAddress.publicKey, LAMPORTS_PER_SOL),
+          "confirmed"
+        );
+  
         await initializeGumballMachine(creatorAddress, gumballMachineAcctKeypair, GUMBALL_MACHINE_ACCT_SIZE, merkleRollKeypair, MERKLE_ROLL_ACCT_SIZE, baseGumballMachineHeader, 3, 8);
         await addConfigLines(creatorAddress, gumballMachineAcctKeypair.publicKey, GUMBALL_MACHINE_ACCT_SIZE, GUMBALL_MACHINE_ACCT_CONFIG_INDEX_ARRAY_SIZE, GUMBALL_MACHINE_ACCT_CONFIG_LINES_SIZE, Buffer.from("uluvnpwncgchwnbqfpbtdlcpdthc"), Buffer.from("uluvnpwncgchwnbqfpbtdlcpdthc"));
+      });
+      describe("dispense nft sol instruction", async () => {
+        beforeEach(async () => {
+          // Give the recipient address enough money to not get rent exempt
+          await GumballMachine.provider.connection.confirmTransaction(
+            await GumballMachine.provider.connection.requestAirdrop(baseGumballMachineHeader.receiver, LAMPORTS_PER_SOL),
+            "confirmed"
+          );
   
-        // Give the recipient address enough money to not get rent exempt
+          // Fund the NFT Buyer
+          await GumballMachine.provider.connection.confirmTransaction(
+            await GumballMachine.provider.connection.requestAirdrop(nftBuyer.publicKey, LAMPORTS_PER_SOL),
+            "confirmed"
+          );
+        });
+        describe("transaction atomicity attacks fail", async () => {
+          it("Cannot dispense NFT for SOL with subsequent instructions in transaction", async () => {
+            const dispenseNFTForSolInstr = await getDispenseNFTForSolInstruction(new BN(1), nftBuyer, baseGumballMachineHeader.receiver, gumballMachineAcctKeypair, merkleRollKeypair, noncePDAKey);
+            const dummyNewAcctKeypair = Keypair.generate();
+            const dummyInstr = SystemProgram.createAccount({
+              fromPubkey: payer.publicKey,
+              newAccountPubkey: dummyNewAcctKeypair.publicKey,
+              lamports: 10000000,
+              space: 100,
+              programId: GumballMachine.programId,
+            });
+            const tx = new Transaction().add(dispenseNFTForSolInstr).add(dummyInstr);
+            try {
+              await GumballMachine.provider.send(tx, [nftBuyer, payer, dummyNewAcctKeypair], {
+                commitment: "confirmed",
+              })
+              assert(false, "Dispense should fail when part of transaction with multiple instructions, but it succeeded");
+            } catch(e) {}
+          });
+          it("Cannot dispense NFT for SOL with prior instructions in transaction", async () => {
+            const dispenseNFTForSolInstr = await getDispenseNFTForSolInstruction(new BN(1), nftBuyer, baseGumballMachineHeader.receiver, gumballMachineAcctKeypair, merkleRollKeypair, noncePDAKey);
+            const dummyNewAcctKeypair = Keypair.generate();
+            const dummyInstr = SystemProgram.createAccount({
+              fromPubkey: payer.publicKey,
+              newAccountPubkey: dummyNewAcctKeypair.publicKey,
+              lamports: 10000000,
+              space: 100,
+              programId: GumballMachine.programId,
+            });
+            const tx = new Transaction().add(dummyInstr).add(dispenseNFTForSolInstr);
+            try {
+              await GumballMachine.provider.send(tx, [nftBuyer, payer, dummyNewAcctKeypair], {
+                commitment: "confirmed",
+              })
+              assert(false, "Dispense should fail when part of transaction with multiple instructions, but it succeeded");
+            } catch(e) {}
+          });
+        });
+        it("Can dispense single NFT paid in sol", async () => {
+          // Give the recipient address enough money to not get rent exempt
+          await GumballMachine.provider.connection.confirmTransaction(
+            await GumballMachine.provider.connection.requestAirdrop(baseGumballMachineHeader.receiver, LAMPORTS_PER_SOL),
+            "confirmed"
+          );
+  
+          // Fund the NFT Buyer
+          await GumballMachine.provider.connection.confirmTransaction(
+            await GumballMachine.provider.connection.requestAirdrop(nftBuyer.publicKey, LAMPORTS_PER_SOL),
+            "confirmed"
+          );
+    
+          const nftBuyerBalanceBeforePurchase = await connection.getBalance(nftBuyer.publicKey);
+          const creatorBalanceBeforePurchase = await connection.getBalance(baseGumballMachineHeader.receiver);
+  
+          // Purchase the compressed NFT with SOL
+          await dispenseCompressedNFTForSol(new BN(1), nftBuyer, baseGumballMachineHeader.receiver, gumballMachineAcctKeypair, merkleRollKeypair, noncePDAKey);
+          const nftBuyerBalanceAfterPurchase = await connection.getBalance(nftBuyer.publicKey);
+          const creatorBalanceAfterPurchase = await connection.getBalance(baseGumballMachineHeader.receiver);
+    
+          // Assert on how the creator and buyer's balances changed
+          assert(
+            await creatorBalanceAfterPurchase === (creatorBalanceBeforePurchase + baseGumballMachineHeader.price.toNumber()),
+            "Creator balance did not update as expected after NFT purchase"
+          );
+    
+          assert(
+            await nftBuyerBalanceAfterPurchase === (nftBuyerBalanceBeforePurchase - baseGumballMachineHeader.price.toNumber()),
+            "NFT purchaser balance did not decrease as expected after NFT purchase"
+          );
+        });
+      });
+      // @notice: We only test admin instructions on SOL projects because they are completely (for now) independent of project mint
+      describe("admin instructions", async () => {
+        it("Can update config lines", async () => {
+          await updateConfigLines(creatorAddress, gumballMachineAcctKeypair.publicKey, GUMBALL_MACHINE_ACCT_SIZE, GUMBALL_MACHINE_ACCT_CONFIG_INDEX_ARRAY_SIZE, GUMBALL_MACHINE_ACCT_CONFIG_LINES_SIZE, Buffer.from("aaavnpwncgchwnbqfpbtdlcpdaaa"), Buffer.from("aaavnpwncgchwnbqfpbtdlcpdaaa"), new BN(0));
+        });
+        it("Can update gumball header", async () => {
+          const newGumballMachineHeader: InitGumballMachineProps = {
+            urlBase: Buffer.from("https://arweave.net/bzdjillretjcraaxawlnhqrhmexzbsixyajrlzhfcvcc"),
+            nameBase: Buffer.from("wmqeslreeondhmcmtfebrwqnqcoasbye"),
+            symbol: Buffer.from("wmqeslreeondhmcmtfebrwqnqcoasbye"), 
+            sellerFeeBasisPoints: 50,
+            isMutable: false,
+            retainAuthority: false,
+            price: new BN(100),
+            goLiveDate: new BN(5678.0),
+            mint: baseGumballMachineHeader.mint,                     // Cannot be modified after init
+            botWallet: Keypair.generate().publicKey,
+            receiver: baseGumballMachineHeader.receiver,             // FOR NOW: Cannot be modified after init
+            authority: Keypair.generate().publicKey,
+            collectionKey: baseGumballMachineHeader.collectionKey,   // Cannot be modified after init
+            creatorAddress: baseGumballMachineHeader.creatorAddress, // Cannot be modified after init
+            extensionLen: baseGumballMachineHeader.extensionLen,     // Cannot be modified after init
+            maxMintSize: new BN(15),
+            maxItems: baseGumballMachineHeader.maxItems              // Cannot be modified after init
+          };
+          await updateHeaderMetadata(creatorAddress, gumballMachineAcctKeypair.publicKey, GUMBALL_MACHINE_ACCT_SIZE, newGumballMachineHeader);
+        });
+        it("Can destroy gumball machine and reclaim lamports", async () => {
+          await destroyGumballMachine(gumballMachineAcctKeypair, creatorAddress);
+        });
+      });
+    });
+
+    describe("spl token projects", async () => {
+      let nftBuyer: Keypair;
+      beforeEach(async () => {
+        creatorAddress = Keypair.generate();
+        // Give creator enough funds to produce accounts for gumball-machine
         await GumballMachine.provider.connection.confirmTransaction(
-          await GumballMachine.provider.connection.requestAirdrop(baseGumballMachineHeader.receiver, LAMPORTS_PER_SOL),
+          await GumballMachine.provider.connection.requestAirdrop(creatorAddress.publicKey, 4 * LAMPORTS_PER_SOL),
           "confirmed"
         );
-
-        // Fund the NFT Buyer
-        await GumballMachine.provider.connection.confirmTransaction(
-          await GumballMachine.provider.connection.requestAirdrop(nftBuyer.publicKey, LAMPORTS_PER_SOL),
-          "confirmed"
-        );
-  
-        const nftBuyerBalanceBeforePurchase = await connection.getBalance(nftBuyer.publicKey);
-        const creatorBalanceBeforePurchase = await connection.getBalance(baseGumballMachineHeader.receiver);
-
-        // Purchase the compressed NFT with SOL
-        await dispenseCompressedNFTForSol(new BN(1), nftBuyer, baseGumballMachineHeader.receiver, gumballMachineAcctKeypair, merkleRollKeypair, noncePDAKey);
-        const nftBuyerBalanceAfterPurchase = await connection.getBalance(nftBuyer.publicKey);
-        const creatorBalanceAfterPurchase = await connection.getBalance(baseGumballMachineHeader.receiver);
-  
-        // Assert on how the creator and buyer's balances changed
-        assert(
-          await creatorBalanceAfterPurchase === (creatorBalanceBeforePurchase + baseGumballMachineHeader.price.toNumber()),
-          "Creator balance did not update as expected after NFT purchase"
-        );
-  
-        assert(
-          await nftBuyerBalanceAfterPurchase === (nftBuyerBalanceBeforePurchase - baseGumballMachineHeader.price.toNumber()),
-          "NFT purchaser balance did not decrease as expected after NFT purchase"
-        );
-  
+        gumballMachineAcctKeypair = Keypair.generate();
+        merkleRollKeypair = Keypair.generate();
+        nftBuyer = Keypair.generate();
       });
       it("Can dispense multiple NFTs paid in token", async () => {
         const someMint = await createMint(connection, payer, payer.publicKey, null, 9);
@@ -767,93 +799,6 @@ describe("gumball-machine", () => {
           Number(newBuyerTokenAccount.amount) === Number(buyerTokenAccount.amount) - baseGumballMachineHeader.price.toNumber(),
           "The nft buyer did not pay for the nft as expected"
         );
-      });
-    });
-    describe("transaction atomicity attacks fail", async () => {
-      let nftBuyer: Keypair;
-      beforeEach(async () => {
-        nftBuyer = Keypair.generate();
-        creatorAddress = Keypair.generate();
-  
-        baseGumballMachineHeader = {
-          urlBase: Buffer.from("https://arweave.net/Rmg4pcIv-0FQ7M7X838p2r592Q4NU63Fj7o7XsvBHEEl"),
-          nameBase: Buffer.from("zfgfsxrwieciemyavrpkuqehkmhqmnim"),
-          symbol: Buffer.from("pehjjqmrjpfcnttlierdqkxjueqjqjsf"), 
-          sellerFeeBasisPoints: 100,
-          isMutable: true,
-          retainAuthority: true,
-          price: new BN(10),
-          goLiveDate: new BN(1234.0),
-          mint: NATIVE_MINT,
-          botWallet: Keypair.generate().publicKey,
-          receiver: Keypair.generate().publicKey,
-          authority: creatorAddress.publicKey,
-          collectionKey: SystemProgram.programId, // 0x0 -> no collection key
-          creatorAddress: creatorAddress.publicKey,
-          extensionLen: new BN(28),
-          maxMintSize: new BN(10),
-          maxItems: new BN(250)
-        };
-  
-        // Give creator enough funds to produce accounts for NFT
-        await GumballMachine.provider.connection.confirmTransaction(
-          await GumballMachine.provider.connection.requestAirdrop(creatorAddress.publicKey, LAMPORTS_PER_SOL),
-          "confirmed"
-        );
-  
-        gumballMachineAcctKeypair = Keypair.generate();
-        merkleRollKeypair = Keypair.generate();
-        await initializeGumballMachine(creatorAddress, gumballMachineAcctKeypair, GUMBALL_MACHINE_ACCT_SIZE, merkleRollKeypair, MERKLE_ROLL_ACCT_SIZE, baseGumballMachineHeader, 3, 8);
-        await addConfigLines(creatorAddress, gumballMachineAcctKeypair.publicKey, GUMBALL_MACHINE_ACCT_SIZE, GUMBALL_MACHINE_ACCT_CONFIG_INDEX_ARRAY_SIZE, GUMBALL_MACHINE_ACCT_CONFIG_LINES_SIZE, Buffer.from("uluvnpwncgchwnbqfpbtdlcpdthc"), Buffer.from("uluvnpwncgchwnbqfpbtdlcpdthc"));
-
-        // Give the recipient address enough money to not get rent exempt
-        await GumballMachine.provider.connection.confirmTransaction(
-          await GumballMachine.provider.connection.requestAirdrop(baseGumballMachineHeader.receiver, LAMPORTS_PER_SOL),
-          "confirmed"
-        );
-
-        // Fund the NFT Buyer
-        await GumballMachine.provider.connection.confirmTransaction(
-          await GumballMachine.provider.connection.requestAirdrop(nftBuyer.publicKey, LAMPORTS_PER_SOL),
-          "confirmed"
-        );
-      });
-  
-      it("Cannot dispense NFT for SOL with subsequent instructions in transaction", async () => {
-        const dispenseNFTForSolInstr = await getDispenseNFTForSolInstruction(new BN(1), nftBuyer, baseGumballMachineHeader.receiver, gumballMachineAcctKeypair, merkleRollKeypair, noncePDAKey);
-        const dummyNewAcctKeypair = Keypair.generate();
-        const dummyInstr = SystemProgram.createAccount({
-          fromPubkey: payer.publicKey,
-          newAccountPubkey: dummyNewAcctKeypair.publicKey,
-          lamports: 10000000,
-          space: 100,
-          programId: GumballMachine.programId,
-        });
-        const tx = new Transaction().add(dispenseNFTForSolInstr).add(dummyInstr);
-        try {
-          await GumballMachine.provider.send(tx, [nftBuyer, payer, dummyNewAcctKeypair], {
-            commitment: "confirmed",
-          })
-          assert(false, "Dispense should fail when part of transaction with multiple instructions, but it succeeded");
-        } catch(e) {}
-      });
-      it("Cannot dispense NFT for SOL with prior instructions in transaction", async () => {
-        const dispenseNFTForSolInstr = await getDispenseNFTForSolInstruction(new BN(1), nftBuyer, baseGumballMachineHeader.receiver, gumballMachineAcctKeypair, merkleRollKeypair, noncePDAKey);
-        const dummyNewAcctKeypair = Keypair.generate();
-        const dummyInstr = SystemProgram.createAccount({
-          fromPubkey: payer.publicKey,
-          newAccountPubkey: dummyNewAcctKeypair.publicKey,
-          lamports: 10000000,
-          space: 100,
-          programId: GumballMachine.programId,
-        });
-        const tx = new Transaction().add(dummyInstr).add(dispenseNFTForSolInstr);
-        try {
-          await GumballMachine.provider.send(tx, [nftBuyer, payer, dummyNewAcctKeypair], {
-            commitment: "confirmed",
-          })
-          assert(false, "Dispense should fail when part of transaction with multiple instructions, but it succeeded");
-        } catch(e) {}
       });
     });
   });
