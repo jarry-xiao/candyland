@@ -190,7 +190,7 @@ fn find_and_mint_compressed_nft<'info>(
     num_items: u64
 ) -> Result<GumballMachineHeader> {
     
-    // Prevent bot attacks
+    // Prevent atomic transaction exploit attacks
     // TODO: potentially record information about botting now as pretains to payments to bot_wallet
     assert_valid_single_instruction_transaction(instruction_sysvar_account)?;
 

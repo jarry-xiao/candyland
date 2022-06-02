@@ -17,7 +17,7 @@ import {
   LAMPORTS_PER_SOL,
   TransactionInstruction,
 } from "@solana/web3.js";
-import { assert, expect } from "chai";
+import { assert } from "chai";
 
 import { buildTree, Tree } from "./merkle-tree";
 import {
