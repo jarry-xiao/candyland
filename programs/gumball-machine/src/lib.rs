@@ -2,11 +2,13 @@ use anchor_lang::{
     prelude::*,
     solana_program::{
         keccak::hashv, 
-        sysvar, 
+        sysvar,
+        sysvar::instructions::{load_instruction_at_checked}, 
         sysvar::SysvarId, 
         pubkey::Pubkey, 
         program::{invoke, invoke_signed},
         system_instruction,
+        instruction::{Instruction},
     },
 };
 use anchor_spl::token::{Mint, TokenAccount, Token, Transfer, transfer};
@@ -87,7 +89,7 @@ pub struct DispenseSol<'info> {
     recent_blockhashes: UncheckedAccount<'info>,
     /// CHECK: Address is verified
     #[account(address = sysvar::instructions::id())]
-    instruction_sysvar_account: UncheckedAccount<'info>,
+    instruction_sysvar_account: AccountInfo<'info>,
     /// CHECK: PDA is checked in CPI from Bubblegum to Gummyroll
     /// This key must sign for all write operations to the NFT Metadata stored in the Merkle slab
     bubblegum_authority: AccountInfo<'info>,
@@ -127,7 +129,7 @@ pub struct DispenseToken<'info> {
     recent_blockhashes: UncheckedAccount<'info>,
     /// CHECK: Address is verified
     #[account(address = sysvar::instructions::id())]
-    instruction_sysvar_account: UncheckedAccount<'info>,
+    instruction_sysvar_account: AccountInfo<'info>,
     /// CHECK: PDA is checked in CPI from Bubblegum to Gummyroll
     /// This key must sign for all write operations to the NFT Metadata stored in the Merkle slab
     bubblegum_authority: AccountInfo<'info>,
@@ -151,6 +153,25 @@ pub struct Destroy<'info> {
 }
 
 #[inline(always)]
+// Bots may try to buy only valuable NFTs by sending instructions to dispense an NFT along with
+// instructions that fail if they do not get the one that they want. We prevent this by forcing
+// all transactions that hit the "dispense" functions to have a single instruction body, and 
+// that the call to "dispense" is the top level of the single instruction (not a CPI)
+fn assert_valid_single_instruction_transaction<'info>(instruction_sysvar_account: &AccountInfo<'info>) -> Result<()> {
+    // There should only be one instruction in this transaction (the current call to dispense_...)
+    let instruction_sysvar = instruction_sysvar_account.try_borrow_data()?;
+    let mut fixed_data = [0u8; 2];
+    fixed_data.copy_from_slice(&instruction_sysvar[0..2]);
+    let num_instructions = u16::from_le_bytes(fixed_data);
+    assert_eq!(num_instructions, 1);
+
+    // We should not be executing dispense... from a CPI
+    let only_instruction = load_instruction_at_checked(0, instruction_sysvar_account)?;
+    assert_eq!(only_instruction.program_id, id());
+    return Ok(())
+}
+
+#[inline(always)]
 // For efficiency, this returns the GumballMachineHeader because it's required to validate
 // payment parameters. But the main purpose of this function is to determine which config
 // line to mint to the user, and CPI to bubblegum to actually execute the mint
@@ -160,7 +181,7 @@ fn find_and_mint_compressed_nft<'info>(
     willy_wonka: &AccountInfo<'info>,
     willy_wonka_bump: &u8,
     recent_blockhashes: &UncheckedAccount<'info>,
-    instruction_sysvar_account: &UncheckedAccount<'info>,
+    instruction_sysvar_account: &AccountInfo<'info>,
     bubblegum_authority: &AccountInfo<'info>,
     nonce: &AccountInfo<'info>,
     gummyroll: &Program<'info, Gummyroll>,
@@ -168,6 +189,11 @@ fn find_and_mint_compressed_nft<'info>(
     bubblegum: &Program<'info, Bubblegum>,
     num_items: u64
 ) -> Result<GumballMachineHeader> {
+    
+    // Prevent bot attacks
+    // TODO: potentially record information about botting now as pretains to payments to bot_wallet
+    assert_valid_single_instruction_transaction(instruction_sysvar_account)?;
+
     // Load all data
     let mut gumball_machine_data = gumball_machine.try_borrow_mut_data()?;
     let (mut header_bytes, config_data) =
@@ -425,7 +451,7 @@ pub mod gumball_machine {
             None => {}
         }
         match go_live_date {
-            Some(gld) => gumball_machine.go_live_date = gld, // Are we worried about clock drift and ppl trying to hit the machine close to when this goes live, and projects updating close to go live date?
+            Some(gld) => gumball_machine.go_live_date = gld, // TODO: Are we worried about clock drift and ppl trying to hit the machine close to when this goes live, and projects updating close to go live date? Consider changing to be slothash, etc.
             None => {}
         }
         match authority {
@@ -433,8 +459,6 @@ pub mod gumball_machine {
             None => {}
         }
         match bot_wallet {
-            // TODO(sorend): do we want to apply some validation here?
-            // If this will only collect SOL then this is fine, if not then need to validate that it's a TokenAccount with a mint corresponding to project mint
             Some(bw) => gumball_machine.bot_wallet = bw,
             None => {}
         }
@@ -446,7 +470,10 @@ pub mod gumball_machine {
         Ok(())
     }
 
-    // @notice: payments cannot be carried out in wrapped sol. If the wrapped SOL mint key is given, then we execute a native SOL transfer
+    /// Request to purchase a random NFT from GumballMachine for a specific project.
+    /// @notice: the project must have specified the native mint (Wrapped SOL) for "mint" 
+    ///          in its GumballMachineHeader for this method to succeed. If mint is anything
+    ///          else dispense_nft_token should be used.
     pub fn dispense_nft_sol(ctx: Context<DispenseSol>, num_items: u64) -> Result<()> {
         let gumball_header = find_and_mint_compressed_nft(
             &ctx.accounts.gumball_machine,
@@ -486,6 +513,10 @@ pub mod gumball_machine {
         Ok(())
     }
 
+    /// Request to purchase a random NFT from GumballMachine for a specific project.
+    /// @notice: the project's mint may be any valid Mint account EXCEPT for Wrapped SOL
+    ///          if the mint is Wrapped SOL then dispense_token_sol should be used, as the
+    ///          project is seeking native SOL as payment.
     pub fn dispense_nft_token(ctx: Context<DispenseToken>, num_items: u64) -> Result<()> {
         let gumball_header = find_and_mint_compressed_nft(
             &ctx.accounts.gumball_machine,
