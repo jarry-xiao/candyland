@@ -4,8 +4,8 @@ import NodeWallet from '@project-serum/anchor/dist/cjs/nodewallet';
 import { Gumdrop } from "../target/types/gumdrop";
 import { MerkleTree } from './gumdropTree';
 import { BinaryWriter } from 'borsh'
-import { getMerkleRollAccountSize } from './merkle-roll-serde';
-import { succeedOrThrow } from './utils';
+import { getMerkleRollAccountSize } from '../sdk/gummyroll/accounts';
+import { execute, succeedOrThrow } from './utils';
 
 async function initMerkleTreeInstruction(
   maxDepth: number,
@@ -271,7 +271,18 @@ describe('Airdropping compressed NFTs with Gumdrop', () => {
 
     // Initialize program-wide nonce
     const nonce = await getBubblegumNonce(BUBBLEGUM_PROGRAM_ID);
-    const initNonceIx = initBubblegumNonce(nonce, payer.publicKey, BUBBLEGUM_PROGRAM_ID);
+    try {
+      const nonceAccount = await connection.getAccountInfo(
+        nonce
+      );
+      if (nonceAccount.data.length === 0 || nonceAccount.lamports === 0) {
+        throw new Error("Nonce account not yet initialized");
+      }
+    } catch {
+      // Only initialize the nonce if it does not exist
+      const initNonceIx = initBubblegumNonce(nonce, payer.publicKey, BUBBLEGUM_PROGRAM_ID);
+      await execute(gumdrop.provider, [initNonceIx], [payer], true);
+    }
 
     // Init merkle tree
     const allocAccountIx = await initMerkleTreeInstruction(maxDepth, maxBufferSize, connection, merkleRollKeypair.publicKey, payer.publicKey, GUMMYROLL_PROGRAM_ID);
@@ -303,7 +314,6 @@ describe('Airdropping compressed NFTs with Gumdrop', () => {
       }
     );
     const tx = new Transaction()
-      .add(initNonceIx)
       .add(allocAccountIx)
       .add(createDistributorIx);
 
