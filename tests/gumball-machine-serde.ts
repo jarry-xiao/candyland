@@ -24,6 +24,7 @@ type GumballMachineHeader = {
   goLiveDate: BN,               // i64
   mint: PublicKey,              
   botWallet: PublicKey,
+  receiver: PublicKey,
   authority: PublicKey,
   collectionKey: PublicKey,
   creatorAddress: PublicKey,
@@ -60,6 +61,7 @@ export function decodeGumballMachine(buffer: Buffer, accountSize: number): OnCha
       goLiveDate: new BN(reader.readFixedArray(8), null, 'le'),
       mint: readPublicKey(reader),
       botWallet: readPublicKey(reader),
+      receiver: readPublicKey(reader),
       authority: readPublicKey(reader),
       collectionKey: readPublicKey(reader),
       creatorAddress: readPublicKey(reader),
