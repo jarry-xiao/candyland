@@ -1,3 +1,4 @@
+import { Connection } from '@solana/web3.js';
 import { Provider } from "@project-serum/anchor";
 import { TransactionInstruction, Transaction, Signer } from "@solana/web3.js";
 
@@ -10,7 +11,6 @@ export async function logTx(provider: Provider, txId: string, verbose: boolean =
     );
   }
 };
-
 
 export async function execute(
   provider: Provider,
@@ -26,4 +26,11 @@ export async function execute(
   });
   await logTx(provider, txid, false);
   return txid;
+}
+
+export async function succeedOrThrow(txId: string, connection: Connection) {
+  const err = (await connection.confirmTransaction(txId, "confirmed")).value.err
+  if (err) {
+    throw new Error(`${txId} failed: \n${JSON.stringify(err)}\n`);
+  }
 }

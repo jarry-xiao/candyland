@@ -2,6 +2,11 @@
 gummyroll = "GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD"
 gummyroll_crud = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
 bubblegum = "BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o"
+gumdrop = "gdrpGjVffourzkdDRrQmySw4aTHr8a3xmQzzxSwFD1a"
+
+[[test.genesis]]
+address = "gdrpGjVffourzkdDRrQmySw4aTHr8a3xmQzzxSwFD1a"
+program = "target/deploy/mpl_gumdrop.so"
 
 [[test.genesis]]
 address = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
