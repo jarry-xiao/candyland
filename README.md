@@ -2,6 +2,20 @@
 
 Smart contracts and indexing services necessary to migrate the Solana ecosystem to a 10,000x cheaper NFT standard.
 
+```mermaid
+graph TD;
+    subgraph contracts
+        gummyroll-->concurrent-merkle-tree;
+        bubblegum-->gummyroll;
+        gumball-machine-->bubblegum;
+        gumdrop-->bubblegum;
+    end
+    subgraph indexer
+        plerkle-->solana-geyser-plugin;
+        nft-ingester-->|messenger|plerkle;
+        nft-api-->nft-ingester;
+    end
+```
 
 # Smart Contracts
 
