@@ -47,6 +47,7 @@ import { getBubblegumAuthorityPDA, getCreateTreeIxs, getNonceCount, getVoucherPD
 import { TokenProgramVersion } from "../sdk/bubblegum/src/generated";
 import { createRemoveAppendAuthorityInstruction } from "../sdk/bubblegum/src/generated/instructions/removeAppendAuthority";
 import { sleep } from "@metaplex-foundation/amman/dist/utils";
+import { createSetAppendAuthorityInstruction } from "../sdk/bubblegum/src/generated/instructions/setAppendAuthority";
 
 // @ts-ignore
 let Bubblegum;
@@ -127,6 +128,26 @@ type Version = {
 //     },
 //     signers: [appendAuthority]
 //   })
+// }
+
+// function createSetAppendAuthorityIx(
+//   bubblegum: Program<Bubblegum>,
+//   index: number,
+//   treeDelegate: Keypair,
+//   newAppendAuthority: PublicKey,
+//   authority: PublicKey,
+// ): TransactionInstruction {
+//   return bubblegum.instruction.setAppendAuthority(
+//     index,
+//     {
+//       accounts: {
+//         treeDelegate: treeDelegate.publicKey,
+//         newAppendAuthority,
+//         authority,
+//       },
+//       signers: [treeDelegate]
+//     }
+//   );
 // }
 
 describe("bubblegum", () => {
@@ -221,7 +242,6 @@ describe("bubblegum", () => {
         },
         { message: metadata }
       );
-      // const mintIx = await createMintIx(Bubblegum, metadata, version, payer, payer.publicKey, payer.publicKey, merkleRollKeypair.publicKey, payer.publicKey);
       console.log(" - Minting to tree");
       await execute(Bubblegum.provider, [mintIx], [payer], true);
 
@@ -495,6 +515,50 @@ describe("bubblegum", () => {
       } catch (e) {
         assert(true, "Successfully prevented payer from minting");
       }
+    });
+    it("Concurrently append into tree", async () => {
+
+      // Create 5 random keys, set them as append publickeys
+      const ALLOWLIST_SIZE = 5;
+      const authIxs = [];
+      const appendIxs = [];
+      const keypairs = [];
+      for (let i = 0; i < ALLOWLIST_SIZE; i++) {
+        const keypair = Keypair.generate();
+        const setAppendAuthorityIx = createSetAppendAuthorityInstruction(
+          {
+            treeDelegate: payer.publicKey,
+            newAppendAuthority: keypair.publicKey,
+            authority: treeAuthority,
+          },
+          {
+            index: i,
+          }
+        );
+        const metadata = createExampleMetadata(`${i}`, `${i}`, "www.solana.com");
+        const mintIx = await createMintV1Instruction(
+          {
+            mintAuthority: keypair.publicKey,
+            authority: treeAuthority,
+            candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
+            gummyrollProgram: GummyrollProgramId,
+            owner: payer.publicKey,
+            delegate: payer.publicKey,
+            merkleSlab: merkleRollKeypair.publicKey,
+          },
+          {
+            message: metadata,
+          }
+        );
+        keypairs.push(keypair);
+        authIxs.push(setAppendAuthorityIx);
+        appendIxs.push(mintIx);
+      }
+
+      // All appends should succeed
+      const allIxs = [].concat(authIxs, appendIxs);
+      const allKeypairs = [payer].concat(keypairs);
+      await execute(Bubblegum.provider, allIxs, allKeypairs, true);
     });
   });
 });
