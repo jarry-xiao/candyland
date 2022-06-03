@@ -5,6 +5,8 @@ pub const GUMMYROLL_TREE_AUTHORITY_SIZE: usize = 256;
 pub struct GummyrollTreeAuthority {
     /// Pubkey of merkle roll that this manages
     pub tree_id: Pubkey,
+    /// How many NFTs have been minted
+    pub count: u64,
     /// Always able to transfer owner, delegate, modify append_allowlist
     pub owner: Pubkey,
     /// Always able to transfer delegate, modify append_allowlist

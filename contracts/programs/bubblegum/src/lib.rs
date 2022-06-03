@@ -2,7 +2,7 @@ use {
     crate::error::BubblegumError,
     crate::state::metaplex_anchor::MplTokenMetadata,
     crate::state::{
-        authority::GummyrollTreeAuthority,
+        authority::{GummyrollTreeAuthority, GUMMYROLL_TREE_AUTHORITY_SIZE},
         leaf_schema::{LeafSchema, Version},
         metaplex_adapter::{MetadataArgs, TokenProgramVersion},
         metaplex_anchor::{MasterEdition, TokenMetadata},
@@ -38,10 +38,10 @@ pub struct CreateTree<'info> {
     init,
     seeds = [merkle_slab.key().as_ref()],
     payer = payer,
-    space = NONCE_SIZE,
+    space = GUMMYROLL_TREE_AUTHORITY_SIZE,
     bump,
     )]
-    pub authority: Account<'info, Nonce>,
+    pub authority: Account<'info, GummyrollTreeAuthority>,
     #[account(mut)]
     pub payer: Signer<'info>,
     pub tree_creator: Signer<'info>,
@@ -114,11 +114,11 @@ pub struct RemoveAppendAuthority<'info> {
 pub struct MintV1<'info> {
     pub mint_authority: Signer<'info>,
     #[account(
-    mut,
-    seeds = [merkle_slab.key().as_ref()],
-    bump,
+        seeds = [merkle_slab.key().as_ref()],
+        bump,
+        constraint = authority.append_allowlist.contains(mint_authority.key)
     )]
-    pub authority: Account<'info, Nonce>,
+    pub authority: Account<'info, GummyrollTreeAuthority>,
     pub candy_wrapper: Program<'info, CandyWrapper>,
     pub gummyroll_program: Program<'info, Gummyroll>,
     /// CHECK: This account is neither written to nor read from.
@@ -136,7 +136,7 @@ pub struct Burn<'info> {
     seeds = [merkle_slab.key().as_ref()],
     bump,
     )]
-    pub authority: Account<'info, Nonce>,
+    pub authority: Account<'info, GummyrollTreeAuthority>,
     pub candy_wrapper: Program<'info, CandyWrapper>,
     pub gummyroll_program: Program<'info, Gummyroll>,
     /// CHECK: This account is checked in the instruction
@@ -155,8 +155,7 @@ pub struct Transfer<'info> {
     seeds = [merkle_slab.key().as_ref()],
     bump,
     )]
-    /// CHECK: This account is neither written to nor read from.
-    pub authority: Account<'info, Nonce>,
+    pub authority: Account<'info, GummyrollTreeAuthority>,
     /// CHECK: This account is checked in the instruction
     pub owner: UncheckedAccount<'info>,
     /// CHECK: This account is chekced in the instruction
@@ -176,8 +175,7 @@ pub struct Delegate<'info> {
     seeds = [merkle_slab.key().as_ref()],
     bump,
     )]
-    /// CHECK: This account is neither written to nor read from.
-    pub authority: Account<'info, Nonce>,
+    pub authority: Account<'info, GummyrollTreeAuthority>,
     pub owner: Signer<'info>,
     /// CHECK: This account is neither written to nor read from.
     pub previous_delegate: UncheckedAccount<'info>,
@@ -203,8 +201,7 @@ pub struct Redeem<'info> {
     seeds = [merkle_slab.key().as_ref()],
     bump,
     )]
-    /// CHECK: This account is neither written to nor read from.
-    pub authority: Account<'info, Nonce>,
+    pub authority: Account<'info, GummyrollTreeAuthority>,
     pub candy_wrapper: Program<'info, CandyWrapper>,
     pub gummyroll_program: Program<'info, Gummyroll>,
     #[account(mut)]
@@ -235,8 +232,7 @@ pub struct CancelRedeem<'info> {
     seeds = [merkle_slab.key().as_ref()],
     bump,
     )]
-    /// CHECK: This account is neither written to nor read from.
-    pub authority: Account<'info, Nonce>,
+    pub authority: Account<'info, GummyrollTreeAuthority>,
     pub candy_wrapper: Program<'info, CandyWrapper>,
     pub gummyroll_program: Program<'info, Gummyroll>,
     #[account(mut)]
@@ -314,8 +310,7 @@ pub struct Compress<'info> {
     seeds = [merkle_slab.key().as_ref()],
     bump,
     )]
-    /// CHECK: This account is neither written to nor read from.
-    pub authority: UncheckedAccount<'info>,
+    pub authority: Account<'info, GummyrollTreeAuthority>,
     /// CHECK: This account is not read
     pub merkle_slab: UncheckedAccount<'info>,
     /// CHECK: This account is checked in the instruction
@@ -387,6 +382,9 @@ pub mod bubblegum {
         max_depth: u32,
         max_buffer_size: u32,
     ) -> Result<()> {
+        // By default, enable the tree creator to write to their own tree
+        ctx.accounts.authority.append_allowlist[0] = ctx.accounts.tree_creator.key();
+
         let merkle_slab = ctx.accounts.merkle_slab.to_account_info();
         let seed = merkle_slab.key();
         let seeds = &[seed.as_ref(), &[*ctx.bumps.get("authority").unwrap()]];
