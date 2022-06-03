@@ -26,11 +26,6 @@
           "isSigner": false
         },
         {
-          "name": "systemProgram",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
           "name": "gummyrollProgram",
           "isMut": false,
           "isSigner": false
@@ -38,6 +33,11 @@
         {
           "name": "merkleSlab",
           "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
           "isSigner": false
         }
       ],
@@ -51,6 +51,95 @@
           "type": "u32"
         }
       ]
+    },
+    {
+      "name": "transferTreeOwner",
+      "accounts": [
+        {
+          "name": "treeOwner",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "newOwner",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "transferTreeDelegate",
+      "accounts": [
+        {
+          "name": "treeDelegate",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "newDelegate",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "setAppendAuthority",
+      "accounts": [
+        {
+          "name": "treeDelegate",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "newAppendAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "index",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "removeAppendAuthority",
+      "accounts": [
+        {
+          "name": "appendAuthority",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "authorityToRemove",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": []
     },
     {
       "name": "mintV1",
@@ -606,6 +695,54 @@
   ],
   "accounts": [
     {
+      "name": "GummyrollTreeAuthority",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "treeId",
+            "docs": [
+              "Pubkey of merkle roll that this manages"
+            ],
+            "type": "publicKey"
+          },
+          {
+            "name": "count",
+            "docs": [
+              "How many NFTs have been minted"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "owner",
+            "docs": [
+              "Always able to transfer owner, delegate, modify append_allowlist"
+            ],
+            "type": "publicKey"
+          },
+          {
+            "name": "delegate",
+            "docs": [
+              "Always able to transfer delegate, modify append_allowlist"
+            ],
+            "type": "publicKey"
+          },
+          {
+            "name": "appendAllowlist",
+            "docs": [
+              "Always able to append via bubblegum"
+            ],
+            "type": {
+              "array": [
+                "publicKey",
+                5
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
       "name": "Nonce",
       "type": {
         "kind": "struct",
@@ -1046,6 +1183,16 @@
       "code": 6003,
       "name": "UnsupportedSchemaVersion",
       "msg": "Unsupported Schema Version"
+    },
+    {
+      "code": 6004,
+      "name": "AppendAuthorityNotFound",
+      "msg": "Could not find append authority in append allowlist"
+    },
+    {
+      "code": 6005,
+      "name": "AppendAllowlistIndexOutOfBounds",
+      "msg": "Append allowlist index out of bounds"
     }
   ],
   "metadata": {

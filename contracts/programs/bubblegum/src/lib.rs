@@ -6,7 +6,7 @@ use {
         leaf_schema::{LeafSchema, Version},
         metaplex_adapter::{MetadataArgs, TokenProgramVersion},
         metaplex_anchor::{MasterEdition, TokenMetadata},
-        NFTDecompressionEvent, NewNFTEvent, Nonce, Voucher, ASSET_PREFIX, NONCE_SIZE,
+        NFTDecompressionEvent, NewNFTEvent, Voucher, ASSET_PREFIX,
         VOUCHER_PREFIX, VOUCHER_SIZE,
     },
     crate::utils::{
@@ -114,6 +114,7 @@ pub struct RemoveAppendAuthority<'info> {
 pub struct MintV1<'info> {
     pub mint_authority: Signer<'info>,
     #[account(
+        mut,
         seeds = [merkle_slab.key().as_ref()],
         bump,
         constraint = authority.append_allowlist.contains(mint_authority.key)
@@ -482,6 +483,7 @@ pub mod bubblegum {
         wrap_event(new_nft.try_to_vec()?, &ctx.accounts.candy_wrapper)?;
         emit!(leaf.to_event());
         nonce.count = nonce.count.saturating_add(1);
+        msg!(&format!("{:?}", nonce.count));
         append_leaf(
             &merkle_slab.key(),
             *ctx.bumps.get("authority").unwrap(),

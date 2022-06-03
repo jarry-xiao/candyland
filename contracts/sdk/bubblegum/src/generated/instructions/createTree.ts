@@ -52,9 +52,9 @@ export type CreateTreeInstructionAccounts = {
   payer: web3.PublicKey
   treeCreator: web3.PublicKey
   candyWrapper: web3.PublicKey
-  systemProgram?: web3.PublicKey
   gummyrollProgram: web3.PublicKey
   merkleSlab: web3.PublicKey
+  systemProgram?: web3.PublicKey
 }
 
 export const createTreeInstructionDiscriminator = [
@@ -102,11 +102,6 @@ export function createCreateTreeInstruction(
       isSigner: false,
     },
     {
-      pubkey: accounts.systemProgram ?? web3.SystemProgram.programId,
-      isWritable: false,
-      isSigner: false,
-    },
-    {
       pubkey: accounts.gummyrollProgram,
       isWritable: false,
       isSigner: false,
@@ -114,6 +109,11 @@ export function createCreateTreeInstruction(
     {
       pubkey: accounts.merkleSlab,
       isWritable: true,
+      isSigner: false,
+    },
+    {
+      pubkey: accounts.systemProgram ?? web3.SystemProgram.programId,
+      isWritable: false,
       isSigner: false,
     },
   ]

@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 
-pub const GUMMYROLL_TREE_AUTHORITY_SIZE: usize = 256;
+pub const GUMMYROLL_TREE_AUTHORITY_SIZE: usize = 264 + 8;
 #[account]
 pub struct GummyrollTreeAuthority {
     /// Pubkey of merkle roll that this manages

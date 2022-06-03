@@ -4,6 +4,7 @@ import { Nonce, PROGRAM_ID } from './generated';
 import { CANDY_WRAPPER_PROGRAM_ID } from "../../utils";
 import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID, createAllocTreeIx } from "../../gummyroll";
 import { createCreateTreeInstruction } from "./generated";
+import { GummyrollTreeAuthority } from "./generated/accounts/GummyrollTreeAuthority";
 
 export async function getBubblegumAuthorityPDA(merkleRollPubKey: PublicKey) {
     const [bubblegumAuthorityPDAKey] = await PublicKey.findProgramAddress(
@@ -15,7 +16,7 @@ export async function getBubblegumAuthorityPDA(merkleRollPubKey: PublicKey) {
 
 export async function getNonceCount(connection: Connection, tree: PublicKey): Promise<BN> {
     const treeAuthority = await getBubblegumAuthorityPDA(tree);
-    return new BN((await Nonce.fromAccountAddress(connection, treeAuthority)).count);
+    return new BN((await GummyrollTreeAuthority.fromAccountAddress(connection, treeAuthority)).count);
 }
 
 export async function getVoucherPDA(connection: Connection, tree: PublicKey, leafIndex: number): Promise<PublicKey> {

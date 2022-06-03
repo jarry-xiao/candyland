@@ -104,6 +104,55 @@ createErrorFromNameLookup.set(
 )
 
 /**
+ * AppendAuthorityNotFound: 'Could not find append authority in append allowlist'
+ *
+ * @category Errors
+ * @category generated
+ */
+export class AppendAuthorityNotFoundError extends Error {
+  readonly code: number = 0x1774
+  readonly name: string = 'AppendAuthorityNotFound'
+  constructor() {
+    super('Could not find append authority in append allowlist')
+    if (typeof Error.captureStackTrace === 'function') {
+      Error.captureStackTrace(this, AppendAuthorityNotFoundError)
+    }
+  }
+}
+
+createErrorFromCodeLookup.set(0x1774, () => new AppendAuthorityNotFoundError())
+createErrorFromNameLookup.set(
+  'AppendAuthorityNotFound',
+  () => new AppendAuthorityNotFoundError()
+)
+
+/**
+ * AppendAllowlistIndexOutOfBounds: 'Append allowlist index out of bounds'
+ *
+ * @category Errors
+ * @category generated
+ */
+export class AppendAllowlistIndexOutOfBoundsError extends Error {
+  readonly code: number = 0x1775
+  readonly name: string = 'AppendAllowlistIndexOutOfBounds'
+  constructor() {
+    super('Append allowlist index out of bounds')
+    if (typeof Error.captureStackTrace === 'function') {
+      Error.captureStackTrace(this, AppendAllowlistIndexOutOfBoundsError)
+    }
+  }
+}
+
+createErrorFromCodeLookup.set(
+  0x1775,
+  () => new AppendAllowlistIndexOutOfBoundsError()
+)
+createErrorFromNameLookup.set(
+  'AppendAllowlistIndexOutOfBounds',
+  () => new AppendAllowlistIndexOutOfBoundsError()
+)
+
+/**
  * Attempts to resolve a custom program error from the provided error code.
  * @category Errors
  * @category generated
