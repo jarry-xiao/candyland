@@ -34,8 +34,6 @@ pub fn replace_leaf<'info>(
         authority_pda_signer,
     )
     .with_remaining_accounts(remaining_accounts.to_vec());
-    // msg!(&format!("previous leaf: {:?}", previous_leaf));
-    // msg!(&format!("new leaf: {:?}", new_leaf));
     gummyroll::cpi::replace_leaf(cpi_ctx, root_node, previous_leaf, new_leaf, index)
 }
 
