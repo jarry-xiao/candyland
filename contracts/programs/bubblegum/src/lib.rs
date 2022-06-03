@@ -382,6 +382,9 @@ pub mod bubblegum {
         max_depth: u32,
         max_buffer_size: u32,
     ) -> Result<()> {
+        ctx.accounts.authority.tree_id = ctx.accounts.merkle_slab.key();
+        ctx.accounts.authority.owner = ctx.accounts.tree_creator.key();
+        ctx.accounts.authority.delegate = ctx.accounts.tree_creator.key();
         // By default, enable the tree creator to write to their own tree
         ctx.accounts.authority.append_allowlist[0] = ctx.accounts.tree_creator.key();
 
