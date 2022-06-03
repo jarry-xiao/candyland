@@ -1,3 +1,4 @@
+pub mod authority;
 pub mod leaf_schema;
 pub mod metaplex_adapter;
 pub mod metaplex_anchor;

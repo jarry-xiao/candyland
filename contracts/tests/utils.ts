@@ -17,15 +17,15 @@ export async function execute(
   provider: Provider,
   instructions: TransactionInstruction[],
   signers: Signer[],
-  skipPreflight: boolean = false
-): Promise<string> {
+  skipPreflight: boolean = false,
+  verbose: boolean = false,
+): Promise<String> {
   let tx = new Transaction();
   instructions.map((ix) => { tx = tx.add(ix) });
-  const txid = await provider.send(tx, signers, {
-    commitment: "confirmed",
+  const txid = await provider.connection.sendTransaction(tx, signers, {
     skipPreflight,
   });
-  await logTx(provider, txid, true);
+  await logTx(provider, txid, verbose);
   return txid;
 }
 

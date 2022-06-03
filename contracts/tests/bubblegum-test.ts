@@ -38,10 +38,14 @@ import {
   TOKEN_PROGRAM_ID,
   Token,
 } from "@solana/spl-token";
+<<<<<<< HEAD
 import { bufferToArray, execute } from "./utils";
 import { TokenProgramVersion, Version } from "../sdk/bubblegum/src/generated";
 import { CANDY_WRAPPER_PROGRAM_ID } from "../sdk/utils";
 import { getBubblegumAuthorityPDA, getCreateTreeIxs, getNonceCount, getVoucherPDA } from "../sdk/bubblegum/src/convenience";
+=======
+import { execute, logTx } from "./utils";
+>>>>>>> 548ee68 (add append list, update preexisting tests)
 
 // @ts-ignore
 let Bubblegum;
@@ -116,9 +120,22 @@ describe("bubblegum", () => {
       Bubblegum.provider.connection,
       MAX_DEPTH,
       MAX_SIZE,
+<<<<<<< HEAD
       authority,
       new PublicKey(tree.root),
       merkleRollKeypair.publicKey
+=======
+      {
+        accounts: {
+          treeCreator: payer.publicKey,
+          authority: authority,
+          gummyrollProgram: GummyrollProgramId,
+          merkleSlab: merkleRollKeypair.publicKey,
+          systemProgram: SystemProgram.programId
+        },
+        signers: [payer],
+      }
+>>>>>>> 548ee68 (add append list, update preexisting tests)
     );
 
     return [merkleRollKeypair, tree, authority];
@@ -160,6 +177,7 @@ describe("bubblegum", () => {
         { message: metadata }
       );
       console.log(" - Minting to tree");
+<<<<<<< HEAD
       const mintTx = await Bubblegum.provider.send(
         new Transaction().add(mintIx),
         [payer],
@@ -178,6 +196,30 @@ describe("bubblegum", () => {
       const nonceCount = await getNonceCount(Bubblegum.provider.connection, merkleRollKeypair.publicKey);
       const leafNonce = nonceCount.sub(new BN(1));
       let transferIx = createTransferInstruction(
+=======
+      await execute(Bubblegum.provider, [mintIx], [payer], false);
+
+      const leafHash = Buffer.from(keccak_256.digest(mintIx.data.slice(9)));
+      const creatorHash = Buffer.from(keccak_256.digest([]));
+      let merkleRollAccount =
+        await Bubblegum.provider.connection.getAccountInfo(
+          merkleRollKeypair.publicKey
+        );
+      let merkleRoll = decodeMerkleRoll(merkleRollAccount.data);
+      let onChainRoot =
+        merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
+
+      console.log(" - Transferring Ownership");
+      const nonceInfo = await (Bubblegum.provider.connection as web3Connection).getAccountInfo(nonceAccount);
+      const leafNonce = (new BN(nonceInfo.data.slice(8, 24), "le")).sub(new BN(1));
+      let transferIx = await Bubblegum.instruction.transfer(
+        version,
+        onChainRoot,
+        leafHash,
+        creatorHash,
+        leafNonce,
+        0,
+>>>>>>> 548ee68 (add append list, update preexisting tests)
         {
           authority: treeAuthority,
           owner: payer.publicKey,
@@ -195,7 +237,11 @@ describe("bubblegum", () => {
           index: 0,
         }
       );
+<<<<<<< HEAD
       await execute(Bubblegum.provider, [transferIx], [payer]);
+=======
+      await execute(Bubblegum.provider, [transferIx], [payer], true);
+>>>>>>> 548ee68 (add append list, update preexisting tests)
 
       onChainRoot = await getRootOfOnChainMerkleRoot(connection, merkleRollKeypair.publicKey);
 
@@ -242,6 +288,7 @@ describe("bubblegum", () => {
         }
       );
       delTransferIx.keys[2].isSigner = true;
+<<<<<<< HEAD
       let delTransferTx = await Bubblegum.provider.send(
         new Transaction().add(delTransferIx),
         [delegateKey],
@@ -250,6 +297,9 @@ describe("bubblegum", () => {
           commitment: "confirmed",
         }
       );
+=======
+      await execute(Bubblegum.provider, [delTransferIx], [delegateKey], true)
+>>>>>>> 548ee68 (add append list, update preexisting tests)
 
       onChainRoot = await getRootOfOnChainMerkleRoot(connection, merkleRollKeypair.publicKey);
 

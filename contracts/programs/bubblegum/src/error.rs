@@ -10,4 +10,8 @@ pub enum BubblegumError {
     HashingMismatch,
     #[msg("Unsupported Schema Version")]
     UnsupportedSchemaVersion,
+    #[msg("Could not find append authority in append allowlist")]
+    AppendAuthorityNotFound,
+    #[msg("Append allowlist index out of bounds")]
+    AppendAllowlistIndexOutOfBounds,
 }
