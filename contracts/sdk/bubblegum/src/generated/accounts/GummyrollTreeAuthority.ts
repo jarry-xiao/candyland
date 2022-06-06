@@ -8,6 +8,10 @@
 import * as web3 from '@solana/web3.js'
 import * as beet from '@metaplex-foundation/beet'
 import * as beetSolana from '@metaplex-foundation/beet-solana'
+import {
+  AppendAllowlistEntry,
+  appendAllowlistEntryBeet,
+} from '../types/AppendAllowlistEntry'
 
 /**
  * Arguments used to create {@link GummyrollTreeAuthority}
@@ -19,7 +23,7 @@ export type GummyrollTreeAuthorityArgs = {
   count: beet.bignum
   owner: web3.PublicKey
   delegate: web3.PublicKey
-  appendAllowlist: web3.PublicKey[] /* size: 5 */
+  appendAllowlist: AppendAllowlistEntry[] /* size: 5 */
 }
 
 export const gummyrollTreeAuthorityDiscriminator = [
@@ -38,7 +42,7 @@ export class GummyrollTreeAuthority implements GummyrollTreeAuthorityArgs {
     readonly count: beet.bignum,
     readonly owner: web3.PublicKey,
     readonly delegate: web3.PublicKey,
-    readonly appendAllowlist: web3.PublicKey[] /* size: 5 */
+    readonly appendAllowlist: AppendAllowlistEntry[] /* size: 5 */
   ) {}
 
   /**
@@ -196,7 +200,10 @@ export const gummyrollTreeAuthorityBeet = new beet.BeetStruct<
     ['count', beet.u64],
     ['owner', beetSolana.publicKey],
     ['delegate', beetSolana.publicKey],
-    ['appendAllowlist', beet.uniformFixedSizeArray(beetSolana.publicKey, 5)],
+    [
+      'appendAllowlist',
+      beet.uniformFixedSizeArray(appendAllowlistEntryBeet, 5),
+    ],
   ],
   GummyrollTreeAuthority.fromArgs,
   'GummyrollTreeAuthority'

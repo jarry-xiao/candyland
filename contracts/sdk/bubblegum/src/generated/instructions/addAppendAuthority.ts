@@ -13,10 +13,23 @@ import * as web3 from '@solana/web3.js'
  * @category AddAppendAuthority
  * @category generated
  */
-export const addAppendAuthorityStruct = new beet.BeetArgsStruct<{
-  instructionDiscriminator: number[] /* size: 8 */
-}>(
-  [['instructionDiscriminator', beet.uniformFixedSizeArray(beet.u8, 8)]],
+export type AddAppendAuthorityInstructionArgs = {
+  numAppends: beet.bignum
+}
+/**
+ * @category Instructions
+ * @category AddAppendAuthority
+ * @category generated
+ */
+export const addAppendAuthorityStruct = new beet.BeetArgsStruct<
+  AddAppendAuthorityInstructionArgs & {
+    instructionDiscriminator: number[] /* size: 8 */
+  }
+>(
+  [
+    ['instructionDiscriminator', beet.uniformFixedSizeArray(beet.u8, 8)],
+    ['numAppends', beet.u64],
+  ],
   'AddAppendAuthorityInstructionArgs'
 )
 /**
@@ -43,16 +56,20 @@ export const addAppendAuthorityInstructionDiscriminator = [
  * Creates a _AddAppendAuthority_ instruction.
  *
  * @param accounts that will be accessed while the instruction is processed
+ * @param args to provide as instruction data to the program
+ *
  * @category Instructions
  * @category AddAppendAuthority
  * @category generated
  */
 export function createAddAppendAuthorityInstruction(
   accounts: AddAppendAuthorityInstructionAccounts,
+  args: AddAppendAuthorityInstructionArgs,
   programId = new web3.PublicKey('BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY')
 ) {
   const [data] = addAppendAuthorityStruct.serialize({
     instructionDiscriminator: addAppendAuthorityInstructionDiscriminator,
+    ...args,
   })
   const keys: web3.AccountMeta[] = [
     {

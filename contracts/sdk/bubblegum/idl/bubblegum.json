@@ -113,7 +113,12 @@
           "isSigner": false
         }
       ],
-      "args": []
+      "args": [
+        {
+          "name": "numAppends",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "removeAppendAuthority",
@@ -725,11 +730,13 @@
           {
             "name": "appendAllowlist",
             "docs": [
-              "Always able to append via bubblegum"
+              "Able to append up to corresponding # of uses via bubblegum"
             ],
             "type": {
               "array": [
-                "publicKey",
+                {
+                  "defined": "AppendAllowlistEntry"
+                },
                 5
               ]
             }
@@ -773,6 +780,22 @@
     }
   ],
   "types": [
+    {
+      "name": "AppendAllowlistEntry",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "pubkey",
+            "type": "publicKey"
+          },
+          {
+            "name": "numAppends",
+            "type": "u64"
+          }
+        ]
+      }
+    },
     {
       "name": "Creator",
       "type": {
@@ -1193,6 +1216,16 @@
       "code": 6006,
       "name": "AppendAllowlistFull",
       "msg": "Append allowlist has no more spots available"
+    },
+    {
+      "code": 6007,
+      "name": "AppendAllowlistIncrementOverflow",
+      "msg": "Append allowlist overflow when incrementing num_appends"
+    },
+    {
+      "code": 6008,
+      "name": "AppendAllowlistIncrementUnderflow",
+      "msg": "Append allowlist underflow when decrementing num_appends"
     }
   ],
   "metadata": {

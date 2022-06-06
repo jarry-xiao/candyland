@@ -40,7 +40,6 @@ import { CANDY_WRAPPER_PROGRAM_ID } from "../sdk/utils";
 import { getBubblegumAuthorityPDA, getCreateTreeIxs, getNonceCount, getVoucherPDA } from "../sdk/bubblegum/src/convenience";
 import { TokenProgramVersion } from "../sdk/bubblegum/src/generated";
 import { createRemoveAppendAuthorityInstruction } from "../sdk/bubblegum/src/generated/instructions/removeAppendAuthority";
-import { createSetAppendAuthorityInstruction } from "../sdk/bubblegum/src/generated/instructions/setAppendAuthority";
 import { createAddAppendAuthorityInstruction } from "../sdk/bubblegum/src/generated/instructions/addAppendAuthority";
 
 // @ts-ignore
@@ -450,6 +449,8 @@ describe("bubblegum", () => {
           newAppendAuthority: keypair.publicKey,
           treeDelegate: payer.publicKey,
           authority: treeAuthority,
+        }, {
+          numAppends: new BN(1),
         });
         const metadata = createExampleMetadata(`${i}`, `${i}`, "www.solana.com");
         const mintIx = await createMintV1Instruction(
@@ -474,7 +475,17 @@ describe("bubblegum", () => {
       // All appends should succeed
       const allIxs = [].concat(authIxs, appendIxs);
       const allKeypairs = [payer].concat(keypairs);
-      await execute(Bubblegum.provider, allIxs, allKeypairs, true);
+      await execute(Bubblegum.provider, allIxs, allKeypairs, true, true);
+
+      const treeAuthorityAccount = await Bubblegum.account.gummyrollTreeAuthority.fetch(treeAuthority);
+      console.log(treeAuthorityAccount);
+      for (let i = 0; i < ALLOWLIST_SIZE; i++) {
+        console.log(treeAuthorityAccount.appendAllowlist[i].numAppends);
+        assert(
+          (new BN(0)).eq(treeAuthorityAccount.appendAllowlist[i].numAppends),
+          'Append allowlist was not decremented properly'
+        );
+      }
     });
   });
 });

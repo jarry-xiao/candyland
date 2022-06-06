@@ -176,6 +176,58 @@ createErrorFromNameLookup.set(
 )
 
 /**
+ * AppendAllowlistIncrementOverflow: 'Append allowlist overflow when incrementing num_appends'
+ *
+ * @category Errors
+ * @category generated
+ */
+export class AppendAllowlistIncrementOverflowError extends Error {
+  readonly code: number = 0x1777
+  readonly name: string = 'AppendAllowlistIncrementOverflow'
+  constructor() {
+    super('Append allowlist overflow when incrementing num_appends')
+    if (typeof Error.captureStackTrace === 'function') {
+      Error.captureStackTrace(this, AppendAllowlistIncrementOverflowError)
+    }
+  }
+}
+
+createErrorFromCodeLookup.set(
+  0x1777,
+  () => new AppendAllowlistIncrementOverflowError()
+)
+createErrorFromNameLookup.set(
+  'AppendAllowlistIncrementOverflow',
+  () => new AppendAllowlistIncrementOverflowError()
+)
+
+/**
+ * AppendAllowlistIncrementUnderflow: 'Append allowlist underflow when decrementing num_appends'
+ *
+ * @category Errors
+ * @category generated
+ */
+export class AppendAllowlistIncrementUnderflowError extends Error {
+  readonly code: number = 0x1778
+  readonly name: string = 'AppendAllowlistIncrementUnderflow'
+  constructor() {
+    super('Append allowlist underflow when decrementing num_appends')
+    if (typeof Error.captureStackTrace === 'function') {
+      Error.captureStackTrace(this, AppendAllowlistIncrementUnderflowError)
+    }
+  }
+}
+
+createErrorFromCodeLookup.set(
+  0x1778,
+  () => new AppendAllowlistIncrementUnderflowError()
+)
+createErrorFromNameLookup.set(
+  'AppendAllowlistIncrementUnderflow',
+  () => new AppendAllowlistIncrementUnderflowError()
+)
+
+/**
  * Attempts to resolve a custom program error from the provided error code.
  * @category Errors
  * @category generated
