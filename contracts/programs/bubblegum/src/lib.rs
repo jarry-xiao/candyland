@@ -2,7 +2,7 @@ use {
     crate::error::BubblegumError,
     crate::state::metaplex_anchor::MplTokenMetadata,
     crate::state::{
-        authority::{GummyrollTreeAuthority, GUMMYROLL_TREE_AUTHORITY_SIZE},
+        authority::{GummyrollTreeAuthority, GUMMYROLL_TREE_AUTHORITY_SIZE, APPEND_ALLOWLIST_SIZE},
         leaf_schema::{LeafSchema, Version},
         metaplex_adapter::{MetadataArgs, TokenProgramVersion},
         metaplex_anchor::{MasterEdition, TokenMetadata},
@@ -436,13 +436,20 @@ pub mod bubblegum {
     pub fn remove_append_authority(
         ctx: Context<RemoveAppendAuthority>,
     ) -> Result<()> {
-        match ctx.accounts.authority.append_allowlist.iter().position(|&append_auth| append_auth == *ctx.accounts.authority_to_remove.key) {
-            Some(idx) => { ctx.accounts.authority.append_allowlist[idx] = Pubkey::new_from_array([0; 32]) }
+        let mut allowlist = ctx.accounts.authority.append_allowlist.to_vec();
+        match allowlist.iter().position(|&append_auth| append_auth == *ctx.accounts.authority_to_remove.key) {
+            Some(idx) => { 
+                allowlist.remove(idx);
+                ctx.accounts.authority.append_allowlist[..allowlist.len()].copy_from_slice(&allowlist);
+                for i in allowlist.len()..APPEND_ALLOWLIST_SIZE {
+                    ctx.accounts.authority.append_allowlist[i] = Pubkey::new_from_array([0; 32])
+                }
+                return Ok(());
+            }
             None => {
                 return err!(BubblegumError::AppendAuthorityNotFound);
             }
         }
-        Ok(())
     }
 
     pub fn mint_v1(ctx: Context<MintV1>, message: MetadataArgs) -> Result<()> {
