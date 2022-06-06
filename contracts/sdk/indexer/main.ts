@@ -96,6 +96,11 @@ async function main() {
     await GummyrollCtx.provider.send(appendTx, [payer], {
       commitment: "confirmed",
     });
+
+    console.log(
+        await nftDb.getTreeStmt.all()
+    );
+    await setTimeout(() => {}, 1000);
   }
 
   // TODO make sure that we can get proofs from the SQL table
