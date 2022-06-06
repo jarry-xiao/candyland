@@ -443,20 +443,7 @@ pub mod bubblegum {
     pub fn remove_append_authority(
         ctx: Context<RemoveAppendAuthority>,
     ) -> Result<()> {
-        let mut allowlist = ctx.accounts.authority.append_allowlist.to_vec();
-        match allowlist.iter().position(|&append_auth| append_auth.pubkey == *ctx.accounts.authority_to_remove.key) {
-            Some(idx) => { 
-                allowlist.remove(idx);
-                ctx.accounts.authority.append_allowlist[..allowlist.len()].copy_from_slice(&allowlist);
-                for i in allowlist.len()..APPEND_ALLOWLIST_SIZE {
-                    ctx.accounts.authority.append_allowlist[i] = AppendAllowlistEntry::default();
-                }
-                return Ok(());
-            }
-            None => {
-                return err!(BubblegumError::AppendAuthorityNotFound);
-            }
-        }
+        ctx.accounts.authority.remove_append_authority(&ctx.accounts.authority_to_remove.key())
     }
 
     pub fn mint_v1(ctx: Context<MintV1>, message: MetadataArgs) -> Result<()> {

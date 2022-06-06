@@ -53,6 +53,9 @@ impl GummyrollTreeAuthority {
             Some(idx) => match self.append_allowlist[idx].num_appends.checked_sub(amount) {
                 Some(new_num_appends) => {
                     self.append_allowlist[idx].num_appends = new_num_appends;
+                    if new_num_appends == 0 {
+                        return self.remove_append_authority(allowlist_pubkey);
+                    }
                     Ok(())
                 }
                 None => {
@@ -61,6 +64,25 @@ impl GummyrollTreeAuthority {
             },
             None => {
                 err!(BubblegumError::AppendAuthorityNotFound)
+            }
+        }
+    }
+    pub fn remove_append_authority(&mut self, allowlist_pubkey: &Pubkey) -> Result<()> {
+        let mut allowlist = self.append_allowlist.to_vec();
+        match allowlist
+            .iter()
+            .position(|&append_auth| append_auth.pubkey == *allowlist_pubkey)
+        {
+            Some(idx) => {
+                allowlist.remove(idx);
+                self.append_allowlist[..allowlist.len()].copy_from_slice(&allowlist);
+                for i in allowlist.len()..APPEND_ALLOWLIST_SIZE {
+                    self.append_allowlist[i] = AppendAllowlistEntry::default();
+                }
+                return Ok(());
+            }
+            None => {
+                return err!(BubblegumError::AppendAuthorityNotFound);
             }
         }
     }

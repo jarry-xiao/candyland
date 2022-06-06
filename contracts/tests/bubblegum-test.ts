@@ -478,9 +478,11 @@ describe("bubblegum", () => {
       await execute(Bubblegum.provider, allIxs, allKeypairs, true, true);
 
       const treeAuthorityAccount = await Bubblegum.account.gummyrollTreeAuthority.fetch(treeAuthority);
-      console.log(treeAuthorityAccount);
       for (let i = 0; i < ALLOWLIST_SIZE; i++) {
-        console.log(treeAuthorityAccount.appendAllowlist[i].numAppends);
+        assert(
+          treeAuthorityAccount.appendAllowlist[i].pubkey.toString() === (new PublicKey(Buffer.alloc(32))).toString(),
+          'Append authority was not removed after num appends hit 0'
+        );
         assert(
           (new BN(0)).eq(treeAuthorityAccount.appendAllowlist[i].numAppends),
           'Append allowlist was not decremented properly'
