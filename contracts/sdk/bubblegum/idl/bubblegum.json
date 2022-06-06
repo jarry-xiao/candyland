@@ -95,7 +95,7 @@
       "args": []
     },
     {
-      "name": "setAppendAuthority",
+      "name": "addAppendAuthority",
       "accounts": [
         {
           "name": "treeDelegate",
@@ -113,12 +113,7 @@
           "isSigner": false
         }
       ],
-      "args": [
-        {
-          "name": "index",
-          "type": "u8"
-        }
-      ]
+      "args": []
     },
     {
       "name": "removeAppendAuthority",
@@ -1193,6 +1188,11 @@
       "code": 6005,
       "name": "AppendAllowlistIndexOutOfBounds",
       "msg": "Append allowlist index out of bounds"
+    },
+    {
+      "code": 6006,
+      "name": "AppendAllowlistFull",
+      "msg": "Append allowlist has no more spots available"
     }
   ],
   "metadata": {

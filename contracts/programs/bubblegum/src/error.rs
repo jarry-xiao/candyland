@@ -14,4 +14,6 @@ pub enum BubblegumError {
     AppendAuthorityNotFound,
     #[msg("Append allowlist index out of bounds")]
     AppendAllowlistIndexOutOfBounds,
+    #[msg("Append allowlist has no more spots available")]
+    AppendAllowlistFull,
 }

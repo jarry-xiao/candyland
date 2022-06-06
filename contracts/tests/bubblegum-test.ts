@@ -41,6 +41,7 @@ import { getBubblegumAuthorityPDA, getCreateTreeIxs, getNonceCount, getVoucherPD
 import { TokenProgramVersion } from "../sdk/bubblegum/src/generated";
 import { createRemoveAppendAuthorityInstruction } from "../sdk/bubblegum/src/generated/instructions/removeAppendAuthority";
 import { createSetAppendAuthorityInstruction } from "../sdk/bubblegum/src/generated/instructions/setAppendAuthority";
+import { createAddAppendAuthorityInstruction } from "../sdk/bubblegum/src/generated/instructions/addAppendAuthority";
 
 // @ts-ignore
 let Bubblegum;
@@ -63,85 +64,6 @@ function createExampleMetadata(name: string, symbol: string, uri: string): Metad
     creators: [],
   };
 }
-
-async function getNonceAccount(bubblegum: Program<Bubblegum>): Promise<PublicKey> {
-  let [nonce] = await PublicKey.findProgramAddress(
-    [Buffer.from("bubblegum")],
-    bubblegum.programId
-  );
-  return nonce;
-}
-
-async function getTreeAuthority(bubblegum: Program<Bubblegum>, merkleSlab: PublicKey): Promise<PublicKey> {
-  let [authority] = await PublicKey.findProgramAddress(
-    [merkleSlab.toBuffer()],
-    bubblegum.programId
-  );
-  return authority;
-}
-
-type Version = {
-  v0: Object,
-}
-
-// async function createMintIx(bubblegum: Program<Bubblegum>,
-//   metadata: any,
-//   version: Version,
-//   payer: Keypair,
-//   owner: PublicKey,
-//   delegate: PublicKey,
-//   merkleSlab: PublicKey,
-//   mintAuthority: PublicKey
-// ): Promise<TransactionInstruction> {
-//   return bubblegum.instruction.mintV1(version, metadata, {
-//     accounts: {
-//       mintAuthority,
-//       authority: await getTreeAuthority(bubblegum, merkleSlab),
-//       gummyrollProgram: GummyrollProgramId,
-//       candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
-//       owner,
-//       delegate,
-//       merkleSlab,
-//     },
-//     signers: [payer],
-//   });
-// }
-
-// function createRemoveAppendAuthorityIx(
-//   bubblegum: Program<Bubblegum>,
-//   appendAuthority: Keypair,
-//   authorityToRemove: PublicKey,
-//   authority: PublicKey,
-// ): TransactionInstruction {
-//   return bubblegum.instruction.removeAppendAuthority({
-//     accounts: {
-//       appendAuthority: appendAuthority.publicKey,
-//       authorityToRemove,
-//       authority,
-//     },
-//     signers: [appendAuthority]
-//   })
-// }
-
-// function createSetAppendAuthorityIx(
-//   bubblegum: Program<Bubblegum>,
-//   index: number,
-//   treeDelegate: Keypair,
-//   newAppendAuthority: PublicKey,
-//   authority: PublicKey,
-// ): TransactionInstruction {
-//   return bubblegum.instruction.setAppendAuthority(
-//     index,
-//     {
-//       accounts: {
-//         treeDelegate: treeDelegate.publicKey,
-//         newAppendAuthority,
-//         authority,
-//       },
-//       signers: [treeDelegate]
-//     }
-//   );
-// }
 
 describe("bubblegum", () => {
   // Configure the client to use the local cluster.
@@ -510,24 +432,25 @@ describe("bubblegum", () => {
       }
     });
     it("Concurrently append into tree", async () => {
-
       // Create 5 random keys, set them as append publickeys
       const ALLOWLIST_SIZE = 5;
       const authIxs = [];
       const appendIxs = [];
       const keypairs = [];
+      const removeInitialAppendAuthorityIx = createRemoveAppendAuthorityInstruction({
+        authorityToRemove: payer.publicKey,
+        appendAuthority: payer.publicKey,
+        authority: treeAuthority,
+      });
+      await execute(Bubblegum.provider, [removeInitialAppendAuthorityIx], [payer]);
+
       for (let i = 0; i < ALLOWLIST_SIZE; i++) {
         const keypair = Keypair.generate();
-        const setAppendAuthorityIx = createSetAppendAuthorityInstruction(
-          {
-            treeDelegate: payer.publicKey,
-            newAppendAuthority: keypair.publicKey,
-            authority: treeAuthority,
-          },
-          {
-            index: i,
-          }
-        );
+        const setAppendAuthorityIx = createAddAppendAuthorityInstruction({
+          newAppendAuthority: keypair.publicKey,
+          treeDelegate: payer.publicKey,
+          authority: treeAuthority,
+        });
         const metadata = createExampleMetadata(`${i}`, `${i}`, "www.solana.com");
         const mintIx = await createMintV1Instruction(
           {

@@ -153,6 +153,29 @@ createErrorFromNameLookup.set(
 )
 
 /**
+ * AppendAllowlistFull: 'Append allowlist has no more spots available'
+ *
+ * @category Errors
+ * @category generated
+ */
+export class AppendAllowlistFullError extends Error {
+  readonly code: number = 0x1776
+  readonly name: string = 'AppendAllowlistFull'
+  constructor() {
+    super('Append allowlist has no more spots available')
+    if (typeof Error.captureStackTrace === 'function') {
+      Error.captureStackTrace(this, AppendAllowlistFullError)
+    }
+  }
+}
+
+createErrorFromCodeLookup.set(0x1776, () => new AppendAllowlistFullError())
+createErrorFromNameLookup.set(
+  'AppendAllowlistFull',
+  () => new AppendAllowlistFullError()
+)
+
+/**
  * Attempts to resolve a custom program error from the provided error code.
  * @category Errors
  * @category generated

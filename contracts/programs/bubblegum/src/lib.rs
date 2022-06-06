@@ -73,9 +73,9 @@ pub struct TransferTreeDelegate<'info> {
     /// CHECK: this account is not read from
     pub new_delegate: AccountInfo<'info>,
     #[account(
+        mut,
         seeds=[authority.tree_id.as_ref()],
         bump,
-        mut, 
         constraint = (*tree_delegate.key == authority.owner) || (*tree_delegate.key == authority.delegate)
     )]
     pub authority: Account<'info, GummyrollTreeAuthority>,
@@ -420,15 +420,17 @@ pub mod bubblegum {
         Ok(())
     }
 
-    pub fn set_append_authority(
+    pub fn add_append_authority(
         ctx: Context<SetTreeAppendAuthority>,
-        index: u8,
     ) -> Result<()> {
-        if (index as usize) >= ctx.accounts.authority.append_allowlist.len() {
-            return err!(BubblegumError::AppendAllowlistIndexOutOfBounds);
+        let empty_key: [u8; 32] = [0; 32];
+        for (i, node) in ctx.accounts.authority.append_allowlist.iter().enumerate() {
+            if *node == Pubkey::new(&empty_key) {
+                ctx.accounts.authority.append_allowlist[i] = ctx.accounts.new_append_authority.key();
+                return Ok(())
+            }
         }
-        ctx.accounts.authority.append_allowlist[index as usize] = ctx.accounts.new_append_authority.key();
-        Ok(())
+        err!(BubblegumError::AppendAllowlistFull)
     }
 
     pub fn remove_append_authority(
