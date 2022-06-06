@@ -46,20 +46,22 @@ export async function getUpdatedBatch(
   console.log(`Received Batch! Sequence=${seq}`);
   const pathNodes = merkleRoll.getChangeLogsWithNodeIndex();
   interface PathDict {
-    [key: number]: PathNode;
+    [key: number]: PathNode[];
   }
   let data: PathDict = {};
   for (const [i, path] of pathNodes.entries()) {
     data[seq - i] = path;
   }
   // TODO: make this atomic maybe / use caching to prevent too much duplication
-  for (const [i, [seq, path]] of Object.entries(data).entries()) {
-    db.upsertStmt.bind({
-      "@node_idx": path.index,
-      "@seq": seq,
-      "@level": i,
-      "@hash": path.node.toBase58(),
-    });
+  for (const [seq, path] of Object.entries(data)) {
+    for (const [i, node] of path.entries()) {
+      db.upsertStmt.bind({
+        "@node_idx": node.index,
+        "@seq": seq,
+        "@level": i,
+        "@hash": node.node.toBase58(),
+      });
+    }
     await db.upsertStmt.run();
   }
 }
