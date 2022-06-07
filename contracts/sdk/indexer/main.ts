@@ -114,43 +114,89 @@ async function main() {
     payer,
     merkleRollKeypair
   );
-  let leaves = [leaf];
+
+  let recentHashes: Set<string> = new Set<string>();
 
   while (1) {
     if (Math.random() < 0.5) {
-      console.log("Append");
-      leaves.push(
-        await sendAppendTransaction(GummyrollCtx, payer, merkleRollKeypair)
+      let leaf = await sendAppendTransaction(
+        GummyrollCtx,
+        payer,
+        merkleRollKeypair
       );
+      console.log(`Append ${bs58.encode(leaf)}`);
     } else {
-      let sample = Math.floor(Math.random() * leaves.length);
-      let leaf = leaves[sample];
-      await nftDb.updateTree();
-      let proof = await nftDb.getProof(leaf);
-      if (proof) {
-        console.log("Replace");
-        let newLeaf = crypto.randomBytes(32);
-        let replaceTx = new Transaction().add(
-          createReplaceIx(
-            GummyrollCtx,
-            payer,
-            merkleRollKeypair.publicKey,
-            proof.root,
-            proof.leaf,
-            newLeaf,
-            proof.index,
-            proof.proofNodes
-          )
-        );
-        await GummyrollCtx.provider.send(replaceTx, [payer], {
-          commitment: "confirmed",
-        });
-        leaves[sample] = newLeaf;
+      console.log("Attempting to replace. Number of outgoing requests:", recentHashes.size);
+      let proof;
+      let leaves;
+      let leaf;
+      let sample;
+      while (1) {
+        leaves = await nftDb.getAllLeaves();
+        if (leaves.size === 0) {
+          console.log("No leaves in DB");
+          break;
+        }
+        for (const k of recentHashes) {
+          if (!leaves.has(k)) {
+            console.log("removing leaf");
+            recentHashes.delete(k);
+          }
+        }
+        sample = Math.floor(Math.random() * leaves.size);
+        leaf = Array.from(leaves)[sample];
+        if (recentHashes.has(leaf)) {
+          continue;
+        } else {
+          break;
+        }
       }
+      if (!leaf) {
+        continue;
+      }
+      let retries = 0;
+      while (retries < 5) {
+        proof = await nftDb.getProof(bs58.decode(leaf));
+        if (proof) {
+          break;
+        }
+        retries += 1;
+      }
+      if (retries === 5) {
+        console.log(
+          `Failed to find leaf hash ${leaf}, index ${sample}`
+        );
+        continue;
+      }
+      console.log(`Sampled ${bs58.encode(proof.leaf)}, index ${sample}`);
+      recentHashes.add(bs58.encode(proof.leaf));
+      let newLeaf = crypto.randomBytes(32);
+      let replaceTx = new Transaction().add(
+        createReplaceIx(
+          GummyrollCtx,
+          payer,
+          merkleRollKeypair.publicKey,
+          proof.root,
+          proof.leaf,
+          newLeaf,
+          proof.index,
+          proof.proofNodes
+        )
+      );
+      await GummyrollCtx.provider
+        .send(replaceTx, [payer], {
+          commitment: "confirmed",
+        })
+        .then(() => {
+          console.log(`Replaced ${bs58.encode(proof.leaf)}, index ${sample}`);
+        })
+        .catch((x) => {
+          console.log("Encountered error on ", bs58.encode(proof.leaf));
+          recentHashes.delete(bs58.encode(proof.leaf));
+        });
+      leaves[sample] = newLeaf;
     }
   }
-
-  // TODO make sure that we can get proofs from the SQL table
 }
 
 main()

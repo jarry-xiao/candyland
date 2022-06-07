@@ -46,22 +46,23 @@ export async function getUpdatedBatch(
   if (seq === 0) {
     return;
   }
-  console.log(`Received Batch! Sequence=${seq}`);
   const pathNodes = merkleRoll.getChangeLogsWithNodeIndex();
+  console.log(`Received Batch! Sequence=${seq}, entries ${pathNodes.length}`);
   let data: Array<[number, PathNode[]]> = [];
   for (const [i, path] of pathNodes.entries()) {
-    data.push([seq - i - 1, path]);
+    if (i == seq) {
+      break;
+    }
+    data.push([seq - i, path]);
   }
-  // TODO: make this atomic maybe / use caching to prevent too much duplication
+
+  let sequenceNumbers = await db.getSequenceNumbers();
   let rows: Array<[PathNode, number, number]> = [];
   for (const [seq, path] of data) {
+    if (sequenceNumbers.has(seq)) {
+      continue;
+    }
     for (const [i, node] of path.entries()) {
-      if (db.tree.has(node.index)) {
-        let [prevSeq] = db.tree[node.index];
-        if (seq < prevSeq) {
-          continue;
-        }
-      }
       rows.push([node, seq, i]);
     }
   }
