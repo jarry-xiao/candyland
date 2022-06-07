@@ -123,14 +123,13 @@ async function main() {
         await sendAppendTransaction(GummyrollCtx, payer, merkleRollKeypair)
       );
     } else {
-      await setTimeout(() => {}, 1000)
       let sample = Math.floor(Math.random() * leaves.length);
       let leaf = leaves[sample];
+      await nftDb.updateTree();
       let proof = await nftDb.getProof(leaf);
       if (proof) {
         console.log("Replace");
         let newLeaf = crypto.randomBytes(32);
-        console.log(bs58.encode(proof.leaf));
         let replaceTx = new Transaction().add(
           createReplaceIx(
             GummyrollCtx,
