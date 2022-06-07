@@ -2,10 +2,11 @@ import { Program, web3 } from "@project-serum/anchor";
 import { bootstrap } from "./db";
 import {
   createAppendIx,
+  createReplaceIx,
   getMerkleRollAccountSize,
   Gummyroll,
 } from "../gummyroll";
-import * as crypto from 'crypto';
+import * as crypto from "crypto";
 import * as anchor from "@project-serum/anchor";
 import { Keypair, SystemProgram, Transaction } from "@solana/web3.js";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
@@ -14,6 +15,28 @@ import {
   updateMerkleRollLive,
   updateMerkleRollSnapshot,
 } from "./indexerGummyroll";
+import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
+
+async function sendAppendTransaction(
+  GummyrollCtx: any,
+  payer: any,
+  merkleRollKeypair: any
+) {
+  const newLeaf = crypto.randomBytes(32);
+  const appendTx = new Transaction().add(
+    createAppendIx(
+      GummyrollCtx,
+      newLeaf,
+      payer,
+      payer,
+      merkleRollKeypair.publicKey
+    )
+  );
+  await GummyrollCtx.provider.send(appendTx, [payer], {
+    commitment: "confirmed",
+  });
+  return newLeaf;
+}
 
 async function main() {
   const connection = new web3.Connection("http://127.0.0.1:8899", {
@@ -64,9 +87,14 @@ async function main() {
       signers: [payer],
     })
   );
-  await GummyrollCtx.provider.send(tx, [payer, merkleRollKeypair], {
-    commitment: "confirmed",
-  });
+  let initTx = await GummyrollCtx.provider.send(
+    tx,
+    [payer, merkleRollKeypair],
+    {
+      commitment: "confirmed",
+    }
+  );
+  console.log(initTx);
   let nftDb = await bootstrap();
   console.log("Finished bootstrapping DB");
   await updateMerkleRollSnapshot(
@@ -81,26 +109,46 @@ async function main() {
   );
 
   // TODO simulate a candy machine mint + ownership transfers
+  let leaf = await sendAppendTransaction(
+    GummyrollCtx,
+    payer,
+    merkleRollKeypair
+  );
+  let leaves = [leaf];
+
   while (1) {
-    const newLeaf = crypto.randomBytes(32);
-    const appendTx = new Transaction().add(
-      createAppendIx(
-        GummyrollCtx,
-        newLeaf,
-        payer,
-        payer,
-        merkleRollKeypair.publicKey
-      )
-    );
-
-    await GummyrollCtx.provider.send(appendTx, [payer], {
-      commitment: "confirmed",
-    });
-
-    console.log(
-        await nftDb.getTreeStmt.all()
-    );
-    await setTimeout(() => {}, 1000);
+    if (Math.random() < 0.5) {
+      console.log("Append");
+      leaves.push(
+        await sendAppendTransaction(GummyrollCtx, payer, merkleRollKeypair)
+      );
+    } else {
+      await setTimeout(() => {}, 1000)
+      let sample = Math.floor(Math.random() * leaves.length);
+      let leaf = leaves[sample];
+      let proof = await nftDb.getProof(leaf);
+      if (proof) {
+        console.log("Replace");
+        let newLeaf = crypto.randomBytes(32);
+        console.log(bs58.encode(proof.leaf));
+        let replaceTx = new Transaction().add(
+          createReplaceIx(
+            GummyrollCtx,
+            payer,
+            merkleRollKeypair.publicKey,
+            proof.root,
+            proof.leaf,
+            newLeaf,
+            proof.index,
+            proof.proofNodes
+          )
+        );
+        await GummyrollCtx.provider.send(replaceTx, [payer], {
+          commitment: "confirmed",
+        });
+        leaves[sample] = newLeaf;
+      }
+    }
   }
 
   // TODO make sure that we can get proofs from the SQL table
