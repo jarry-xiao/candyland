@@ -2,12 +2,6 @@ use crate::error::BubblegumError;
 use anchor_lang::prelude::*;
 
 pub const GUMMYROLL_TREE_AUTHORITY_SIZE: usize = 304 + 8;
-// 32 + 8 + 32 + 32
-// 96 + 8
-// 104
-// + 5 * (32 + 8)
-// + 5 * (40)
-// + 200
 pub const APPEND_ALLOWLIST_SIZE: usize = 5;
 #[account]
 pub struct GummyrollTreeAuthority {
@@ -44,6 +38,7 @@ impl GummyrollTreeAuthority {
             }
         }
     }
+
     pub fn decrement_allowlist(&mut self, allowlist_pubkey: &Pubkey, amount: u64) -> Result<()> {
         match self
             .append_allowlist
@@ -67,18 +62,15 @@ impl GummyrollTreeAuthority {
             }
         }
     }
+
     pub fn remove_append_authority(&mut self, allowlist_pubkey: &Pubkey) -> Result<()> {
         let mut allowlist = self.append_allowlist.to_vec();
-        match allowlist
-            .iter()
-            .position(|&append_auth| append_auth.pubkey == *allowlist_pubkey)
-        {
-            Some(idx) => {
-                allowlist.remove(idx);
+        let mut entries = allowlist.iter();
+        match entries.position(|&allowlist_entry| allowlist_entry.pubkey == *allowlist_pubkey) {
+            Some(idx_to_remove) => {
+                allowlist.swap_remove(idx_to_remove);
+                allowlist.push(AppendAllowlistEntry::default());
                 self.append_allowlist[..allowlist.len()].copy_from_slice(&allowlist);
-                for i in allowlist.len()..APPEND_ALLOWLIST_SIZE {
-                    self.append_allowlist[i] = AppendAllowlistEntry::default();
-                }
                 return Ok(());
             }
             None => {
@@ -87,6 +79,7 @@ impl GummyrollTreeAuthority {
         }
     }
 }
+
 #[repr(C)]
 #[derive(AnchorDeserialize, AnchorSerialize, Default, Debug, Copy, Clone)]
 pub struct AppendAllowlistEntry {
