@@ -2,6 +2,7 @@ import { PublicKey, Connection } from "@solana/web3.js";
 import * as borsh from "borsh";
 import { BN } from "@project-serum/anchor";
 import { assert } from "chai";
+import { readPublicKey } from '../../utils';
 
 /**
  * Manually create a model for MerkleRoll in order to deserialize correctly
@@ -73,10 +74,6 @@ type Path = {
   index: number;
   _padding: number;
 };
-
-function readPublicKey(reader: borsh.BinaryReader): PublicKey {
-  return new PublicKey(reader.readFixedArray(32));
-}
 
 export function decodeMerkleRoll(buffer: Buffer): OnChainMerkleRoll {
   let reader = new borsh.BinaryReader(buffer);
