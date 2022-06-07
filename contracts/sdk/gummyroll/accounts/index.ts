@@ -18,10 +18,10 @@ export class OnChainMerkleRoll {
   getChangeLogsWithNodeIndex(): PathNode[][] {
     const mask = this.header.maxBufferSize - 1;
     let pathNodeList = [];
-    console.log("current buffer size:", this.roll.bufferSize);
     for (let j = 0; j < this.roll.bufferSize; j++) {
-      let pathNodes = []
-      let changeLog = this.roll.changeLogs[(this.roll.activeIndex - j) ^ mask];
+      let pathNodes = [];
+      let idx = (this.roll.activeIndex - j) & mask;
+      let changeLog = this.roll.changeLogs[idx];
       let pathLen = changeLog.pathNodes.length;
       for (const [lvl, key] of changeLog.pathNodes.entries()) {
         let nodeIdx = (1 << (pathLen - lvl)) + (changeLog.index >> lvl);
@@ -34,7 +34,7 @@ export class OnChainMerkleRoll {
         node: changeLog.root,
         index: 1,
       });
-      pathNodeList.push(pathNodes)
+      pathNodeList.push(pathNodes);
     }
     return pathNodeList;
   }
