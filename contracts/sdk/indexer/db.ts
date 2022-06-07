@@ -82,10 +82,9 @@ export class NFTDatabaseConnection {
       `
         SELECT node_idx
         FROM merkle
-        WHERE hash = ? and level = ?
+        WHERE hash = ? and level = 0
       `,
       hashString,
-      0
     );
     if (res.length == 1) {
       let nodeIdx = res[0].node_idx;

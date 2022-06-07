@@ -43,11 +43,14 @@ export async function getUpdatedBatch(
 ) {
   // If seq > max JS int it's all over :(
   const seq = merkleRoll.roll.sequenceNumber.toNumber();
+  if (seq === 0) {
+    return;
+  }
   console.log(`Received Batch! Sequence=${seq}`);
   const pathNodes = merkleRoll.getChangeLogsWithNodeIndex();
   let data: Array<[number, PathNode[]]> = [];
   for (const [i, path] of pathNodes.entries()) {
-    data.push([seq - i, path]);
+    data.push([seq - i - 1, path]);
   }
   // TODO: make this atomic maybe / use caching to prevent too much duplication
   let rows: Array<[PathNode, number, number]> = [];
@@ -61,8 +64,8 @@ export async function getUpdatedBatch(
       }
       rows.push([node, seq, i]);
     }
-    db.upsert(rows);
-    console.log(`Updated ${rows.length} rows`);
-    await db.updateTree();
   }
+  db.upsert(rows);
+  console.log(`Updated ${rows.length} rows`);
+  await db.updateTree();
 }

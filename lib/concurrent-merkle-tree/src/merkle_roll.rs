@@ -380,7 +380,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         };
 
         let proof_leaf_unchanged = self.fast_forward_proof(
-            new_leaf,
+            leaf,
             proof,
             leaf_index,
             changelog_buffer_index,
@@ -392,7 +392,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         }
 
         if !proof_leaf_unchanged {
-            return Err(CMTError::EmptyLeafSpotTaken);
+            return Err(CMTError::LeafAlreadyUpdated);
         }
 
         self.increment_active_index();
