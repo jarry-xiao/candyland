@@ -10,18 +10,25 @@ use anchor_lang::{
 };
 use gummyroll::{program::Gummyroll, Node};
 use spl_token::state::Mint as SplMint;
+use spl_token_2022::{
+    extension::{ExtensionType, ExtensionType::MintCloseAuthority},
+    state::Mint as Mint2022,
+};
 
+pub mod error;
 pub mod state;
 pub mod utils;
 
+use crate::error::BubblegumError;
 use crate::state::metaplex_anchor::MplTokenMetadata;
+use crate::state::spl_token_2022_anchor::*;
 use crate::state::{
     leaf_schema::{LeafSchema, Version},
     metaplex_adapter::{MetadataArgs, TokenProgramVersion},
     metaplex_anchor::{MasterEdition, TokenMetadata},
     Nonce, Voucher,
 };
-use crate::utils::{append_leaf, insert_or_append_leaf, replace_leaf};
+use crate::utils::{append_leaf, insert_or_append_leaf, replace_leaf, verify_leaf};
 
 const NONCE_SIZE: usize = 8 + 16;
 const VOUCHER_SIZE: usize = 8 + 1 + 32 + 32 + 16 + 32 + 4 + 32 + 32 + 32;
@@ -302,8 +309,20 @@ pub fn get_instruction_type(full_bytes: &[u8]) -> InstructionName {
     }
 }
 
+#[inline(always)]
+pub fn assert_with_msg(v: bool, err: ProgramError, msg: &str) -> Result<()> {
+    if !v {
+        let caller = std::panic::Location::caller();
+        msg!("{}. \n{}", msg, caller);
+        Err(err.into())
+    } else {
+        Ok(())
+    }
+}
 #[program]
 pub mod bubblegum {
+    use mpl_token_metadata::state::Metadata;
+
     use super::*;
 
     pub fn initialize_nonce(_ctx: Context<InitNonce>) -> Result<()> {
@@ -703,8 +722,129 @@ pub mod bubblegum {
         Ok(())
     }
 
-    pub fn compress(_ctx: Context<Compress>) -> Result<()> {
-        // TODO
+    pub fn compress<'info>(
+        ctx: Context<'_, '_, '_, 'info, Compress<'info>>,
+        version: Version,
+        metadata: MetadataArgs,
+        root: [u8; 32],
+        creator_hash: [u8; 32],
+        nonce: u128,
+        index: u32,
+    ) -> Result<()> {
+        if TokenProgramVersion::Original == metadata.token_program_version {
+            err!(BubblegumError::CompressTokenProgramIneligible)
+        }
+        let data_hash = hash_metadata(&metadata)?;
+        let bump = match ctx.bumps.get("authority") {
+            Some(b) => *b,
+            _ => {
+                msg!("Bump seed missing from ctx");
+                return err!(BubblegumError::MissingAuthorityBumpSeed);
+            }
+        };
+
+        let compressed_nft_leaf = LeafSchema::new(
+            version,
+            ctx.accounts.owner.key(),
+            ctx.accounts.delegate.key(),
+            nonce,
+            data_hash,
+            creator_hash,
+        );
+        verify_leaf(
+            &ctx.accounts.gummyroll_program.to_account_info(),
+            &ctx.accounts.merkle_slab.to_account_info(),
+            ctx.remaining_accounts,
+            root,
+            compressed_nft_leaf.to_node(),
+            index,
+        )?;
+
+        invoke(
+            &spl_token_2022::instruction::burn(
+                &spl_token_2022::id(),
+                &ctx.accounts.token_account.key(),
+                &ctx.accounts.mint.key(),
+                &ctx.accounts.owner.key(),
+                &[],
+                1,
+            )?,
+            &[
+                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.owner.to_account_info(),
+                ctx.accounts.mint.to_account_info(),
+                ctx.accounts.token_account.to_account_info(),
+            ],
+        )?;
+        invoke(
+            &spl_token_2022::instruction::close_account(
+                &spl_token_2022::id(),
+                &ctx.accounts.token_account.key(),
+                &ctx.accounts.owner.key(),
+                &ctx.accounts.owner.key(),
+                &[],
+            )?,
+            &[
+                ctx.accounts.token_program.to_account_info(),
+                ctx.accounts.owner.to_account_info(),
+                ctx.accounts.token_account.to_account_info(),
+            ],
+        )?;
+        match ctx.accounts.master_edition.max_supply {
+            Some(d) if d > 0 => {
+                msg!("Master edition must have a max supply of 0");
+                return err!(BubblegumError::MasterEditionSupplyNonzero);
+            }
+            _ => {}
+        };
+        // Replace an empty node
+        replace_leaf(
+            &ctx.accounts.merkle_slab.key(),
+            *ctx.bumps.get("authority").unwrap(),
+            &ctx.accounts.gummyroll_program.to_account_info(),
+            &ctx.accounts.authority.to_account_info(),
+            &ctx.accounts.merkle_slab.to_account_info(),
+            ctx.remaining_accounts,
+            root,
+            [0; 32],
+            compressed_nft_leaf.to_node(),
+            index,
+        )?;
+
+        invoke_signed(
+            &spl_token_2022::instruction::close_account(
+                &spl_token_2022::id(),
+                &ctx.accounts.mint.key(),
+                &ctx.accounts.owner.key(),
+                &ctx.accounts.authority.key(),
+                &[],
+            )?,
+            &[
+                ctx.accounts.mint.to_account_info(),
+                ctx.accounts.owner.to_account_info(),
+                ctx.accounts.authority.to_account_info(),
+                ctx.accounts.token_program.to_account_info(),
+            ],
+            &[&[ctx.accounts.merkle_slab.key().as_ref(), &[bump]]],
+        )?;
+        invoke(
+            &mpl_token_metadata::instruction::close_metadata_and_master_edition(
+                mpl_token_metadata::id(),
+                ctx.accounts.metadata.key(),
+                ctx.accounts.master_edition.key(),
+                ctx.accounts.mint.key(),
+                ctx.accounts.owner.key(),
+                ctx.accounts.owner.key(),
+            ),
+            &[
+                ctx.accounts.token_metadata_program.to_account_info(),
+                ctx.accounts.metadata.to_account_info(),
+                ctx.accounts.master_edition.to_account_info(),
+                ctx.accounts.mint.to_account_info(),
+                ctx.accounts.owner.to_account_info(),
+                ctx.accounts.token_program.to_account_info(),
+            ],
+        )?;
         Ok(())
     }
 }

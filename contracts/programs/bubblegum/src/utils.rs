@@ -74,3 +74,21 @@ pub fn insert_or_append_leaf<'info>(
     .with_remaining_accounts(remaining_accounts.to_vec());
     gummyroll::cpi::insert_or_append(cpi_ctx, root_node, leaf, index)
 }
+
+pub fn verify_leaf<'info>(
+    gummyroll_program: &AccountInfo<'info>,
+    merkle_roll: &AccountInfo<'info>,
+    remaining_accounts: &[AccountInfo<'info>],
+    root_node: Node,
+    leaf: Node,
+    index: u32,
+) -> Result<()> {
+    let cpi_ctx = CpiContext::new(
+        gummyroll_program.clone(),
+        gummyroll::cpi::accounts::VerifyLeaf {
+            merkle_roll: merkle_roll.clone(),
+        },
+    )
+    .with_remaining_accounts(remaining_accounts.to_vec());
+    gummyroll::cpi::verify_leaf(cpi_ctx, root_node, leaf, index)
+}

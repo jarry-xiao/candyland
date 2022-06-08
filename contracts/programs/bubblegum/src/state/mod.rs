@@ -1,6 +1,7 @@
 pub mod leaf_schema;
 pub mod metaplex_adapter;
 pub mod metaplex_anchor;
+pub mod spl_token_2022_anchor;
 
 use anchor_lang::prelude::*;
 use leaf_schema::LeafSchema;
