@@ -2497,11 +2497,13 @@ name = "snapshot-backfill"
 version = "0.1.0"
 dependencies = [
  "bs58",
+ "futures",
  "solana-client",
  "solana-sdk",
  "solana-transaction-status",
  "structopt",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]
