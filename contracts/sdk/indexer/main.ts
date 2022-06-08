@@ -1,5 +1,5 @@
 import { Program, web3 } from "@project-serum/anchor";
-import { bootstrap } from "./db";
+import { bootstrap, NFTDatabaseConnection, Proof } from "./db";
 import {
   createAppendIx,
   createReplaceIx,
@@ -16,6 +16,13 @@ import {
   updateMerkleRollSnapshot,
 } from "./indexerGummyroll";
 import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
+import {
+  buildTree,
+  getProofOfLeaf,
+  Tree,
+  TreeNode,
+  updateTree,
+} from "../../tests/merkle-tree";
 
 async function sendAppendTransaction(
   GummyrollCtx: any,
@@ -109,68 +116,72 @@ async function main() {
   );
 
   // TODO simulate a candy machine mint + ownership transfers
-  let leaf = await sendAppendTransaction(
-    GummyrollCtx,
-    payer,
-    merkleRollKeypair
-  );
 
-  let recentHashes: Set<string> = new Set<string>();
+  let appends = 0;
+  let replaces = 0;
+  let failed = 0;
+
+  let counter = 0;
+  let replacedInds = [];
+  let emptyLeaves: Buffer[] = [];
+  for (let i = 0; i < 1 << 20; ++i) {
+    emptyLeaves.push(nftDb.emptyNode(0));
+  }
+  let offChainMerkle = buildTree(emptyLeaves);
 
   while (1) {
+    counter += 1;
+    if (counter % 10 == 0) {
+      console.log("Status: ", counter);
+      await logStats(
+        nftDb,
+        offChainMerkle,
+        appends,
+        replaces,
+        failed,
+        replacedInds
+      );
+    }
     if (Math.random() < 0.5) {
       let leaf = await sendAppendTransaction(
         GummyrollCtx,
         payer,
         merkleRollKeypair
       );
-      console.log(`Append ${bs58.encode(leaf)}`);
+      console.log(`Append ${bs58.encode(leaf)}, index: ${appends}`);
+      updateTree(offChainMerkle, leaf, appends);
+      appends += 1;
     } else {
-      console.log("Attempting to replace. Number of outgoing requests:", recentHashes.size);
+      continue;
       let proof;
       let leaves;
       let leaf;
       let sample;
-      while (1) {
-        leaves = await nftDb.getAllLeaves();
-        if (leaves.size === 0) {
-          console.log("No leaves in DB");
-          break;
-        }
-        for (const k of recentHashes) {
-          if (!leaves.has(k)) {
-            console.log("removing leaf");
-            recentHashes.delete(k);
-          }
-        }
-        sample = Math.floor(Math.random() * leaves.size);
-        leaf = Array.from(leaves)[sample];
-        if (recentHashes.has(leaf)) {
-          continue;
-        } else {
-          break;
-        }
+      leaves = await nftDb.getAllLeaves();
+      if (leaves.size === 0) {
+        console.log("No leaves in DB");
+        continue;
       }
+      sample = Math.floor(Math.random() * leaves.size);
+      leaf = Array.from(leaves)[sample];
       if (!leaf) {
         continue;
       }
-      let retries = 0;
-      while (retries < 5) {
-        proof = await nftDb.getProof(bs58.decode(leaf));
-        if (proof) {
-          break;
-        }
-        retries += 1;
-      }
-      if (retries === 5) {
-        console.log(
-          `Failed to find leaf hash ${leaf}, index ${sample}`
+      proof = await nftDb.getProof(bs58.decode(leaf));
+      if (!proof) {
+        await logStats(
+          nftDb,
+          offChainMerkle,
+          appends,
+          replaces,
+          failed,
+          replacedInds
         );
         continue;
       }
       console.log(`Sampled ${bs58.encode(proof.leaf)}, index ${sample}`);
-      recentHashes.add(bs58.encode(proof.leaf));
       let newLeaf = crypto.randomBytes(32);
+      replaces += 1;
       let replaceTx = new Transaction().add(
         createReplaceIx(
           GummyrollCtx,
@@ -188,14 +199,96 @@ async function main() {
           commitment: "confirmed",
         })
         .then(() => {
-          console.log(`Replaced ${bs58.encode(proof.leaf)}, index ${sample}`);
+          console.log(
+            `Replaced ${bs58.encode(proof.leaf)} with ${bs58.encode(
+              newLeaf
+            )}, index ${sample}`
+          );
+          updateTree(offChainMerkle, newLeaf, sample);
+          if (!(sample in replacedInds)) replacedInds.push(sample);
         })
-        .catch((x) => {
+        .catch(async (x) => {
           console.log("Encountered error on ", bs58.encode(proof.leaf));
-          recentHashes.delete(bs58.encode(proof.leaf));
+          failed += 1;
+          await logStats(
+            nftDb,
+            offChainMerkle,
+            appends,
+            replaces,
+            failed,
+            replacedInds
+          );
         });
-      leaves[sample] = newLeaf;
     }
+  }
+}
+
+async function logStats(
+  nftDb: NFTDatabaseConnection,
+  tree: Tree,
+  appends: number,
+  replaces: number,
+  failed: number,
+  replacedInds: Array<number>,
+  repeat: boolean = true
+) {
+  let leafIdxs = await nftDb.getLeafIndices();
+  let sequenceNumbers = Array.from(await nftDb.getSequenceNumbers()).sort(
+    (a, b) => {
+      return a - b;
+    }
+  );
+  for (let i = 0; i < sequenceNumbers.length + 1; ++i) {
+    let prev = sequenceNumbers[i];
+    let curr = sequenceNumbers[i + 1];
+    for (let j = 1; j < curr - prev; ++j) {
+      console.log("Missing sequence number in DB: ", prev + j);
+    }
+  }
+  let count = 0;
+  console.log(
+    replacedInds.sort((a, b) => {
+      return a - b;
+    })
+  );
+  for (const [nodeIdx, hash] of leafIdxs) {
+    let proof = await nftDb.generateProof(nodeIdx, hash, false);
+    let corruptedIdx = nodeIdx - (1 << Math.log2(nodeIdx));
+    if (!nftDb.verifyProof(proof)) {
+      console.log(
+        `   ${corruptedIdx} proof verification failed, hash: ${bs58.encode(
+          hash
+        )}, stored hash: ${nftDb.tree.get(nodeIdx)}`
+      );
+      count++;
+    }
+    let offChainProof = getProofOfLeaf(tree, corruptedIdx);
+    let root = offChainProof.pop().node;
+    let proofNodes = offChainProof.map((x) => x.node);
+    let newProof: Proof = {
+      leaf: hash,
+      root: root,
+      index: nodeIdx,
+      proofNodes: proofNodes,
+    };
+    if (!nftDb.verifyProof(newProof)) {
+      console.log(
+        `   OFF CHAIN ${corruptedIdx} proof verification failed, hash: ${bs58.encode(
+          hash
+        )}, stored hash: ${nftDb.tree.get(nodeIdx)}`
+      );
+    } 
+  }
+  console.log(`Verification failed for ${count}/${leafIdxs.length}`);
+  console.log(`Stats:`);
+  console.log(`   Appends: ${appends}`);
+  console.log(`   Replace attempts: ${replaces}`);
+  console.log(`   Failed replaces: ${failed}`);
+  if (count > 0 && repeat) {
+    console.log("Sleeping for the DB to recover");
+    await new Promise((r) => setTimeout(r, 2000));
+    console.log("Polling status again");
+    await logStats(nftDb, tree, appends, replaces, failed, replacedInds, false);
   }
 }
 

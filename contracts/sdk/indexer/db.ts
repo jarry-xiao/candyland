@@ -103,6 +103,25 @@ export class NFTDatabaseConnection {
     return leafHashes;
   }
 
+  async getLeafIndices(): Promise<Array<[number, Buffer]>> {
+    let leaves = await this.connection.all(
+      `
+        SELECT DISTINCT node_idx, hash, max(seq) as seq
+        FROM merkle
+        WHERE level = 0
+        GROUP BY node_idx
+        ORDER BY node_idx
+      `
+    );
+    let leafIdxs = [];
+    if (leaves.length > 0) {
+      for (const l of leaves) {
+        leafIdxs.push([l.node_idx, bs58.decode(l.hash)]);
+      }
+    }
+    return leafIdxs;
+  }
+
   async getProof(hash: Buffer): Promise<Proof | null> {
     let hashString = bs58.encode(hash);
     let res = await this.connection.all(
@@ -116,54 +135,62 @@ export class NFTDatabaseConnection {
     );
     if (res.length == 1) {
       let nodeIdx = res[0].node_idx;
-      let nodes = [];
-      let n = nodeIdx;
-      while (n > 1) {
-        if (n % 2 == 0) {
-          nodes.push(n + 1);
-        } else {
-          nodes.push(n - 1);
-        }
-        n >>= 1;
-      }
-      nodes.push(1);
-      res = await this.connection.all(
-        `
-        SELECT DISTINCT node_idx, hash, level, max(seq) as seq
-        FROM merkle where node_idx in (${nodes.join(",")})
-        GROUP BY node_idx
-        ORDER BY level
-        `
-      );
-      if (res.length < 1) {
-        return null;
-      }
-      let root = res.pop();
-      if (root.node_idx != 1) {
-        return null;
-      }
-      let proof = [];
-      for (let i = 0; i < root.level; i++) {
-        proof.push(this.emptyNode(i));
-      }
-      for (const node of res) {
-        proof[node.level] = bs58.decode(node.hash);
-      }
-      let leafIdx = nodeIdx - (1 << root.level);
-      let inferredProof = {
-        leaf: hash,
-        root: bs58.decode(root.hash),
-        proofNodes: proof,
-        index: leafIdx,
-      };
-      if (!this.verifyProof(inferredProof)) {
-        console.log("Proof is invalid");
-        return null
-      }
-      return inferredProof;
+      return this.generateProof(nodeIdx, hash);
     } else {
       return null;
     }
+  }
+
+  async generateProof(
+    nodeIdx: number,
+    hash: Buffer,
+    check: boolean = true
+  ): Promise<Proof | null> {
+    let nodes = [];
+    let n = nodeIdx;
+    while (n > 1) {
+      if (n % 2 == 0) {
+        nodes.push(n + 1);
+      } else {
+        nodes.push(n - 1);
+      }
+      n >>= 1;
+    }
+    nodes.push(1);
+    let res = await this.connection.all(
+      `
+      SELECT DISTINCT node_idx, hash, level, max(seq) as seq
+      FROM merkle where node_idx in (${nodes.join(",")})
+      GROUP BY node_idx
+      ORDER BY level
+      `
+    );
+    if (res.length < 1) {
+      return null;
+    }
+    let root = res.pop();
+    if (root.node_idx != 1) {
+      return null;
+    }
+    let proof = [];
+    for (let i = 0; i < root.level; i++) {
+      proof.push(this.emptyNode(i));
+    }
+    for (const node of res) {
+      proof[node.level] = bs58.decode(node.hash);
+    }
+    let leafIdx = nodeIdx - (1 << root.level);
+    let inferredProof = {
+      leaf: hash,
+      root: bs58.decode(root.hash),
+      proofNodes: proof,
+      index: leafIdx,
+    };
+    if (check && !this.verifyProof(inferredProof)) {
+      console.log("Proof is invalid");
+      return null;
+    }
+    return inferredProof;
   }
 
   verifyProof(proof: Proof) {
