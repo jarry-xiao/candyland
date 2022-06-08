@@ -76,6 +76,8 @@ async fn parse_and_store_transactions(
         parse_results.push(get_transaction(client, &sig_info.signature));
     }
     let results = join_all(parse_results).await;
+    // Loop through results and insert them into the tree
+    // Save tree to database
     println!("{:?}", results);
     Ok(())
 }
