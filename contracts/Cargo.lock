@@ -391,6 +391,7 @@ dependencies = [
  "mpl-token-metadata",
  "spl-associated-token-account",
  "spl-token 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spl-token-2022 0.2.0",
 ]
 
 [[package]]
@@ -999,7 +1000,7 @@ dependencies = [
  "solana-program",
  "spl-associated-token-account",
  "spl-token 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "spl-token-2022",
+ "spl-token-2022 0.2.0 (git+https://github.com/solana-labs/solana-program-library?rev=7f3cad3)",
  "thiserror",
 ]
 
@@ -1650,6 +1651,18 @@ dependencies = [
 [[package]]
 name = "spl-token"
 version = "3.3.0"
+dependencies = [
+ "arrayref",
+ "num-derive",
+ "num-traits",
+ "num_enum",
+ "solana-program",
+ "thiserror",
+]
+
+[[package]]
+name = "spl-token"
+version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0cc67166ef99d10c18cb5e9c208901e6d8255c6513bb1f877977eba48e6cc4fb"
 dependencies = [
@@ -1671,6 +1684,21 @@ dependencies = [
  "num-traits",
  "num_enum",
  "solana-program",
+ "thiserror",
+]
+
+[[package]]
+name = "spl-token-2022"
+version = "0.2.0"
+dependencies = [
+ "arrayref",
+ "bytemuck",
+ "num-derive",
+ "num-traits",
+ "num_enum",
+ "solana-program",
+ "solana-zk-token-sdk",
+ "spl-token 3.3.0",
  "thiserror",
 ]
 
