@@ -2,10 +2,12 @@ pub mod error;
 use crate::error::SnapshotBackfillError;
 use solana_client::rpc_client::GetConfirmedSignaturesForAddress2Config;
 use solana_client::rpc_client::RpcClient;
+use solana_client::rpc_config::RpcTransactionConfig;
 use solana_sdk::commitment_config::CommitmentConfig;
 use solana_sdk::pubkey::Pubkey;
 use solana_sdk::pubkeys;
 use solana_sdk::signature::Signature;
+use solana_transaction_status::UiTransactionEncoding;
 use structopt::StructOpt;
 
 pubkeys!(
@@ -48,7 +50,10 @@ fn get_rpc_client(rpc_url: &str) -> Result<RpcClient, SnapshotBackfillError> {
     Ok(client)
 }
 
-fn parse_and_store_transactions(client: RpcClient, opts: Opt) -> Result<(), SnapshotBackfillError> {
+fn parse_and_store_transactions(
+    client: &RpcClient,
+    opts: Opt,
+) -> Result<(), SnapshotBackfillError> {
     let config = GetConfirmedSignaturesForAddress2Config {
         before: Some(Signature::new(
             bs58::decode(opts.before).into_vec()?.as_slice(),
@@ -61,6 +66,23 @@ fn parse_and_store_transactions(client: RpcClient, opts: Opt) -> Result<(), Snap
     };
     let sigs = client.get_signatures_for_address_with_config(&CandyMachineID(), config)?;
     println!("{:?}", sigs);
+    for sig_info in sigs.iter() {
+        get_transaction(client, &sig_info.signature);
+    }
+    Ok(())
+}
+
+fn get_transaction(client: &RpcClient, signature: &str) -> Result<(), SnapshotBackfillError> {
+    let config = RpcTransactionConfig {
+        encoding: Some(UiTransactionEncoding::Json),
+        commitment: Some(CommitmentConfig::confirmed()),
+        max_supported_transaction_version: None,
+    };
+    let tx = client.get_transaction_with_config(
+        &Signature::new(bs58::decode(signature.to_string()).into_vec()?.as_slice()),
+        config,
+    )?;
+    println!("\n{:?}", tx);
     Ok(())
 }
 
@@ -69,5 +91,5 @@ fn main() {
     println!("{:?}", &args);
 
     let client = get_rpc_client(&args.url).unwrap();
-    parse_and_store_transactions(client, args).unwrap();
+    parse_and_store_transactions(&client, args).unwrap();
 }

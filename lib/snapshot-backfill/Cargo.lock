@@ -2499,6 +2499,7 @@ dependencies = [
  "bs58",
  "solana-client",
  "solana-sdk",
+ "solana-transaction-status",
  "structopt",
  "thiserror",
 ]
