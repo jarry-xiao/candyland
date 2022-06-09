@@ -122,7 +122,7 @@ export class NFTDatabaseConnection {
     return leafIdxs;
   }
 
-  async getProof(hash: Buffer): Promise<Proof | null> {
+  async getProof(hash: Buffer, check: boolean = true): Promise<Proof | null> {
     let hashString = bs58.encode(hash);
     let res = await this.connection.all(
       `
@@ -135,7 +135,7 @@ export class NFTDatabaseConnection {
     );
     if (res.length == 1) {
       let nodeIdx = res[0].node_idx;
-      return this.generateProof(nodeIdx, hash);
+      return this.generateProof(nodeIdx, hash, check);
     } else {
       return null;
     }
