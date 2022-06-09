@@ -1,5 +1,5 @@
 import { Program, web3 } from "@project-serum/anchor";
-import { bootstrap, NFTDatabaseConnection, Proof } from "./db";
+import { bootstrap, hash, NFTDatabaseConnection, Proof } from "./db";
 import {
   createAppendIx,
   createReplaceIx,
@@ -131,8 +131,9 @@ async function main() {
 
   while (1) {
     counter += 1;
-    if (counter % 10 == 0) {
+    if (counter % 20 == 0) {
       console.log("Status: ", counter);
+      await nftDb.updateTree();
       await logStats(
         nftDb,
         offChainMerkle,
@@ -152,14 +153,12 @@ async function main() {
       updateTree(offChainMerkle, leaf, appends);
       appends += 1;
     } else {
-      continue;
       let proof;
       let leaves;
       let leaf;
       let sample;
       leaves = await nftDb.getAllLeaves();
-      if (leaves.size === 0) {
-        console.log("No leaves in DB");
+      if (leaves.size < 1) {
         continue;
       }
       sample = Math.floor(Math.random() * leaves.size);
@@ -167,7 +166,7 @@ async function main() {
       if (!leaf) {
         continue;
       }
-      proof = await nftDb.getProof(bs58.decode(leaf));
+      proof = await nftDb.getProof(bs58.decode(leaf), false);
       if (!proof) {
         await logStats(
           nftDb,
@@ -251,6 +250,33 @@ async function logStats(
       return a - b;
     })
   );
+
+  for (let i = 1; i < 1 << 20; ++i) {
+    if (!nftDb.tree.has(i)) {
+      continue;
+    }
+    let expected = nftDb.tree.get(i)[1];
+    let left, right;
+    if (nftDb.tree.has(2 * i)) {
+      left = bs58.decode(nftDb.tree.get(2 * i)[1]);
+    } else {
+      left = nftDb.emptyNode(20 - Math.floor(Math.log2(2 * i)));
+    }
+    if (nftDb.tree.has(2 * i + 1)) {
+      right = bs58.decode(nftDb.tree.get(2 * i + 1)[1]);
+    } else {
+      right = nftDb.emptyNode(20 - Math.floor(Math.log2(2 * i)));
+    }
+    let actual = bs58.encode(hash(left, right));
+    if (expected !== actual) {
+      console.log(
+        `Node mismatch ${i}, expected: ${expected}, actual: ${actual}, left: ${bs58.encode(
+          left
+        )}, right: ${bs58.encode(right)}`
+      );
+    }
+  }
+
   for (const [nodeIdx, hash] of leafIdxs) {
     let proof = await nftDb.generateProof(nodeIdx, hash, false);
     let corruptedIdx = nodeIdx - (1 << Math.log2(nodeIdx));
@@ -262,22 +288,22 @@ async function logStats(
       );
       count++;
     }
-    let offChainProof = getProofOfLeaf(tree, corruptedIdx);
-    let root = offChainProof.pop().node;
-    let proofNodes = offChainProof.map((x) => x.node);
-    let newProof: Proof = {
-      leaf: hash,
-      root: root,
-      index: nodeIdx,
-      proofNodes: proofNodes,
-    };
-    if (!nftDb.verifyProof(newProof)) {
-      console.log(
-        `   OFF CHAIN ${corruptedIdx} proof verification failed, hash: ${bs58.encode(
-          hash
-        )}, stored hash: ${nftDb.tree.get(nodeIdx)}`
-      );
-    } 
+    // let offChainProof = getProofOfLeaf(tree, corruptedIdx);
+    // let root = offChainProof.pop().node;
+    // let proofNodes = offChainProof.map((x) => x.node);
+    // let newProof: Proof = {
+    //   leaf: hash,
+    //   root: root,
+    //   index: nodeIdx,
+    //   proofNodes: proofNodes,
+    // };
+    // if (!nftDb.verifyProof(newProof)) {
+    //   console.log(
+    //     `   OFF CHAIN ${corruptedIdx} proof verification failed, hash: ${bs58.encode(
+    //       hash
+    //     )}, stored hash: ${nftDb.tree.get(nodeIdx)}`
+    //   );
+    // }
   }
   console.log(`Verification failed for ${count}/${leafIdxs.length}`);
   console.log(`Stats:`);
@@ -289,6 +315,8 @@ async function logStats(
     await new Promise((r) => setTimeout(r, 2000));
     console.log("Polling status again");
     await logStats(nftDb, tree, appends, replaces, failed, replacedInds, false);
+  } else if (count > 0) {
+    throw new Error();
   }
 }
 
