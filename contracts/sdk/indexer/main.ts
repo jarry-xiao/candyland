@@ -97,9 +97,6 @@ async function main() {
   let initTx = await GummyrollCtx.provider.send(
     tx,
     [payer, merkleRollKeypair],
-    {
-      commitment: "confirmed",
-    }
   );
   console.log(initTx);
   let nftDb = await bootstrap();
@@ -183,6 +180,7 @@ async function main() {
       replaces += 1;
       let replaceTx = new Transaction().add(
         createReplaceIx(
+          // @ts-ignore
           GummyrollCtx,
           payer,
           merkleRollKeypair.publicKey,
@@ -194,9 +192,7 @@ async function main() {
         )
       );
       await GummyrollCtx.provider
-        .send(replaceTx, [payer], {
-          commitment: "confirmed",
-        })
+        .send(replaceTx, [payer])
         .then(() => {
           console.log(
             `Replaced ${bs58.encode(proof.leaf)} with ${bs58.encode(

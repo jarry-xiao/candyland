@@ -75,13 +75,6 @@ type Path = {
   _padding: number;
 };
 
-<<<<<<< HEAD
-=======
-function readPublicKey(reader: borsh.BinaryReader): PublicKey {
-  return new PublicKey(reader.readFixedArray(32));
-}
-
->>>>>>> 4c7a7b6 (Initial commit for a jank indexing procedure for people who don't know how to write real code :))
 export function decodeMerkleRoll(buffer: Buffer): OnChainMerkleRoll {
   let reader = new borsh.BinaryReader(buffer);
 
