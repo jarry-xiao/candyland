@@ -74,6 +74,7 @@ describe("gumball-machine", () => {
     })
   );
 
+  console.log(anchor.workspace);
   GumballMachine = anchor.workspace.GumballMachine as Program<GumballMachine>;
   Bubblegum = anchor.workspace.Bubblegum as Program<Bubblegum>;
   GummyrollProgramId = anchor.workspace.Gummyroll.programId;
