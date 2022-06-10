@@ -9,7 +9,7 @@
     "express": "^4.18.1"
   },
   "scripts": {
-    "validator": "solana-test-validator --bpf-program GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD ../../target/deploy/gummyroll.so",
+    "validator": "./runs.sh",
     "test": "ts-node main.ts",
     "server": "ts-node server.ts"
   }
