@@ -8,7 +8,7 @@ import { BubblegumIx } from './bubblegum';
 const startRegEx = /Program (\w*) invoke \[(\d)\]/;
 const endRegEx = /Program (\w*) success/;
 const dataRegEx = /Program data: ((?:[A-Za-z\d+/]{4})*(?:[A-Za-z\d+/]{3}=|[A-Za-z\d+/]{2}==)?$)/;
-const ixRegEx = /Program log: Instruction: (\w+)/;
+export const ixRegEx = /Program log: Instruction: (\w+)/;
 
 export type ParserState = {
     Gummyroll: anchor.Program<Gummyroll>,
@@ -19,6 +19,10 @@ export type ParsedLog = {
     programId: PublicKey,
     logs: (string | ParsedLog)[]
     depth: number,
+}
+
+export type OptionalInfo = {
+    txId: String
 }
 
 /**
@@ -80,7 +84,7 @@ export function parseLogs(logs: string[]): ParsedLog[] {
     return parsedLogs;
 }
 
-export function parseEventFromLog(log: string, idl: anchor.Idl): Object | null {
+export function parseEventFromLog(log: string, idl: anchor.Idl): anchor.Event | null {
     return decodeEvent(log.match(dataRegEx)[1], idl)
 }
 
@@ -93,7 +97,7 @@ export function parseEventFromLog(log: string, idl: anchor.Idl): Object | null {
  * @param idl 
  * @returns 
  */
-function decodeEvent(data: string, idl: anchor.Idl): Object | null {
+function decodeEvent(data: string, idl: anchor.Idl): anchor.Event | null {
     let eventCoder = new anchor.BorshEventCoder(idl);
     return eventCoder.decode(data);
 }
@@ -103,6 +107,3 @@ export function loadProgram(provider: anchor.Provider, programId: PublicKey, idl
     return new anchor.Program(IDL, programId, provider)
 }
 
-export function getIxName(logLine: string): BubblegumIx | null {
-    return logLine.match(ixRegEx)[1] as BubblegumIx
-}

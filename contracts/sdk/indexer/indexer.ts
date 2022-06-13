@@ -8,7 +8,6 @@ import { Gummyroll } from '../../target/types/gummyroll';
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 import { readFileSync } from 'fs';
 import { loadProgram, parseLogs } from './indexer/utils';
-import { parseGummyrollAppend } from "./indexer/gummyroll";
 import { parseBubblegum } from "./indexer/bubblegum";
 
 let Bubblegum: anchor.Program<Bubblegum>;
@@ -23,32 +22,9 @@ async function handleLogs(logs: Logs, _context: Context) {
     for (const parsedLog of parsed) {
         if (typeof parsedLog !== "string" && parsedLog.programId.equals(BUBBLEGUM_PROGRAM_ID)) {
             parseBubblegum(parsedLog, { Bubblegum, Gummyroll });
-            // if (ixName == 'Mint') {
-            //     for (const innerLog of parsedLog.logs.slice(1,)) {
-            //         if (typeof innerLog !== "string" && innerLog.programId.equals(GUMMYROLL_PROGRAM_ID)) {
-            //             const gixName = getIxName(innerLog.logs[0] as string);
-            //             if (gixName == 'Append') {
-            //                 parseGummyrollAppend(innerLog.logs as string[], Gummyroll)
-            //             }
-            //         }
-            //     }
-            // }
         }
     }
 }
-
-function handleBubblegumEvent() {
-
-}
-
-function handleGummyrollEvent() {
-
-}
-
-function handleBubbblegumGummyrollEvent() {
-
-}
-
 
 async function main() {
     const connection = new Connection("http://localhost:8899", "confirmed");
