@@ -21,7 +21,7 @@ async function handleLogs(logs: Logs, _context: Context) {
     const parsed = parseLogs(logs.logs);
     for (const parsedLog of parsed) {
         if (typeof parsedLog !== "string" && parsedLog.programId.equals(BUBBLEGUM_PROGRAM_ID)) {
-            parseBubblegum(parsedLog, { Bubblegum, Gummyroll });
+            parseBubblegum(parsedLog, { Bubblegum, Gummyroll }, {txId: logs.signature});
         }
     }
 }
