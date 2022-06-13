@@ -9,7 +9,9 @@ pub enum IngesterError {
     #[error("Error writing batch files")]
     BatchInitIOError,
     #[error("Storage Write Error {0}")]
-    StorageWriteError(String)
+    StorageWriteError(String),
+    #[error("NotImplemented")]
+    NotImplemented
 }
 
 impl From<reqwest::Error> for IngesterError {

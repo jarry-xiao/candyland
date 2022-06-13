@@ -16,7 +16,8 @@ thiserror = "1.0.31"
 tokio = { version = "1.17.0", features = ["full"] }
 gummyroll = { path = "../programs/gummyroll", features = ["no-entrypoint"] }
 bubblegum = { path = "../programs/bubblegum", features = ["no-entrypoint"] }
-sqlx = { version = "0.5.11", features = ["runtime-tokio-rustls", "postgres", "uuid"] }
+sqlx = { version = "0.5.11", features = ["macros","runtime-tokio-rustls", "postgres", "uuid", "offline", "json"] }
+sea-orm = { version = "^0", features = ["macros", "runtime-tokio-rustls", "sqlx-postgres"] }
 tokio-postgres = "0.7.5"
 serde = "1.0.136"
 bs58 = "0.4.0"
@@ -30,6 +31,7 @@ regex = "1.5.5"
 plerkle = { path = "../plerkle" }
 gummyroll-crud = { path = "../programs/gummyroll_crud", features = ["no-entrypoint"] }
 plerkle-serialization = { path = "../plerkle_serialization" }
+digital_asset_types = { path = "../digital_asset_types" }
 uuid = "1.0.0"
 async-trait = "0.1.53"
 

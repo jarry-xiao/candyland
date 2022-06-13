@@ -1125,6 +1125,9 @@ name = "either"
 version = "1.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "encode_unicode"
@@ -2140,6 +2143,7 @@ dependencies = [
  "bs58 0.4.0",
  "bubblegum",
  "csv",
+ "digital_asset_types",
  "flatbuffers",
  "futures-util",
  "gummyroll",
@@ -2156,6 +2160,7 @@ dependencies = [
  "reqwest",
  "routerify",
  "routerify-json-response",
+ "sea-orm",
  "serde",
  "solana-sdk",
  "sqlx",
@@ -4486,9 +4491,11 @@ dependencies = [
  "dotenv",
  "either",
  "heck",
+ "hex",
  "once_cell",
  "proc-macro2 1.0.36",
  "quote 1.0.15",
+ "serde",
  "serde_json",
  "sha2 0.9.9",
  "sqlx-core",

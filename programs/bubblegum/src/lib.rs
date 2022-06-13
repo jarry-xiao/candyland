@@ -366,7 +366,7 @@ pub mod bubblegum {
             data_hash.to_bytes(),
             creator_hash.to_bytes(),
         );
-        let bump = assert_derivation(
+        assert_derivation(
             &id(),
             &ctx.accounts.id.to_account_info(),
             &[nonce.key().as_ref(), (nonce.count).to_le_bytes().as_ref()],
