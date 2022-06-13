@@ -6,12 +6,12 @@ const {
 const { spawn } = require('child_process');
 const { Solita } = require('@metaplex-foundation/solita');
 const { writeFile } = require('fs/promises');
-const { fstat, existsSync } = require('fs');
+const { fstat, existsSync, realpath, realpathSync } = require('fs');
 
-const PROGRAM_NAME = 'bubblegum';
-const PROGRAM_ID = 'BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o';
+const PROGRAM_NAME = 'gumball-machine';
+const PROGRAM_ID = 'BRKyVDRGT7SPBtMhjHN4PVSPVYoc3Wa3QTyuRVM4iZkt';
 
-const programDir = path.join(__dirname, '..', '..', 'programs', 'bubblegum');
+const programDir = path.join(__dirname, '..', '..', 'programs', 'gumball-machine');
 const cargoToml = path.join(programDir, 'Cargo.toml')
 const generatedIdlDir = path.join(__dirname, 'idl');
 const generatedSDKDir = path.join(__dirname, 'src', 'generated');
@@ -19,6 +19,7 @@ const rootDir = path.join(__dirname, '.crates')
 
 async function main() {
     const anchorExecutable = realpathSync("../../../deps/anchor/target/debug/anchor");
+    // const anchorExecutable = ("~/Documents/core/candyland/deps/anchor/target/debug/anchor").replace("~", process.env.HOME);
     if (!existsSync(anchorExecutable)) {
         console.log(`Could not find: ${anchorExecutable}`);
         throw new Error("Please `cd candyland/deps/anchor/anchor-cli` && cargo build`")
@@ -35,7 +36,7 @@ async function main() {
             process.exit(1);
         })
         .on('exit', () => {
-            console.log('IDL written to: %s', path.join(generatedIdlDir, `${PROGRAM_NAME}.json`));
+            console.log('IDL written to: %s', path.join(generatedIdlDir, `${PROGRAM_NAME.replace("-", '_')}.json`));
             generateTypeScriptSDK();
         });
 
@@ -45,7 +46,7 @@ async function main() {
 
 async function generateTypeScriptSDK() {
     console.error('Generating TypeScript SDK to %s', generatedSDKDir);
-    const generatedIdlPath = path.join(generatedIdlDir, `${PROGRAM_NAME}.json`);
+    const generatedIdlPath = path.join(generatedIdlDir, `${PROGRAM_NAME.replace("-", "_")}.json`);
 
     const idl = require(generatedIdlPath);
     if (idl.metadata?.address == null) {
