@@ -1,32 +1,43 @@
+use std::rc::Rc;
 use anchor_client::anchor_lang::prelude::Pubkey;
 use lazy_static::lazy_static;
-use sea_orm::SqlxPostgresConnector;
 use solana_sdk::pubkeys;
-use sqlx::{PgPool, query};
+use std::sync::Arc;
 use {
-    crate::{
-        events::handle_event,
-        parsers::{InstructionBundle, ProgramHandler, ProgramHandlerConfig},
-        utils::{filter_events_from_logs, pubkey_from_fb_table},
-        error::IngesterError,
-    },
+    crate::events::handle_event,
+    crate::utils::{filter_events_from_logs, pubkey_from_fb_table},
     anchor_client::anchor_lang::AnchorDeserialize,
     bubblegum::state::leaf_schema::LeafSchemaEvent,
     flatbuffers::{ForwardsUOffset, Vector},
     plerkle_serialization::transaction_info_generated::transaction_info::{self},
     solana_sdk,
     sqlx::{self, types::Uuid, Pool, Postgres},
-    async_trait::async_trait,
 };
-use bubblegum::state::leaf_schema::LeafSchema;
-use digital_asset_types::{asset, asset_data};
-use digital_asset_types::sea_orm_active_enums::{OwnerType, RoyaltyTargetType};
-use crate::{get_gummy_roll_events, gummyroll_change_log_event_to_database};
+
+use crate::error::IngesterError;
+use crate::parsers::{InstructionBundle, ProgramHandler, ProgramHandlerConfig};
+use async_trait::async_trait;
 
 pubkeys!(
-    Bubblegum_Program_ID,
+    BubblegumProgramID,
     "BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o"
 );
+
+const SET_NFT_APPSQL: &str = r#"
+    INSERT INTO nft_metadata (
+        owner,
+        delegate,
+        nonce,
+        revision,
+        name,
+        symbol,
+        uri,
+        sellerfeebasispoints,
+        primarySaleHappened,
+        isMutable
+    )
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+    "#;
 
 pub struct BubblegumHandler {
     id: Pubkey,
@@ -57,14 +68,14 @@ impl ProgramHandler for BubblegumHandler {
             bundle.message_id,
             &self.storage,
         )
-            .await
+        .await
     }
 }
 
 impl BubblegumHandler {
     pub fn new(pool: Pool<Postgres>) -> Self {
         BubblegumHandler {
-            id: Bubblegum_Program_ID(),
+            id: BubblegumProgramID(),
             storage: pool,
         }
     }
@@ -110,16 +121,6 @@ async fn handle_bubblegum_instruction<'a, 'b>(
     pid: i64,
     pool: &Pool<Postgres>,
 ) -> Result<(), IngesterError> {
-    println!("{:?}", logs);
-    let db = SqlxPostgresConnector::from_sqlx_postgres_pool(PgPool(pool));
-    let txn = pool.begin().await.unwrap();
-    for change_log_event in get_gummy_roll_events(logs)? {
-        gummyroll_change_log_event_to_database(
-            change_log_event,
-            pid,
-            pool,
-        ).await;
-    }
     match bubblegum::get_instruction_type(instruction.data().unwrap()) {
         bubblegum::InstructionName::Transfer => {
             println!("Bubblegum: Transfer");
@@ -135,17 +136,6 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                 return Err(IngesterError::ChangeLogEventMalformed);
             };
             let leaf_event = leaf_event_result.unwrap();
-            let (id, owner, delegate, nonce) =  match leaf_event.schema {
-                LeafSchema::V0 {
-                    id,
-                    owner,
-                    delegate,
-                    nonce,
-                    ..
-                } => (id, owner, delegate, nonce)
-
-            }
-
             let accounts = instruction.accounts().unwrap();
             let owner = pubkey_from_fb_table(keys, accounts[4] as usize);
             let delegate = pubkey_from_fb_table(keys, accounts[5] as usize);
@@ -164,32 +154,10 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                 metadata.primary_sale_happened,
                 metadata.is_mutable,
             );
-            let data = asset_data::ActiveModel {
-
-            };
-
-            asset::ActiveModel {
-                id: bs58::decode(id).into_vec().unwrap(),
-                owner: bs58::decode(&owner).into_vec().unwrap(),
-                owner_type: OwnerType::Single,
-                delegate: None,
-                frozen: false,
-                supply: 0,
-                supply_mint: None,
-                compressed: false,
-                compressible: false,
-                tree_id: Some(ix.merkle_slab),
-                leaf: Some(),
-                revision: 0,
-                royalty_target_type: RoyaltyTargetType::Creators,
-                royalty_target: None,
-                chain_data_id: None
-            }
-
 
             // TODO(): insert ALL metadata for NFT so that it can be hashed on-chain
             sqlx::query(SET_NFT_APPSQL)
-                .bind()
+                .bind(&bs58::decode(&owner).into_vec().unwrap())
                 .bind(&bs58::decode(&delegate).into_vec().unwrap())
                 .bind(&Uuid::from_u128(leaf_event.nonce))
                 // revision
@@ -225,7 +193,5 @@ async fn handle_bubblegum_instruction<'a, 'b>(
         }
         _ => println!("Bubblegum: Ignored instruction"),
     }
-    txn.commit().await.map_err(|e| {
-        IngesterError::StorageWriteError(e.to_string())
-    })
+    Ok(())
 }
