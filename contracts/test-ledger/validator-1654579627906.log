@@ -1,0 +1,11 @@
+[0m[38;5;8m[[0m2022-06-07T05:27:07.907284000Z [0m[32mINFO [0m solana_test_validator[0m[38;5;8m][0m solana-validator 1.10.1 (src:83f5f8bf; feat:382658362)
+[0m[38;5;8m[[0m2022-06-07T05:27:07.907326000Z [0m[32mINFO [0m solana_test_validator[0m[38;5;8m][0m Starting validator with: ArgsOs {
+        inner: [
+            "solana-test-validator",
+            "--bpf-program",
+            "GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD",
+            "contracts/target/deploy/gummyroll.so",
+        ],
+    }
+[0m[38;5;8m[[0m2022-06-07T05:27:07.907362000Z [0m[33mWARN [0m solana_perf[0m[38;5;8m][0m CUDA is disabled
+[0m[38;5;8m[[0m2022-06-07T05:27:07.909044000Z [0m[32mINFO [0m solana_perf[0m[38;5;8m][0m AVX detected

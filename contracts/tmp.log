@@ -1,0 +1,80 @@
+3CT4HyV4McrrhaMXk74e5kdj3p18bqvjbApfBFFFZHAGQ9Q7qaT5p4St1taoZW9UHJrgEBrDfAMrZbpDvSuSDSX4
+Finished bootstrapping DB
+Updated 21 rows
+Status:  1
+[]
+Verification failed for 0/0
+Stats:
+   Appends: 0
+   Replace attempts: 0
+   Failed replaces: 0
+Sampled 11111111111111111111111111111111, index 0
+Replaced 11111111111111111111111111111111 with 5t61EXXEcJaxECj8bTvP3N8x7pGWTEQ4xzK6txmdqCEu, index 0
+Status:  2
+Received Batch! Sequence=1, entries 2
+Updated 21 rows
+[ 0 ]
+Verification failed for 0/1
+Stats:
+   Appends: 0
+   Replace attempts: 1
+   Failed replaces: 0
+Sampled 5t61EXXEcJaxECj8bTvP3N8x7pGWTEQ4xzK6txmdqCEu, index 0
+Replaced 5t61EXXEcJaxECj8bTvP3N8x7pGWTEQ4xzK6txmdqCEu with 8RxW6dPFJ7h7oSaxwfDEFyN81rF7ptcvPoo9CKFWBKuo, index 0
+Status:  3
+[ 0 ]
+Received Batch! Sequence=2, entries 3
+Verification failed for 0/1
+Stats:
+   Appends: 0
+   Replace attempts: 2
+   Failed replaces: 0
+Updated 21 rows
+Proof is invalid
+[ 0 ]
+Verification failed for 0/1
+Stats:
+   Appends: 0
+   Replace attempts: 2
+   Failed replaces: 0
+Status:  4
+[ 0 ]
+Verification failed for 0/1
+Stats:
+   Appends: 0
+   Replace attempts: 2
+   Failed replaces: 0
+Append 3Rh9QZ9GwMgrPBdogV7CDDghebpEPiocs7EYWuyy7RrK, index: 0
+Status:  5
+[ 0 ]
+Received Batch! Sequence=3, entries 4
+Verification failed for 0/1
+Stats:
+   Appends: 1
+   Replace attempts: 2
+   Failed replaces: 0
+Updated 21 rows
+Append 9237AFT2bv6ZEaMyKtJQPQBNnvgSevThwGWYrbvEK6sv, index: 1
+Status:  6
+[ 0 ]
+Node mismatch 524288, expected: 6cfRZk5R3J7Y6qmNnZJJYac36j2pj43Pa1W1La7Shfno, actual: 7idWtAwRV2nhmceS2apZUiE1f9vUefge3GsqUFXfFXB3, left: 8RxW6dPFJ7h7oSaxwfDEFyN81rF7ptcvPoo9CKFWBKuo, right: 3Rh9QZ9GwMgrPBdogV7CDDghebpEPiocs7EYWuyy7RrK
+Received Batch! Sequence=4, entries 5
+   0 proof verification failed, hash: 8RxW6dPFJ7h7oSaxwfDEFyN81rF7ptcvPoo9CKFWBKuo, stored hash: 2,8RxW6dPFJ7h7oSaxwfDEFyN81rF7ptcvPoo9CKFWBKuo
+Updated 21 rows
+   1 proof verification failed, hash: 3Rh9QZ9GwMgrPBdogV7CDDghebpEPiocs7EYWuyy7RrK, stored hash: 3,3Rh9QZ9GwMgrPBdogV7CDDghebpEPiocs7EYWuyy7RrK
+Verification failed for 2/2
+Stats:
+   Appends: 2
+   Replace attempts: 2
+   Failed replaces: 0
+Sleeping for the DB to recover
+Polling status again
+[ 0 ]
+Node mismatch 524288, expected: 6cfRZk5R3J7Y6qmNnZJJYac36j2pj43Pa1W1La7Shfno, actual: 7idWtAwRV2nhmceS2apZUiE1f9vUefge3GsqUFXfFXB3, left: 8RxW6dPFJ7h7oSaxwfDEFyN81rF7ptcvPoo9CKFWBKuo, right: 3Rh9QZ9GwMgrPBdogV7CDDghebpEPiocs7EYWuyy7RrK
+   0 proof verification failed, hash: 8RxW6dPFJ7h7oSaxwfDEFyN81rF7ptcvPoo9CKFWBKuo, stored hash: 2,8RxW6dPFJ7h7oSaxwfDEFyN81rF7ptcvPoo9CKFWBKuo
+   1 proof verification failed, hash: 3Rh9QZ9GwMgrPBdogV7CDDghebpEPiocs7EYWuyy7RrK, stored hash: 3,3Rh9QZ9GwMgrPBdogV7CDDghebpEPiocs7EYWuyy7RrK
+Verification failed for 2/3
+Stats:
+   Appends: 2
+   Replace attempts: 2
+   Failed replaces: 0

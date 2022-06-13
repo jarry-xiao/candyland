@@ -90,9 +90,24 @@
     "@solana/web3.js" "^1.31.0"
 
 "@metaplex-foundation/beet@^0.1.0":
+<<<<<<< HEAD
   version "0.1.4"
   resolved "https://registry.npmjs.org/@metaplex-foundation/beet/-/beet-0.1.4.tgz"
   integrity sha512-gUlgl4h9XzSvSx7lUDvYQuy1eMxu4UXbt5MSR9K/dYIHHd3gcCxm8/6vn0VnUXMvpwVHS8tezxlsaKu+TIu6zQ==
+=======
+  "integrity" "sha512-gUlgl4h9XzSvSx7lUDvYQuy1eMxu4UXbt5MSR9K/dYIHHd3gcCxm8/6vn0VnUXMvpwVHS8tezxlsaKu+TIu6zQ=="
+  "resolved" "https://registry.npmjs.org/@metaplex-foundation/beet/-/beet-0.1.4.tgz"
+  "version" "0.1.4"
+  dependencies:
+    "ansicolors" "^0.3.2"
+    "bn.js" "^5.2.0"
+    "debug" "^4.3.3"
+
+"@metaplex-foundation/beet@>=0.1.0":
+  "integrity" "sha512-H570hkJxmx/FxET1OggPPLkPL7psYQa71rNI9NJjYRM8WXdrEvmI/IRIEUW2KR6RqwWWN3FvlRHnKoQUV/lQtA=="
+  "resolved" "https://registry.npmjs.org/@metaplex-foundation/beet/-/beet-0.2.0.tgz"
+  "version" "0.2.0"
+>>>>>>> 727f17258230deafda04d58d2e92e6b479d11f67
   dependencies:
     ansicolors "^0.3.2"
     bn.js "^5.2.0"
