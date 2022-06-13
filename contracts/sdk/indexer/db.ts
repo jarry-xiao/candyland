@@ -1,13 +1,14 @@
 import sqlite3 from "sqlite3";
 import { open, Database, Statement } from "sqlite";
 import { PathNode } from "../gummyroll";
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, SystemProgram } from "@solana/web3.js";
 import { keccak_256 } from "js-sha3";
 import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
 import { NewLeafEvent } from "./indexer/bubblegum";
 import { BN } from "@project-serum/anchor";
 import { Beet, bignum } from "@metaplex-foundation/beet";
 import {
+  Creator,
   LeafSchema,
   redeemInstructionDiscriminator,
 } from "../bubblegum/src/generated";
@@ -44,7 +45,7 @@ export class NFTDatabaseConnection {
     return this.connection.run("COMMIT");
   }
 
-  async upsert(rows: Array<[PathNode, number, number]>) {
+  async upsertRowsFromBackfill(rows: Array<[PathNode, number, number]>) {
     this.connection.db.serialize(() => {
       this.connection.run("BEGIN TRANSACTION");
       for (const [node, seq, i] of rows) {
@@ -123,7 +124,18 @@ export class NFTDatabaseConnection {
     const primarySaleHappened = newLeafEvent.metadata.primarySaleHappened;
     const sellerFeeBasisPoints = newLeafEvent.metadata.sellerFeeBasisPoints;
     const isMutable = newLeafEvent.metadata.isMutable;
-    const creators = newLeafEvent.metadata.creators;
+    let creators: Array<Creator> = [];
+    for (let i = 0; i < 5; ++i) {
+      if (newLeafEvent.metadata.creators.length < i + 1) {
+        creators.push({
+          address: SystemProgram.programId,
+          share: 0,
+          verified: false,
+        });
+      } else {
+        creators.push(newLeafEvent.metadata.creators[i]);
+      }
+    }
     this.connection.run(
       `
         INSERT INTO 
@@ -134,9 +146,24 @@ export class NFTDatabaseConnection {
           symbol,
           primary_sale_happened,
           seller_fee_basis_points,
-          is_mutable
+          is_mutable,
+          creator0,
+          share0,
+          verified0,
+          creator1,
+          share1,
+          verified1,
+          creator2,
+          share2,
+          verified2,
+          creator3,
+          share3,
+          verified3,
+          creator4,
+          share4,
+          verified4
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (nonce)
         DO UPDATE SET
           uri = excluded.uri,
@@ -152,26 +179,23 @@ export class NFTDatabaseConnection {
       symbol,
       primarySaleHappened,
       sellerFeeBasisPoints,
-      isMutable
+      isMutable,
+      creators[0].address,
+      creators[0].share,
+      creators[0].verified,
+      creators[1].address,
+      creators[1].share,
+      creators[1].verified,
+      creators[2].address,
+      creators[2].share,
+      creators[2].verified,
+      creators[3].address,
+      creators[3].share,
+      creators[3].verified,
+      creators[4].address,
+      creators[4].share,
+      creators[4].verified
     );
-    for (const creator of creators) {
-      this.connection.run(
-        `
-            INSERT INTO 
-            creators(
-              nonce,
-              creator,
-              share,
-              verified 
-            )
-            VALUES (?, ?, ?, ?)
-          `,
-        nonce,
-        creator.address,
-        creator.share,
-        creator.verified
-      );
-    }
   }
 
   emptyNode(level: number): Buffer {
@@ -257,16 +281,34 @@ export class NFTDatabaseConnection {
     let hashString = bs58.encode(hash);
     let res = await this.connection.all(
       `
-        SELECT DISTINCT node_idx, max(seq) as seq
-        FROM merkle
+        SELECT 
+          DISTINCT m.node_idx,
+          l.data_hash,
+          l.creator_hash,
+          l.nonce,
+          l.owner,
+          l.delegate,
+          max(m.seq) as seq
+        FROM merkle m
+        JOIN leaf_schema l
+        ON m.hash = l.leaf_hash
         WHERE hash = ? and level = 0
         GROUP BY node_idx
       `,
       hashString
     );
     if (res.length == 1) {
-      let nodeIdx = res[0].node_idx;
-      return this.generateProof(nodeIdx, hash, check);
+      let [nodeIdx, dataHash, creatorHash, nonce, owner, delegate] = res[0];
+      return this.generateProof(
+        nodeIdx,
+        hash,
+        dataHash,
+        creatorHash,
+        nonce,
+        owner,
+        delegate,
+        check
+      );
     } else {
       return null;
     }
@@ -275,6 +317,11 @@ export class NFTDatabaseConnection {
   async generateProof(
     nodeIdx: number,
     hash: Buffer,
+    dataHash: string,
+    creatorHash: string,
+    nonce: number,
+    owner: string,
+    delegate: string,
     check: boolean = true
   ): Promise<Proof | null> {
     let nodes = [];
@@ -305,17 +352,22 @@ export class NFTDatabaseConnection {
     }
     let proof = [];
     for (let i = 0; i < root.level; i++) {
-      proof.push(this.emptyNode(i));
+      proof.push(bs58.encode(this.emptyNode(i)));
     }
     for (const node of res) {
-      proof[node.level] = bs58.decode(node.hash);
+      proof[node.level] = node.hash;
     }
     let leafIdx = nodeIdx - (1 << root.level);
     let inferredProof = {
-      leaf: hash,
-      root: bs58.decode(root.hash),
+      leaf: bs58.encode(hash),
+      root: root.hash,
       proofNodes: proof,
       index: leafIdx,
+      nonce,
+      dataHash: dataHash,
+      creatorHash: creatorHash,
+      owner: owner,
+      delegate: delegate,
     };
     if (check && !this.verifyProof(inferredProof)) {
       console.log("Proof is invalid");
@@ -325,7 +377,7 @@ export class NFTDatabaseConnection {
   }
 
   verifyProof(proof: Proof) {
-    let node = proof.leaf;
+    let node = bs58.decode(proof.leaf);
     let index = proof.index;
     for (const [i, pNode] of proof.proofNodes.entries()) {
       if ((index >> i) % 2 === 0) {
@@ -338,17 +390,109 @@ export class NFTDatabaseConnection {
     const received = new PublicKey(proof.root).toString();
     return rehashed === received;
   }
+
+  async getAssetsForOwner(owner: string) {
+    let rawNftMetadata = await this.connection.all(
+      `
+      SELECT
+        ls.nonce as nonce,
+        n.uri as uri,
+        n.name as name,
+        n.symbol as symbol,
+        n.seller_fee_basis_points as sellerFeeBasisPoints,
+        ls.owner as owner,
+        ls.delegate as delegate,
+        n.creator0 as creator0,
+        n.share0 as share0,
+        n.verified0 as verified0,
+        n.creator1 as creator1,
+        n.share1 as share1,
+        n.verified1 as verified1,
+        n.creator2 as creator2,
+        n.share2 as share2,
+        n.verified2 as verified2,
+        n.creator3 as creator3,
+        n.share3 as share3,
+        n.verified3 as verified3,
+        n.creator4 as creator4,
+        n.share4 as share4,
+        n.verified4 as verified4
+      FROM leaf_schema ls
+      JOIN nft n
+      ON ls.nonce = n.nonce
+      WHERE owner = ?
+      `,
+      owner
+    );
+    let assets = [];
+    for (const metadata of rawNftMetadata) {
+      let creators: Creator[] = [];
+      if (metadata.creator0 !== SystemProgram.programId.toBase58()) {
+        creators.push({
+          address: metadata.creator0,
+          share: metadata.share0,
+          verified: metadata.verified0,
+        });
+      }
+      if (metadata.creator1 !== SystemProgram.programId.toBase58()) {
+        creators.push({
+          address: metadata.creator1,
+          share: metadata.share1,
+          verified: metadata.verified1,
+        });
+      }
+      if (metadata.creator2 !== SystemProgram.programId.toBase58()) {
+        creators.push({
+          address: metadata.creator2,
+          share: metadata.share2,
+          verified: metadata.verified2,
+        });
+      }
+      if (metadata.creator3 !== SystemProgram.programId.toBase58()) {
+        creators.push({
+          address: metadata.creator3,
+          share: metadata.share3,
+          verified: metadata.verified3,
+        });
+      }
+      if (metadata.creator4 !== SystemProgram.programId.toBase58()) {
+        creators.push({
+          address: metadata.creator4,
+          share: metadata.share4,
+          verified: metadata.verified4,
+        });
+      }
+      assets.push({
+        nonce: metadata.nonce,
+        uri: metadata.uri,
+        name: metadata.name,
+        symbol: metadata.symbol,
+        sellerFeeBasisPoints: metadata.sellerFeeBasisPoints,
+        owner: metadata.owner,
+        delegate: metadata.delegate,
+        creators: creators,
+      });
+    }
+    return assets;
+  }
 }
 
 export type Proof = {
-  root: Buffer;
-  leaf: Buffer;
-  proofNodes: Buffer[];
+  dataHash: string;
+  creatorHash: string;
+  owner: string;
+  delegate: string;
+  nonce: number;
+  root: string;
+  leaf: string;
+  proofNodes: string[];
   index: number;
 };
 
 // this is a top-level await
-export async function bootstrap(): Promise<NFTDatabaseConnection> {
+export async function bootstrap(
+  create: boolean = true
+): Promise<NFTDatabaseConnection> {
   // open the database
   const dir = "db";
   if (!fs.existsSync(dir)) {
@@ -359,53 +503,70 @@ export async function bootstrap(): Promise<NFTDatabaseConnection> {
     driver: sqlite3.Database,
   });
 
-  await db.run(
-    `
-      CREATE TABLE IF NOT EXISTS merkle (
-        id INTEGER PRIMARY KEY,
-        node_idx INT,
-        seq INT,
-        level INT,
-        hash TEXT
-      );
-    `
-  );
+  if (create) {
+    await db.run(
+      `
+        CREATE TABLE IF NOT EXISTS merkle (
+          id INTEGER PRIMARY KEY,
+          node_idx INT,
+          seq INT,
+          level INT,
+          hash TEXT
+        );
+      `
+    );
 
-  await db.run(
-    `
-    CREATE TABLE IF NOT EXISTS nft (
-      nonce BIGINT PRIMARY KEY,
-      name TEXT,
-      symbol TEXT,
-      uri TEXT,
-      seller_fee_basis_points INT, 
-      primary_sale_happened BOOLEAN, 
-      is_mutable BOOLEAN
+    await db.run(
+      `
+      CREATE TABLE IF NOT EXISTS nft (
+        nonce BIGINT PRIMARY KEY,
+        name TEXT,
+        symbol TEXT,
+        uri TEXT,
+        seller_fee_basis_points INT, 
+        primary_sale_happened BOOLEAN, 
+        is_mutable BOOLEAN,
+        creator0 TEXT,
+        share0 INT,
+        verified0 BOOLEAN,
+        creator1 TEXT,
+        share1 INT,
+        verified1 BOOLEAN,
+        creator2 TEXT,
+        share2 INT,
+        verified2 BOOLEAN,
+        creator3 TEXT,
+        share3 INT,
+        verified3 BOOLEAN,
+        creator4 TEXT,
+        share4 INT,
+        verified4 BOOLEAN
+      );
+      `
     );
-    `
-  );
-  await db.run(
-    `
-    CREATE TABLE IF NOT EXISTS leaf_schema (
-      nonce BIGINT PRIMARY KEY,
-      owner TEXT,
-      delegate TEXT,
-      data_hash TEXT,
-      creator_hash TEXT,
-      leaf_hash TEXT
+    await db.run(
+      `
+      CREATE TABLE IF NOT EXISTS leaf_schema (
+        nonce BIGINT PRIMARY KEY,
+        owner TEXT,
+        delegate TEXT,
+        data_hash TEXT,
+        creator_hash TEXT,
+        leaf_hash TEXT
+      );
+      `
     );
-    `
-  );
-  await db.run(
-    `
-    CREATE TABLE IF NOT EXISTS creators (
-      nonce BIGINT,
-      creator TEXT,
-      share INT,
-      verifed BOOLEAN 
+    await db.run(
+      `
+      CREATE TABLE IF NOT EXISTS creators (
+        nonce BIGINT,
+        creator TEXT,
+        share INT,
+        verifed BOOLEAN 
+      );
+      `
     );
-    `
-  );
+  }
 
   return new NFTDatabaseConnection(db);
 }

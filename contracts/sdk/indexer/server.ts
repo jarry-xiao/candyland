@@ -5,21 +5,31 @@ import { bootstrap, Proof } from './db';
 const app = express();
 app.use(express.json());
 
-const port = 3000;
+const port = 4000;
 
 type JsonProof = {
     root: String,
     proofNodes: String[],
     leaf: String,
-    index: number
+    index: number,
+    nonce: number,
+    dataHash: string,
+    creatorHash: string,
+    owner: string,
+    delegate: string,
 };
 
 function stringifyProof(proof: Proof): string {
     let jsonProof: JsonProof = {
-        root: bs58.encode(proof.root),
-        proofNodes: proof.proofNodes.map((node) => { return bs58.encode(node) }),
-        leaf: bs58.encode(proof.leaf),
-        index: proof.index
+        root: proof.root,
+        proofNodes: proof.proofNodes,
+        leaf: proof.leaf,
+        index: proof.index,
+        nonce: proof.nonce,
+        dataHash: proof.dataHash,
+        creatorHash: proof.creatorHash,
+        owner: proof.owner,
+        delegate: proof.delegate,
     }
     return JSON.stringify(jsonProof);
 }
@@ -27,10 +37,18 @@ function stringifyProof(proof: Proof): string {
 app.get("/proof", async (req, res) => {
     const leafHashString = req.query.leafHash;
     console.log("POST request:", leafHashString);
-    const nftDb = await bootstrap();
+    const nftDb = await bootstrap(false);
     const leafHash: Buffer = bs58.decode(leafHashString);
     const proof = await nftDb.getProof(leafHash, false);
     res.send(stringifyProof(proof));
+});
+
+app.get("/assets", async (req, res) => {
+    const owner = req.query.owner;
+    console.log("POST request:", owner);
+    const nftDb = await bootstrap(false);
+    const assets = await nftDb.getAssetsForOwner(owner);
+    res.send(JSON.stringify(assets));
 });
 
 app.listen(port, () => {

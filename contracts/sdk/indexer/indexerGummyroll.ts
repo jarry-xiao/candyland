@@ -85,7 +85,7 @@ export async function getUpdatedBatch(
       }
     }
   }
-  db.upsert(rows);
+  db.upsertRowsFromBackfill(rows);
   console.log(`Updated ${rows.length} rows`);
   await db.updateTree();
 }

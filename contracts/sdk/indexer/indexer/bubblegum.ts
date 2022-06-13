@@ -8,17 +8,12 @@ import {
 import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from "../../gummyroll";
 import { ChangeLogEvent, parseEventGummyroll } from "./gummyroll";
 import {
-  handleBubblegumCreateTree,
-  handleBubblegumMint,
-} from "../ingester/bubblegum";
-import {
   LeafSchema,
   TokenProgramVersion,
   MetadataArgs,
 } from "../../bubblegum/src/generated/types";
 import { BN } from "@project-serum/anchor";
 import { NFTDatabaseConnection } from "../db";
-import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
 import { PublicKey } from "@solana/web3.js";
 
 function parseIxName(logLine: string): BubblegumIx | null {
