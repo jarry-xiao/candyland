@@ -11,6 +11,7 @@
   "scripts": {
     "validator": "./runs.sh",
     "test": "ts-node main.ts",
-    "server": "ts-node server.ts"
+    "server": "ts-node server.ts",
+    "indexer": "ts-node indexer.ts"
   }
 }
