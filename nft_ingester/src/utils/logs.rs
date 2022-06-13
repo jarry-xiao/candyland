@@ -46,7 +46,7 @@ pub fn parse_logs<'a>(
                         .map(|bytes| {
                             Pubkey::new(&bytes)
                         });
-                    let level: Option<u8> = c.get(2).and_then(|l| l.parse::<u8>().ok());
+                    let level: Option<u8> = c.get(2).and_then(|l| l.as_str().parse::<u8>().ok());
                     if program.is_some() && level.is_some() {
                         return Some((program.unwrap(), level.unwrap()));
                     }

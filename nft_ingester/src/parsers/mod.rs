@@ -1,8 +1,8 @@
 mod bubblegum;
-mod gummy_roll;
+mod gummyroll;
 
 pub use self::bubblegum::*;
-pub use self::gummy_roll::*;
+pub use self::gummyroll::*;
 
 use async_trait::async_trait;
 use flatbuffers::{ForwardsUOffset, Vector};

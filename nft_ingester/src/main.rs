@@ -147,14 +147,14 @@ async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<
         for ((outer_ix, inner_ix), parsed_log) in std::iter::zip(instructions, parsed_logs) {
             // Sanity check that instructions and logs were parsed correctly
             assert_eq!(
-                program_instruction.0.key().unwrap(),
+                outer_ix.0.key().unwrap(),
                 parsed_log.0.to_bytes(),
                 "expected {:?}, but program log was {:?}",
-                program_instruction.0,
+                outer_ix.0,
                 parsed_log.0
             );
 
-            let (program, instruction) = program_instruction;
+            let (program, instruction) = outer_ix;
             let parser = manager.match_program(program.key().unwrap());
             match parser {
                 Some(p) if p.config().responds_to_instruction == true => {

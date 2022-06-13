@@ -13,12 +13,11 @@ use {
         error::IngesterError,
         events::handle_event,
         utils::{filter_events_from_logs, write_assets_to_file},
-        InstructionBundle
-    }
+        InstructionBundle,
+    },
 };
 
-const SET_CLSQL_ITEM: &str =
-    "INSERT INTO cl_items (tree, seq, level, hash, node_idx) VALUES ($1,$2,$3,$4,$5)";
+const SET_CLSQL_ITEM: &str = "INSERT INTO cl_items (tree, seq, level, hash, node_idx) VALUES ($1,$2,$3,$4,$5) ON conflict node_idx DO UPDATE SET hash = EXCLUDED.hash, seq = EXCLUDED.seq";
 
 #[derive(Debug, Deserialize)]
 pub struct CLRecord {
@@ -60,7 +59,7 @@ impl ProgramHandler for GummyRollHandler {
             bundle.message_id,
             &self.storage,
         )
-        .await
+            .await
     }
 }
 
@@ -98,7 +97,7 @@ pub async fn handle_gummyroll_instruction(
     pid: i64,
     pool: &Pool<Postgres>,
 ) -> Result<(), IngesterError> {
-    for change_log_event  in get_gummy_roll_events(logs)? {
+    for change_log_event in get_gummy_roll_events(logs)? {
         // Put change log event into database.
         change_log_db_txn(change_log_event, pid, pool).await;
     }
@@ -114,10 +113,10 @@ async fn change_log_db_txn(
     let txnb = pool.begin().await;
     match txnb {
         Ok(txn) => {
-            change_log_event_to_database(
+            gummyroll_change_log_event_to_database(
                 change_log_event,
                 pid,
-                pool
+                pool,
             ).await;
             match txn.commit().await {
                 Ok(_r) => {
@@ -134,7 +133,7 @@ async fn change_log_db_txn(
     }
 }
 
-async fn change_log_event_to_database(
+pub async fn gummyroll_change_log_event_to_database(
     change_log_event: ChangeLogEvent,
     pid: i64,
     pool: &Pool<Postgres>,

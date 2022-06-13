@@ -8,6 +8,8 @@ pub enum IngesterError {
     BatchInitNetworkingError,
     #[error("Error writing batch files")]
     BatchInitIOError,
+    #[error("Storage Write Error {0}")]
+    StorageWriteError(String)
 }
 
 impl From<reqwest::Error> for IngesterError {

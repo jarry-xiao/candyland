@@ -6,8 +6,8 @@ pub type IxPair<'a> = (transaction_info::Pubkey<'a>, transaction_info::CompiledI
 pub fn order_instructions<'a>(
     transaction_info: &TransactionInfo<'a>,
 ) -> Vec<(
-    IxPair,
-    Option<Vec<IxPair>>
+    IxPair<'a>,
+    Option<Vec<IxPair<'a>>>
 )> {
     let mut ordered_ixs: Vec<(IxPair, Option<Vec<IxPair>>)> = vec![];
     // Get inner instructions.
@@ -34,13 +34,13 @@ pub fn order_instructions<'a>(
     for (i, instruction) in outer_instructions.iter().enumerate() {
         let program_id = keys.get(instruction.program_id_index() as usize);
         let program_id = program_id;
-        let outer = IxPair(program_id, instruction);
+        let outer: IxPair = (program_id, instruction);
 
         let inner: Option<Vec<IxPair>> = get_inner_ixs(inner_ix_list, i).map(|inner_ixs|{
             let mut inner_list: Vec<IxPair> = vec![];
             for inner_ix_instance in inner_ixs.instructions().unwrap() {
                 let inner_program_id = keys.get(inner_ix_instance.program_id_index() as usize);
-                inner_list.push(IxPair(inner_program_id, inner_ix_instance))
+                inner_list.push((inner_program_id, inner_ix_instance))
             }
             inner_list
         });

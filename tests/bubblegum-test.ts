@@ -118,7 +118,7 @@ describe("bubblegum", () => {
     );
 
     let [nonce] = await PublicKey.findProgramAddress(
-      [Buffer.from("bubblegum")],
+      [Buffer.from("bubblegum"), merkleRollKeypair.publicKey.toBuffer()],
       Bubblegum.programId
     );
 
@@ -127,6 +127,7 @@ describe("bubblegum", () => {
         nonce: nonce,
         payer: payer.publicKey,
         systemProgram: SystemProgram.programId,
+        merkleSlab: merkleRollKeypair.publicKey
       },
       signers: [payer],
     });
@@ -197,7 +198,14 @@ describe("bubblegum", () => {
         uses: null,
         creators: [],
       };
+      let nonce = await Bubblegum.provider.getNonce(nonceAccount)
       let version = { v0: {} };
+      let asset_id = PublicKey.findProgramAddress([
+            nonceAccount.toBuffer(),
+            nonce.count
+          ],
+          Bubblegum.programId
+      )
       let mintIx = await Bubblegum.instruction.mint(version, metadata, {
         accounts: {
           mintAuthority: payer.publicKey,
@@ -207,6 +215,7 @@ describe("bubblegum", () => {
           owner: payer.publicKey,
           delegate: payer.publicKey,
           merkleSlab: merkleRollKeypair.publicKey,
+          id: asset_id
         },
         signers: [payer],
       });
