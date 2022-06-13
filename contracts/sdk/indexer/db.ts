@@ -4,6 +4,15 @@ import { PathNode } from "../gummyroll";
 import { PublicKey } from "@solana/web3.js";
 import { keccak_256 } from "js-sha3";
 import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
+import { NewLeafEvent } from "./indexer/bubblegum";
+import { BN } from "@project-serum/anchor";
+import { Beet, bignum } from "@metaplex-foundation/beet";
+import {
+  LeafSchema,
+  redeemInstructionDiscriminator,
+} from "../bubblegum/src/generated";
+import { ChangeLogEvent } from "./indexer/gummyroll";
+let fs = require("fs");
 
 /**
  * Uses on-chain hash fn to hash together buffers
@@ -21,6 +30,18 @@ export class NFTDatabaseConnection {
     this.connection = connection;
     this.tree = new Map<number, [number, string]>();
     this.emptyNodeCache = new Map<number, Buffer>();
+  }
+
+  async beginTransaction() {
+    return this.connection.run("BEGIN TRANSACTION");
+  }
+
+  async rollback() {
+    return this.connection.run("ROLLBACK");
+  }
+
+  async commit() {
+    return this.connection.run("COMMIT");
   }
 
   async upsert(rows: Array<[PathNode, number, number]>) {
@@ -41,6 +62,116 @@ export class NFTDatabaseConnection {
       }
       this.connection.run("COMMIT");
     });
+  }
+
+  async updateChangeLogs(changeLog: ChangeLogEvent) {
+    console.log("Update Change Log");
+    if (changeLog.seq == 0) {
+      return;
+    }
+    for (const [i, pathNode] of changeLog.path.entries()) {
+      this.connection.run(
+        `
+          INSERT INTO 
+          merkle(node_idx, seq, level, hash)
+          VALUES (?, ?, ?, ?)
+        `,
+        pathNode.index,
+        changeLog.seq,
+        i,
+        new PublicKey(pathNode.node).toBase58()
+      );
+    }
+  }
+
+  async updateLeafSchema(leafSchema: LeafSchema, leafHash: PublicKey) {
+    console.log("Update Leaf Schema");
+    this.connection.run(
+      `
+        INSERT INTO
+        leaf_schema(
+          nonce,
+          owner,
+          delegate,
+          data_hash,
+          creator_hash,
+          leaf_hash  
+        )
+        VALUES (?, ?, ?, ?, ?, ?)
+        ON CONFLICT (nonce)
+        DO UPDATE SET 
+          owner = excluded.owner,
+          delegate = excluded.delegate,
+          data_hash = excluded.data_hash,
+          creator_hash = excluded.creator_hash,
+          leaf_hash = excluded.leaf_hash
+      `,
+      (leafSchema.nonce.valueOf() as BN).toNumber(),
+      leafSchema.owner.toBase58(),
+      leafSchema.delegate.toBase58(),
+      bs58.encode(leafSchema.dataHash),
+      bs58.encode(leafSchema.creatorHash),
+      leafHash.toBase58()
+    );
+  }
+
+  async updateNFTMetadata(newLeafEvent: NewLeafEvent, nonce: bignum) {
+    console.log("Update NFT");
+    const uri = newLeafEvent.metadata.uri;
+    const name = newLeafEvent.metadata.name;
+    const symbol = newLeafEvent.metadata.symbol;
+    const primarySaleHappened = newLeafEvent.metadata.primarySaleHappened;
+    const sellerFeeBasisPoints = newLeafEvent.metadata.sellerFeeBasisPoints;
+    const isMutable = newLeafEvent.metadata.isMutable;
+    const creators = newLeafEvent.metadata.creators;
+    this.connection.run(
+      `
+        INSERT INTO 
+        nft(
+          nonce,
+          uri,
+          name,
+          symbol,
+          primary_sale_happened,
+          seller_fee_basis_points,
+          is_mutable
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (nonce)
+        DO UPDATE SET
+          uri = excluded.uri,
+          name = excluded.name,
+          symbol = excluded.symbol,
+          primary_sale_happened = excluded.primary_sale_happened,
+          seller_fee_basis_points = excluded.seller_fee_basis_points,
+          is_mutable = excluded.is_mutable
+      `,
+      (nonce as BN).toNumber(),
+      uri,
+      name,
+      symbol,
+      primarySaleHappened,
+      sellerFeeBasisPoints,
+      isMutable
+    );
+    for (const creator of creators) {
+      this.connection.run(
+        `
+            INSERT INTO 
+            creators(
+              nonce,
+              creator,
+              share,
+              verified 
+            )
+            VALUES (?, ?, ?, ?)
+          `,
+        nonce,
+        creator.address,
+        creator.share,
+        creator.verified
+      );
+    }
   }
 
   emptyNode(level: number): Buffer {
@@ -219,8 +350,12 @@ export type Proof = {
 // this is a top-level await
 export async function bootstrap(): Promise<NFTDatabaseConnection> {
   // open the database
+  const dir = "db";
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir);
+  }
   const db = await open({
-    filename: "/tmp/merkle.db",
+    filename: `${dir}/merkle.db`,
     driver: sqlite3.Database,
   });
 
@@ -232,7 +367,43 @@ export async function bootstrap(): Promise<NFTDatabaseConnection> {
         seq INT,
         level INT,
         hash TEXT
-      )
+      );
+    `
+  );
+
+  await db.run(
+    `
+    CREATE TABLE IF NOT EXISTS nft (
+      nonce BIGINT PRIMARY KEY,
+      name TEXT,
+      symbol TEXT,
+      uri TEXT,
+      seller_fee_basis_points INT, 
+      primary_sale_happened BOOLEAN, 
+      is_mutable BOOLEAN
+    );
+    `
+  );
+  await db.run(
+    `
+    CREATE TABLE IF NOT EXISTS leaf_schema (
+      nonce BIGINT PRIMARY KEY,
+      owner TEXT,
+      delegate TEXT,
+      data_hash TEXT,
+      creator_hash TEXT,
+      leaf_hash TEXT
+    );
+    `
+  );
+  await db.run(
+    `
+    CREATE TABLE IF NOT EXISTS creators (
+      nonce BIGINT,
+      creator TEXT,
+      share INT,
+      verifed BOOLEAN 
+    );
     `
   );
 
