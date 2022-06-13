@@ -15,7 +15,7 @@ import { Bubblegum } from "../../target/types/bubblegum";
 import { Gummyroll } from "../../target/types/gummyroll";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 import { readFileSync } from "fs";
-import { loadProgram, parseLogs } from "./indexer/utils";
+import { loadProgram, ParsedLog, parseLogs } from "./indexer/utils";
 import { parseBubblegum } from "./indexer/bubblegum";
 import { bootstrap, NFTDatabaseConnection } from "./db";
 import { logTx } from "../../tests/utils";
@@ -25,6 +25,22 @@ const MAX_SIZE = 1024;
 const localhostUrl = "http://127.0.0.1:8899";
 let Bubblegum: anchor.Program<Bubblegum>;
 let Gummyroll: anchor.Program<Gummyroll>;
+
+function indexParsedLog(
+  db: NFTDatabaseConnection,
+  parsedLog: ParsedLog | string
+) {
+  if (typeof parsedLog === "string") {
+    return;
+  }
+  if (parsedLog.programId.equals(BUBBLEGUM_PROGRAM_ID)) {
+    return parseBubblegum(db, parsedLog, { Bubblegum, Gummyroll }, null);
+  } else {
+    for (const log of parsedLog.logs) {
+      indexParsedLog(db, log);
+    }
+  }
+}
 
 async function handleLogs(
   db: NFTDatabaseConnection,
@@ -40,23 +56,13 @@ async function handleLogs(
     return;
   }
   db.connection.db.serialize(() => {
-      db.beginTransaction();
-      for (const parsedLog of parsedLogs) {
-        if (
-          typeof parsedLog !== "string" &&
-          parsedLog.programId.equals(BUBBLEGUM_PROGRAM_ID)
-        ) {
-          parseBubblegum(
-            db,
-            parsedLog,
-            { Bubblegum, Gummyroll },
-            { txId: logs.signature }
-          );
-        }
-      }
-      console.log("Done executing queries")
-      db.commit();
-      console.log("Committed")
+    db.beginTransaction();
+    for (const parsedLog of parsedLogs) {
+      indexParsedLog(db, parsedLog);
+    }
+    console.log("Done executing queries");
+    db.commit();
+    console.log("Committed");
   });
 }
 
