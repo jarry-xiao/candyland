@@ -10,8 +10,7 @@ use {
     flatbuffers::FlatBufferBuilder,
     log::*,
     messenger::{
-        AsyncRedisMessenger, Messenger, ACCOUNT_STREAM, BLOCK_STREAM, SLOT_STREAM,
-        TRANSACTION_STREAM,
+        Messenger, RedisMessenger, ACCOUNT_STREAM, BLOCK_STREAM, SLOT_STREAM, TRANSACTION_STREAM,
     },
     solana_geyser_plugin_interface::geyser_plugin_interface::{
         GeyserPlugin, GeyserPluginError, ReplicaAccountInfoVersions, ReplicaBlockInfoVersions,
@@ -24,16 +23,15 @@ use {
         io::Read,
         sync::Arc,
     },
+    tokio::sync::Mutex,
 };
 
-use tokio::sync::Mutex;
-
 #[derive(Default)]
-pub struct Plerkle<T: Messenger + Default>(Arc<Inner<T>>);
+pub struct Plerkle<T: Messenger + Default>(Option<Arc<Inner<T>>>);
 
 #[derive(Default)]
 pub(crate) struct Inner<T: Messenger + Default> {
-    rt: Option<tokio::runtime::Runtime>,
+    runtime: Option<tokio::runtime::Runtime>,
     accounts_selector: Option<AccountsSelector>,
     transaction_selector: Option<TransactionSelector>,
     messenger: Option<Mutex<T>>,
@@ -97,6 +95,36 @@ impl<T: Messenger + Default> Plerkle<T> {
         }
     }
 
+    fn inner(&self) -> Result<&Arc<Inner<T>>> {
+        let inner = if let Some(inner) = &self.0 {
+            inner
+        } else {
+            return Err(GeyserPluginError::Custom(Box::new(
+                PlerkleError::GeneralPluginConfigError {
+                    msg: "No Inner struct present.".to_string(),
+                },
+            )));
+        };
+
+        if let None = inner.runtime {
+            return Err(GeyserPluginError::Custom(Box::new(
+                PlerkleError::GeneralPluginConfigError {
+                    msg: "No runtime contained in Inner struct.".to_string(),
+                },
+            )));
+        }
+
+        if let None = inner.messenger {
+            return Err(GeyserPluginError::Custom(Box::new(
+                PlerkleError::DataStoreConnectionError {
+                    msg: "There is no connection to data store.".to_string(),
+                },
+            )));
+        }
+
+        Ok(inner)
+    }
+
     // Currently not used but may want later.
     pub fn _txn_contains_program<'b>(keys: AccountKeys, program: &Pubkey) -> bool {
         keys.iter()
@@ -146,17 +174,15 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
             }
         };
 
-        let rt = tokio::runtime::Builder::new_multi_thread()
+        let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
-            .thread_name("plerkle")
-            .worker_threads(32)
-            .max_blocking_threads(32)
+            .thread_name("plerkle-runtime-worker")
             .build()
             .map_err(|err| GeyserPluginError::ConfigFileReadError {
                 msg: format!("Could not create tokio runtime: {:?}", err),
             })?;
 
-        let messenger = rt.block_on(async {
+        let messenger = runtime.block_on(async {
             let mut messenger = T::new().await?;
             messenger.add_stream(ACCOUNT_STREAM).await;
             messenger.add_stream(SLOT_STREAM).await;
@@ -169,12 +195,12 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
             Result::<_>::Ok(messenger)
         })?;
 
-        self.0 = Arc::new(Inner {
-            rt: Some(rt),
+        self.0 = Some(Arc::new(Inner {
+            runtime: Some(runtime),
             accounts_selector: Some(accounts_selector),
             transaction_selector: Some(transaction_selector),
             messenger: Some(Mutex::new(messenger)),
-        });
+        }));
 
         Ok(())
     }
@@ -191,7 +217,8 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
         match account {
             ReplicaAccountInfoVersions::V0_0_1(account) => {
-                let inner = self.0.clone();
+                // Get inner struct and make sure all needed info present.
+                let inner = self.inner()?;
 
                 // Check if account was selected in config.
                 if let Some(accounts_selector) = &inner.accounts_selector {
@@ -203,29 +230,19 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
                 }
 
                 // Send account info over messenger.
-                match &inner.messenger {
-                    None => Err(GeyserPluginError::Custom(Box::new(
-                        PlerkleError::DataStoreConnectionError {
-                            msg: "There is no connection to data store.".to_string(),
-                        },
-                    ))),
-                    Some(_) => {
-                        let rt = inner.rt.as_ref().unwrap();
-                        let inner = inner.clone();
-                        let builder = FlatBufferBuilder::new();
-                        let builder = serialize_account(builder, &account, slot, is_startup);
-                        rt.spawn(async move {
-                            let bytes = builder.finished_data();
-                            let mut messenger =
-                                inner.as_ref().messenger.as_ref().unwrap().lock().await;
-                            let _ = messenger.send(ACCOUNT_STREAM, &bytes).await;
-                        });
-
-                        Ok(())
-                    }
-                }
+                let runtime = inner.runtime.as_ref().unwrap();
+                let inner = inner.clone();
+                let builder = FlatBufferBuilder::new();
+                let builder = serialize_account(builder, &account, slot, is_startup);
+                runtime.spawn(async move {
+                    let bytes = builder.finished_data();
+                    let mut messenger = inner.as_ref().messenger.as_ref().unwrap().lock().await;
+                    let _ = messenger.send(ACCOUNT_STREAM, &bytes).await;
+                });
             }
         }
+
+        Ok(())
     }
 
     fn notify_end_of_startup(
@@ -240,29 +257,21 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
         parent: Option<u64>,
         status: SlotStatus,
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
-        let inner = self.0.clone();
+        // Get inner struct and make sure all needed info present.
+        let inner = self.inner()?;
 
         // Send slot status over messenger.
-        match &inner.messenger {
-            None => Err(GeyserPluginError::Custom(Box::new(
-                PlerkleError::DataStoreConnectionError {
-                    msg: "There is no connection to data store.".to_string(),
-                },
-            ))),
-            Some(_) => {
-                let rt = inner.rt.as_ref().unwrap();
-                let inner = inner.clone();
-                let builder = FlatBufferBuilder::new();
-                let builder = serialize_slot_status(builder, slot, parent, status);
-                rt.spawn(async move {
-                    let bytes = builder.finished_data();
-                    let mut messenger = inner.as_ref().messenger.as_ref().unwrap().lock().await;
-                    let _ = messenger.send(SLOT_STREAM, &bytes).await;
-                });
+        let runtime = inner.runtime.as_ref().unwrap();
+        let inner = inner.clone();
+        let builder = FlatBufferBuilder::new();
+        let builder = serialize_slot_status(builder, slot, parent, status);
+        runtime.spawn(async move {
+            let bytes = builder.finished_data();
+            let mut messenger = inner.as_ref().messenger.as_ref().unwrap().lock().await;
+            let _ = messenger.send(SLOT_STREAM, &bytes).await;
+        });
 
-                Ok(())
-            }
-        }
+        Ok(())
     }
 
     fn notify_transaction(
@@ -272,7 +281,8 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
         match transaction_info {
             ReplicaTransactionInfoVersions::V0_0_1(transaction_info) => {
-                let inner = self.0.clone();
+                // Get inner struct and make sure all needed info present.
+                let inner = self.inner()?;
 
                 // Don't log votes or transactions with error status.
                 if transaction_info.is_vote
@@ -294,29 +304,19 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
                 }
 
                 // Send transaction info over messenger.
-                match &inner.messenger {
-                    None => Err(GeyserPluginError::Custom(Box::new(
-                        PlerkleError::DataStoreConnectionError {
-                            msg: "There is no connection to data store.".to_string(),
-                        },
-                    ))),
-                    Some(_) => {
-                        let rt = inner.rt.as_ref().unwrap();
-                        let inner = inner.clone();
-                        let builder = FlatBufferBuilder::new();
-                        let builder = serialize_transaction(builder, transaction_info, slot);
-                        rt.spawn(async move {
-                            let bytes = builder.finished_data();
-                            let mut messenger =
-                                inner.as_ref().messenger.as_ref().unwrap().lock().await;
-                            let _ = messenger.send(TRANSACTION_STREAM, &bytes).await;
-                        });
-
-                        Ok(())
-                    }
-                }
+                let runtime = inner.runtime.as_ref().unwrap();
+                let inner = inner.clone();
+                let builder = FlatBufferBuilder::new();
+                let builder = serialize_transaction(builder, transaction_info, slot);
+                runtime.spawn(async move {
+                    let bytes = builder.finished_data();
+                    let mut messenger = inner.as_ref().messenger.as_ref().unwrap().lock().await;
+                    let _ = messenger.send(TRANSACTION_STREAM, &bytes).await;
+                });
             }
         }
+
+        Ok(())
     }
 
     fn notify_block_metadata(
@@ -325,50 +325,45 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
         match blockinfo {
             ReplicaBlockInfoVersions::V0_0_1(block_info) => {
-                let inner = self.0.clone();
-
-                info!("Updating block: {:?}", block_info);
+                // Get inner struct and make sure all needed info present.
+                let inner = self.inner()?;
 
                 // Send block info over messenger.
-                match &inner.messenger {
-                    None => Err(GeyserPluginError::Custom(Box::new(
-                        PlerkleError::DataStoreConnectionError {
-                            msg: "There is no connection to data store.".to_string(),
-                        },
-                    ))),
-                    Some(_) => {
-                        let rt = inner.rt.as_ref().unwrap();
-                        let inner = inner.clone();
-                        let builder = FlatBufferBuilder::new();
-                        let builder = serialize_block(builder, block_info);
-                        rt.spawn(async move {
-                            let bytes = builder.finished_data();
-                            let mut messenger =
-                                inner.as_ref().messenger.as_ref().unwrap().lock().await;
-                            let _ = messenger.send(BLOCK_STREAM, &bytes).await;
-                        });
-
-                        Ok(())
-                    }
-                }
+                let runtime = inner.runtime.as_ref().unwrap();
+                let inner = inner.clone();
+                let builder = FlatBufferBuilder::new();
+                let builder = serialize_block(builder, block_info);
+                runtime.spawn(async move {
+                    let bytes = builder.finished_data();
+                    let mut messenger = inner.as_ref().messenger.as_ref().unwrap().lock().await;
+                    let _ = messenger.send(BLOCK_STREAM, &bytes).await;
+                });
             }
         }
+
+        Ok(())
     }
 
     fn account_data_notifications_enabled(&self) -> bool {
-        let inner = self.0.as_ref();
-        inner
-            .accounts_selector
-            .as_ref()
-            .map_or_else(|| false, |selector| selector.is_enabled())
+        if let Ok(inner) = self.inner() {
+            inner
+                .accounts_selector
+                .as_ref()
+                .map_or_else(|| false, |selector| selector.is_enabled())
+        } else {
+            false
+        }
     }
 
     fn transaction_notifications_enabled(&self) -> bool {
-        let inner = self.0.as_ref();
-        inner
-            .transaction_selector
-            .as_ref()
-            .map_or_else(|| false, |selector| selector.is_enabled())
+        if let Ok(inner) = self.inner() {
+            inner
+                .transaction_selector
+                .as_ref()
+                .map_or_else(|| false, |selector| selector.is_enabled())
+        } else {
+            false
+        }
     }
 }
 
@@ -378,7 +373,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
 ///
 /// This function returns the GeyserPluginPostgres pointer as trait GeyserPlugin.
 pub unsafe extern "C" fn _create_plugin() -> *mut dyn GeyserPlugin {
-    let plugin = Plerkle::<AsyncRedisMessenger>::new();
+    let plugin = Plerkle::<RedisMessenger>::new();
     let plugin: Box<dyn GeyserPlugin> = Box::new(plugin);
     Box::into_raw(plugin)
 }

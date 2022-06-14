@@ -23,7 +23,7 @@ pub const CONSUMER_NAME: &str = "ingester";
 pub const DATA_KEY: &str = "data";
 
 #[derive(Default)]
-pub struct AsyncRedisMessenger {
+pub struct RedisMessenger {
     connection: Option<redis::aio::Connection<Pin<Box<dyn AsyncStream + Send + Sync>>>>,
     streams: HashMap<&'static str, RedisMessengerStream>,
     stream_read_reply: StreamReadReply,
@@ -34,7 +34,7 @@ pub struct RedisMessengerStream {
 }
 
 #[async_trait]
-impl Messenger for AsyncRedisMessenger {
+impl Messenger for RedisMessenger {
     //pub async fn new(stream_key: &'static str) -> Result<Self> {
     async fn new() -> Result<Self> {
         // Setup Redis client.
@@ -43,7 +43,7 @@ impl Messenger for AsyncRedisMessenger {
         // Get connection.
         let connection = client.get_tokio_connection().await.map_err(|e| {
             error!("{}", e.to_string());
-            GeyserPluginError::Custom(Box::new(MessengerError::ConfigurationError {
+            GeyserPluginError::Custom(Box::new(MessengerError::ConnectionError {
                 msg: e.to_string(),
             }))
         })?;
@@ -109,9 +109,11 @@ impl Messenger for AsyncRedisMessenger {
             .xadd_maxlen(stream_key, maxlen, "*", &[(DATA_KEY, &bytes)])
             .await;
 
-        // Log but do not return errors.
         if let Err(e) = result {
             error!("Redis send error: {e}");
+            return Err(GeyserPluginError::Custom(Box::new(
+                MessengerError::SendError { msg: e.to_string() },
+            )));
         } else {
             info!("Data Sent");
         }
@@ -126,16 +128,21 @@ impl Messenger for AsyncRedisMessenger {
             .group(GROUP_NAME, CONSUMER_NAME);
 
         // Read on stream key and save the reply. Log but do not return errors.
-        match self
+        self.stream_read_reply = match self
             .connection
             .as_mut()
             .unwrap()
             .xread_options(&[stream_key], &[">"], &opts)
             .await
         {
-            Ok(reply) => self.stream_read_reply = reply,
-            Err(e) => error!("Redis receive error: {e}"),
-        }
+            Ok(reply) => reply,
+            Err(e) => {
+                error!("Redis receive error: {e}");
+                return Err(GeyserPluginError::Custom(Box::new(
+                    MessengerError::ReceiveError { msg: e.to_string() },
+                )));
+            }
+        };
 
         // Data vec that will be returned with parsed data from stream read reply.
         let mut data_vec = Vec::<(i64, &[u8])>::new();
@@ -170,7 +177,7 @@ impl Messenger for AsyncRedisMessenger {
     }
 }
 
-impl Debug for AsyncRedisMessenger {
+impl Debug for RedisMessenger {
     fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }

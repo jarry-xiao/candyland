@@ -10,7 +10,7 @@ use {
         utils::{order_instructions, parse_logs},
     },
     futures_util::TryFutureExt,
-    messenger::{AsyncRedisMessenger, Messenger, ACCOUNT_STREAM, TRANSACTION_STREAM},
+    messenger::{Messenger, RedisMessenger, ACCOUNT_STREAM, TRANSACTION_STREAM},
     plerkle_serialization::account_info_generated::account_info::root_as_account_info,
     plerkle_serialization::transaction_info_generated::transaction_info::root_as_transaction_info,
     solana_sdk::pubkey::Pubkey,
@@ -39,7 +39,7 @@ async fn main() {
         .await
         .unwrap();
     // Service streams as separate concurrent processes.
-    tasks.push(service_transaction_stream::<AsyncRedisMessenger>(pool).await);
+    tasks.push(service_transaction_stream::<RedisMessenger>(pool).await);
     // Wait for ctrl-c.
     match tokio::signal::ctrl_c().await {
         Ok(()) => {}
