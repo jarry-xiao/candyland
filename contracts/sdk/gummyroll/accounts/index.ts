@@ -16,11 +16,13 @@ export class OnChainMerkleRoll {
     this.roll = roll;
   }
 
-  getChangeLogsWithNodeIndex(): PathNode[] {
+  getChangeLogsWithNodeIndex(): PathNode[][] {
     const mask = this.header.maxBufferSize - 1;
-    let pathNodes = [];
+    let pathNodeList = [];
     for (let j = 0; j < this.roll.bufferSize; j++) {
-      let changeLog = this.roll.changeLogs[(this.roll.activeIndex - j) ^ mask];
+      let pathNodes = [];
+      let idx = (this.roll.activeIndex - j) & mask;
+      let changeLog = this.roll.changeLogs[idx];
       let pathLen = changeLog.pathNodes.length;
       for (const [lvl, key] of changeLog.pathNodes.entries()) {
         let nodeIdx = (1 << (pathLen - lvl)) + (changeLog.index >> lvl);
@@ -33,8 +35,9 @@ export class OnChainMerkleRoll {
         node: changeLog.root,
         index: 1,
       });
+      pathNodeList.push(pathNodes);
     }
-    return pathNodes;
+    return pathNodeList;
   }
 }
 
@@ -72,13 +75,6 @@ type Path = {
   _padding: number;
 };
 
-<<<<<<< HEAD
-=======
-function readPublicKey(reader: borsh.BinaryReader): PublicKey {
-  return new PublicKey(reader.readFixedArray(32));
-}
-
->>>>>>> 4c7a7b6 (Initial commit for a jank indexing procedure for people who don't know how to write real code :))
 export function decodeMerkleRoll(buffer: Buffer): OnChainMerkleRoll {
   let reader = new borsh.BinaryReader(buffer);
 

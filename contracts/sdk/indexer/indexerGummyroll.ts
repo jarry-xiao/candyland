@@ -1,7 +1,7 @@
 import { BN, web3 } from "@project-serum/anchor";
 import { PublicKey } from "@solana/web3.js";
 import React from "react";
-import { hash } from "../../tests/merkle-tree";
+import { emptyNode, hash } from "../../tests/merkle-tree";
 import { PathNode, decodeMerkleRoll, OnChainMerkleRoll } from "../gummyroll";
 import { NFTDatabaseConnection } from "./db";
 
@@ -41,25 +41,51 @@ export async function getUpdatedBatch(
   merkleRoll: OnChainMerkleRoll,
   db: NFTDatabaseConnection
 ) {
-  // If seq > max JS int it's all over :(
   const seq = merkleRoll.roll.sequenceNumber.toNumber();
-  console.log(`Received Batch! Sequence=${seq}`);
-  const pathNodes = merkleRoll.getChangeLogsWithNodeIndex();
-  interface PathDict {
-    [key: number]: PathNode;
+  let rows: Array<[PathNode, number, number]> = [];
+  if (seq === 0) {
+    let nodeIdx = 1 << merkleRoll.header.maxDepth;
+    for (let i = 0; i < merkleRoll.header.maxDepth; ++i) {
+      rows.push([
+        {
+          node: new PublicKey(db.emptyNode(i)),
+          index: nodeIdx,
+        },
+        0,
+        i,
+      ]);
+      nodeIdx >>= 1;
+    }
+    rows.push([
+      {
+        node: new PublicKey(db.emptyNode(merkleRoll.header.maxDepth)),
+        index: 1,
+      },
+      0,
+      merkleRoll.header.maxDepth,
+    ]);
+  } else {
+    const pathNodes = merkleRoll.getChangeLogsWithNodeIndex();
+    console.log(`Received Batch! Sequence=${seq}, entries ${pathNodes.length}`);
+    let data: Array<[number, PathNode[]]> = [];
+    for (const [i, path] of pathNodes.entries()) {
+      if (i == seq) {
+        break;
+      }
+      data.push([seq - i, path]);
+    }
+
+    let sequenceNumbers = await db.getSequenceNumbers();
+    for (const [seq, path] of data) {
+      if (sequenceNumbers.has(seq)) {
+        continue;
+      }
+      for (const [i, node] of path.entries()) {
+        rows.push([node, seq, i]);
+      }
+    }
   }
-  let data: PathDict = {};
-  for (const [i, path] of pathNodes.entries()) {
-    data[seq - i] = path;
-  }
-  // TODO: make this atomic maybe / use caching to prevent too much duplication
-  for (const [i, [seq, path]] of Object.entries(data).entries()) {
-    db.upsertStmt.bind({
-      "@node_idx": path.index,
-      "@seq": seq,
-      "@level": i,
-      "@hash": path.node.toBase58(),
-    });
-    await db.upsertStmt.run();
-  }
+  db.upsertRowsFromBackfill(rows);
+  console.log(`Updated ${rows.length} rows`);
+  await db.updateTree();
 }
