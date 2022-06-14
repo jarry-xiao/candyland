@@ -22,7 +22,7 @@ export type ParsedLog = {
 }
 
 export type OptionalInfo = {
-    txId: String
+    txId: string
 }
 
 /**

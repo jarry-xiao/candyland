@@ -28,16 +28,17 @@ let Gummyroll: anchor.Program<Gummyroll>;
 
 function indexParsedLog(
   db: NFTDatabaseConnection,
+  txId: string,
   parsedLog: ParsedLog | string
 ) {
   if (typeof parsedLog === "string") {
     return;
   }
   if (parsedLog.programId.equals(BUBBLEGUM_PROGRAM_ID)) {
-    return parseBubblegum(db, parsedLog, { Bubblegum, Gummyroll }, null);
+    return parseBubblegum(db, parsedLog, { Bubblegum, Gummyroll }, {txId: txId});
   } else {
     for (const log of parsedLog.logs) {
-      indexParsedLog(db, log);
+      indexParsedLog(db, txId, log);
     }
   }
 }
@@ -50,7 +51,6 @@ async function handleLogs(
   if (logs.err) {
     return;
   }
-  // console.log("Sig:", logs.signature);
   const parsedLogs = parseLogs(logs.logs);
   if (parsedLogs.length == 0) {
     return;
@@ -58,7 +58,7 @@ async function handleLogs(
   db.connection.db.serialize(() => {
     db.beginTransaction();
     for (const parsedLog of parsedLogs) {
-      indexParsedLog(db, parsedLog);
+      indexParsedLog(db, logs.signature, parsedLog);
     }
     console.log("Done executing queries");
     db.commit();

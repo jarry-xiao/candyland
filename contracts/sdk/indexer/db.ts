@@ -65,7 +65,7 @@ export class NFTDatabaseConnection {
     });
   }
 
-  async updateChangeLogs(changeLog: ChangeLogEvent) {
+  async updateChangeLogs(changeLog: ChangeLogEvent, txId: string) {
     console.log("Update Change Log");
     if (changeLog.seq == 0) {
       return;
@@ -74,9 +74,10 @@ export class NFTDatabaseConnection {
       this.connection.run(
         `
           INSERT INTO 
-          merkle(node_idx, seq, level, hash)
-          VALUES (?, ?, ?, ?)
+          merkle(transaction_id, node_idx, seq, level, hash)
+          VALUES (?, ?, ?, ?, ?)
         `,
+        txId,
         pathNode.index,
         changeLog.seq,
         i,
@@ -85,20 +86,21 @@ export class NFTDatabaseConnection {
     }
   }
 
-  async updateLeafSchema(leafSchema: LeafSchema, leafHash: PublicKey) {
+  async updateLeafSchema(leafSchema: LeafSchema, leafHash: PublicKey, txId: string) {
     console.log("Update Leaf Schema");
     this.connection.run(
       `
         INSERT INTO
         leaf_schema(
           nonce,
+          transaction_id,
           owner,
           delegate,
           data_hash,
           creator_hash,
           leaf_hash  
         )
-        VALUES (?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (nonce)
         DO UPDATE SET 
           owner = excluded.owner,
@@ -108,6 +110,7 @@ export class NFTDatabaseConnection {
           leaf_hash = excluded.leaf_hash
       `,
       (leafSchema.nonce.valueOf() as BN).toNumber(),
+      txId,
       leafSchema.owner.toBase58(),
       leafSchema.delegate.toBase58(),
       bs58.encode(leafSchema.dataHash),
@@ -508,6 +511,7 @@ export async function bootstrap(
       `
         CREATE TABLE IF NOT EXISTS merkle (
           id INTEGER PRIMARY KEY,
+          transaction_id TEXT,
           node_idx INT,
           seq INT,
           level INT,
@@ -548,6 +552,7 @@ export async function bootstrap(
       `
       CREATE TABLE IF NOT EXISTS leaf_schema (
         nonce BIGINT PRIMARY KEY,
+        transaction_id TEXT,
         owner TEXT,
         delegate TEXT,
         data_hash TEXT,
