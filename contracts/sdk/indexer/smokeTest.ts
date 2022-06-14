@@ -213,7 +213,15 @@ async function main() {
       let tx = new Transaction().add(replaceIx);
       await BubblegumCtx.provider.connection
         .sendTransaction(tx, [wallets[i]])
-        .then(() => console.log("Successfully transferred asset"))
+        .then(() =>
+          console.log(
+            `Successfully transferred asset (${assets[k].leafHash} from tree: ${
+              assets[k].treeId
+            }) - ${wallets[i].publicKey.toBase58()} -> ${wallets[
+              j
+            ].publicKey.toBase58()}`
+          )
+        )
         .catch((e) => console.log("Encountered Error when transferring", e));
     }
   }
