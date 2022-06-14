@@ -284,12 +284,12 @@ export class NFTDatabaseConnection {
     let res = await this.connection.all(
       `
         SELECT 
-          DISTINCT m.node_idx,
-          l.data_hash,
-          l.creator_hash,
-          l.nonce,
-          l.owner,
-          l.delegate,
+          DISTINCT m.node_idx as nodeIdx,
+          l.data_hash as dataHash,
+          l.creator_hash as creatorHash,
+          l.nonce as nonce,
+          l.owner as owner,
+          l.delegate as delegate,
           max(m.seq) as seq
         FROM merkle m
         JOIN leaf_schema l
@@ -300,15 +300,15 @@ export class NFTDatabaseConnection {
       hashString
     );
     if (res.length == 1) {
-      let [nodeIdx, dataHash, creatorHash, nonce, owner, delegate] = res[0];
+      let data = res[0]
       return this.generateProof(
-        nodeIdx,
+        data.nodeIdx,
         hash,
-        dataHash,
-        creatorHash,
-        nonce,
-        owner,
-        delegate,
+        data.dataHash,
+        data.creatorHash,
+        data.nonce,
+        data.owner,
+        data.delegate,
         check
       );
     } else {
@@ -404,6 +404,7 @@ export class NFTDatabaseConnection {
         n.seller_fee_basis_points as sellerFeeBasisPoints,
         ls.owner as owner,
         ls.delegate as delegate,
+        ls.leaf_hash as leafHash,
         n.creator0 as creator0,
         n.share0 as share0,
         n.verified0 as verified0,
@@ -472,6 +473,7 @@ export class NFTDatabaseConnection {
         sellerFeeBasisPoints: metadata.sellerFeeBasisPoints,
         owner: metadata.owner,
         delegate: metadata.delegate,
+        leafHash: metadata.leafHash, 
         creators: creators,
       });
     }
