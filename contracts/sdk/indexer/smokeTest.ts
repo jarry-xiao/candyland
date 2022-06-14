@@ -190,13 +190,17 @@ async function main() {
           isSigner: false,
         };
       });
+      let [merkleAuthority] = await PublicKey.findProgramAddress(
+        [bs58.decode(assets[k].treeId)],
+        BubblegumCtx.programId
+      );
       let replaceIx = createTransferInstruction(
         {
           owner: wallets[i].publicKey,
           delegate: new PublicKey(proof.delegate),
           newOwner: wallets[j].publicKey,
-          authority: authority,
-          merkleSlab: merkleRollKeypair.publicKey,
+          authority: merkleAuthority,
+          merkleSlab: new PublicKey(assets[k].treeId),
           gummyrollProgram: GummyrollCtx.programId,
         },
         {
