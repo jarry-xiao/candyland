@@ -1,6 +1,5 @@
 import * as anchor from '@project-serum/anchor';
 import { PublicKey } from '@solana/web3.js';
-import { assert } from 'chai';
 import { Gummyroll, PathNode } from "../../gummyroll"
 import { parseEventFromLog, ParsedLog, ixRegEx } from './utils';
 

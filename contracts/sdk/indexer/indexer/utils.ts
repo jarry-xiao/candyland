@@ -3,7 +3,6 @@ import { PublicKey } from '@solana/web3.js';
 import { readFileSync } from 'fs';
 import { Bubblegum } from '../../../target/types/bubblegum';
 import { Gummyroll } from '../../../target/types/gummyroll';
-import { BubblegumIx } from './bubblegum';
 
 const startRegEx = /Program (\w*) invoke \[(\d)\]/;
 const endRegEx = /Program (\w*) success/;

@@ -1,24 +1,14 @@
-import {
-  Keypair,
-  PublicKey,
-  SystemProgram,
-  Transaction,
-} from "@solana/web3.js";
+import { Keypair } from "@solana/web3.js";
 import { Connection, Context, Logs } from "@solana/web3.js";
 import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "../bubblegum/src/generated";
-import {
-  getMerkleRollAccountSize,
-  PROGRAM_ID as GUMMYROLL_PROGRAM_ID,
-} from "../gummyroll/index";
+import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from "../gummyroll/index";
 import * as anchor from "@project-serum/anchor";
 import { Bubblegum } from "../../target/types/bubblegum";
 import { Gummyroll } from "../../target/types/gummyroll";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
-import { readFileSync } from "fs";
 import { loadProgram, ParsedLog, parseLogs } from "./indexer/utils";
 import { parseBubblegum } from "./indexer/bubblegum";
 import { bootstrap, NFTDatabaseConnection } from "./db";
-import { logTx } from "../../tests/utils";
 
 const MAX_DEPTH = 20;
 const MAX_SIZE = 1024;
@@ -35,7 +25,12 @@ function indexParsedLog(
     return;
   }
   if (parsedLog.programId.equals(BUBBLEGUM_PROGRAM_ID)) {
-    return parseBubblegum(db, parsedLog, { Bubblegum, Gummyroll }, {txId: txId});
+    return parseBubblegum(
+      db,
+      parsedLog,
+      { Bubblegum, Gummyroll },
+      { txId: txId }
+    );
   } else {
     for (const log of parsedLog.logs) {
       indexParsedLog(db, txId, log);

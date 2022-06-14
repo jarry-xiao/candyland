@@ -6,11 +6,10 @@ import { keccak_256 } from "js-sha3";
 import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
 import { NewLeafEvent } from "./indexer/bubblegum";
 import { BN } from "@project-serum/anchor";
-import { Beet, bignum } from "@metaplex-foundation/beet";
+import { bignum } from "@metaplex-foundation/beet";
 import {
   Creator,
   LeafSchema,
-  redeemInstructionDiscriminator,
 } from "../bubblegum/src/generated";
 import { ChangeLogEvent } from "./indexer/gummyroll";
 let fs = require("fs");
