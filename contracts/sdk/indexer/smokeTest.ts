@@ -135,7 +135,7 @@ async function main() {
     tx = tx.add(initNonceIx);
   }
   tx = tx.add(allocAccountIx).add(createTreeIx);
-  await GummyrollCtx.provider.send(tx, [payer]);
+  await GummyrollCtx.provider.send(tx, [payer, merkleRollKeypair]);
   let numMints = 0;
   while (1) {
     let i = Math.floor(Math.random() * wallets.length);

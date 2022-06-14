@@ -36,7 +36,7 @@ function stringifyProof(proof: Proof): string {
 
 app.get("/proof", async (req, res) => {
   const leafHashString = req.query.leafHash;
-  console.log("POST request:", leafHashString);
+  console.log("GET request:", leafHashString);
   const nftDb = await bootstrap(false);
   const leafHash: Buffer = bs58.decode(leafHashString);
   const proof = await nftDb.getProof(leafHash, false);
@@ -45,7 +45,7 @@ app.get("/proof", async (req, res) => {
 
 app.get("/assets", async (req, res) => {
   const owner = req.query.owner;
-  console.log("POST request:", owner);
+  console.log("GET request:", owner);
   const nftDb = await bootstrap(false);
   const assets = await nftDb.getAssetsForOwner(owner);
   res.send(JSON.stringify(assets));
