@@ -183,6 +183,9 @@ async function main() {
         { method: "GET" }
       );
       const proof = await response.json();
+      if ("err" in proof) {
+        continue;
+      }
       const proofNodes: Array<AccountMeta> = proof.proofNodes.map((key) => {
         return {
           pubkey: new PublicKey(key),

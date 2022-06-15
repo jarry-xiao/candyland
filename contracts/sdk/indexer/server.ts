@@ -37,21 +37,23 @@ function stringifyProof(proof: Proof): string {
 app.get("/proof", async (req, res) => {
   const leafHashString = req.query.leafHash;
   const treeId = req.query.treeId;
-  console.log("GET request:", leafHashString);
   const nftDb = await bootstrap(false);
   const leafHash: Buffer = bs58.decode(leafHashString);
   const proof = await nftDb.getProof(leafHash, treeId, false);
-  res.send(stringifyProof(proof));
+  if (proof) {
+    res.send(stringifyProof(proof));
+  } else {
+    res.send(JSON.stringify({"err": "Failed to fetch proof"}))
+  }
 });
 
 app.get("/assets", async (req, res) => {
   const owner = req.query.owner;
-  console.log("GET request:", owner);
   const nftDb = await bootstrap(false);
   const assets = await nftDb.getAssetsForOwner(owner);
   res.send(JSON.stringify(assets));
 });
 
 app.listen(port, () => {
-  console.log(`Example app listening on port ${port}`);
+  console.log(`Tree server listening on port ${port}`);
 });
