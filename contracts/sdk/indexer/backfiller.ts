@@ -14,7 +14,9 @@ const localhostUrl = "http://127.0.0.1:8899";
 let Bubblegum: anchor.Program<Bubblegum>;
 let Gummyroll: anchor.Program<Gummyroll>;
 
-async function runSnapshot() {}
+async function runSnapshot() {
+  // TODO
+}
 
 async function validateTreeAndUpdateSnapshot(
   nftDb: NFTDatabaseConnection,
@@ -57,6 +59,7 @@ async function validateTreeAndUpdateSnapshot(
     }
     ++i;
   }
+  await runSnapshot();
   return true;
   //   nftDb.updateSnapshot
 }
@@ -74,7 +77,7 @@ async function plugGapsFromSlot(
   treeKey: PublicKey,
   slot: number,
   startSeq: number,
-  endSeq: number,
+  endSeq: number
 ) {
   const blockData = await connection.getBlock(slot, {
     commitment: "confirmed",
@@ -120,7 +123,15 @@ async function plugGaps(
 ) {
   const treeKey = new PublicKey(treeId);
   for (let slot = startSlot; slot <= endSlot; ++slot) {
-    await plugGapsFromSlot(connection, nftDb, parserState, treeKey, slot, startSeq, endSeq);
+    await plugGapsFromSlot(
+      connection,
+      nftDb,
+      parserState,
+      treeKey,
+      slot,
+      startSeq,
+      endSeq
+    );
   }
 }
 
@@ -173,17 +184,17 @@ async function main() {
   while (true) {
     for (const [treeId, depth] of await nftDb.getTrees()) {
       try {
-          await fetchAndPlugGaps(connection, nftDb, 0, treeId, {
-            Gummyroll,
-            Bubblegum,
-          });
-          console.log(
-            `Off-chain tree ${treeId} is consistent: ${await validateTreeAndUpdateSnapshot(
-              nftDb,
-              depth,
-              treeId
-            )}`
-          );
+        await fetchAndPlugGaps(connection, nftDb, 0, treeId, {
+          Gummyroll,
+          Bubblegum,
+        });
+        console.log(
+          `Off-chain tree ${treeId} is consistent: ${await validateTreeAndUpdateSnapshot(
+            nftDb,
+            depth,
+            treeId
+          )}`
+        );
       } catch {
         continue;
       }
