@@ -21,23 +21,26 @@ use {
         fmt::{Debug, Formatter},
         fs::File,
         io::Read,
-        sync::Arc,
+        marker::PhantomData,
     },
-    tokio::sync::Mutex,
+    tokio::sync::mpsc::{self, Sender},
 };
 
-#[derive(Default)]
-pub struct Plerkle<T: Messenger + Default>(Option<Arc<Inner<T>>>);
+struct SerializedData<'a> {
+    stream: &'static str,
+    builder: FlatBufferBuilder<'a>,
+}
 
 #[derive(Default)]
-pub(crate) struct Inner<T: Messenger + Default> {
+pub(crate) struct Plerkle<'a, T: Messenger + Default> {
     runtime: Option<tokio::runtime::Runtime>,
     accounts_selector: Option<AccountsSelector>,
     transaction_selector: Option<TransactionSelector>,
-    messenger: Option<Mutex<T>>,
+    messenger: PhantomData<T>,
+    sender: Option<Sender<SerializedData<'a>>>,
 }
 
-impl<T: Messenger + Default> Plerkle<T> {
+impl<'a, T: Messenger + Default> Plerkle<'a, T> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -95,34 +98,28 @@ impl<T: Messenger + Default> Plerkle<T> {
         }
     }
 
-    fn inner(&self) -> Result<&Arc<Inner<T>>> {
-        let inner = if let Some(inner) = &self.0 {
-            inner
+    fn get_runtime(&self) -> Result<&tokio::runtime::Runtime> {
+        if let Some(runtime) = &self.runtime {
+            Ok(runtime)
         } else {
-            return Err(GeyserPluginError::Custom(Box::new(
+            Err(GeyserPluginError::Custom(Box::new(
                 PlerkleError::GeneralPluginConfigError {
-                    msg: "No Inner struct present.".to_string(),
+                    msg: "No runtime contained in struct".to_string(),
                 },
-            )));
-        };
+            )))
+        }
+    }
 
-        if let None = inner.runtime {
-            return Err(GeyserPluginError::Custom(Box::new(
+    fn get_sender_clone(&self) -> Result<Sender<SerializedData<'a>>> {
+        if let Some(sender) = &self.sender {
+            Ok(sender.clone())
+        } else {
+            Err(GeyserPluginError::Custom(Box::new(
                 PlerkleError::GeneralPluginConfigError {
-                    msg: "No runtime contained in Inner struct.".to_string(),
+                    msg: "No Sender channel contained in struct".to_string(),
                 },
-            )));
+            )))
         }
-
-        if let None = inner.messenger {
-            return Err(GeyserPluginError::Custom(Box::new(
-                PlerkleError::DataStoreConnectionError {
-                    msg: "There is no connection to data store.".to_string(),
-                },
-            )));
-        }
-
-        Ok(inner)
     }
 
     // Currently not used but may want later.
@@ -136,13 +133,13 @@ impl<T: Messenger + Default> Plerkle<T> {
     }
 }
 
-impl<T: Messenger + Default> Debug for Plerkle<T> {
+impl<'a, T: Messenger + Default> Debug for Plerkle<'a, T> {
     fn fmt(&self, _f: &mut Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
 }
 
-impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T> {
+impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'static, T> {
     fn name(&self) -> &'static str {
         "Plerkle"
     }
@@ -174,6 +171,9 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
             }
         };
 
+        self.accounts_selector = Some(accounts_selector);
+        self.transaction_selector = Some(transaction_selector);
+
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .thread_name("plerkle-runtime-worker")
@@ -182,25 +182,30 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
                 msg: format!("Could not create tokio runtime: {:?}", err),
             })?;
 
-        let messenger = runtime.block_on(async {
-            let mut messenger = T::new().await?;
-            messenger.add_stream(ACCOUNT_STREAM).await;
-            messenger.add_stream(SLOT_STREAM).await;
-            messenger.add_stream(TRANSACTION_STREAM).await;
-            messenger.add_stream(BLOCK_STREAM).await;
-            messenger.set_buffer_size(ACCOUNT_STREAM, 5000).await;
-            messenger.set_buffer_size(SLOT_STREAM, 5000).await;
-            messenger.set_buffer_size(TRANSACTION_STREAM, 5000).await;
-            messenger.set_buffer_size(BLOCK_STREAM, 5000).await;
-            Result::<_>::Ok(messenger)
-        })?;
+        let (sender, mut receiver) = mpsc::channel::<SerializedData>(32);
+        self.sender = Some(sender);
 
-        self.0 = Some(Arc::new(Inner {
-            runtime: Some(runtime),
-            accounts_selector: Some(accounts_selector),
-            transaction_selector: Some(transaction_selector),
-            messenger: Some(Mutex::new(messenger)),
-        }));
+        runtime.spawn(async move {
+            // Create new Messenger connection.
+            if let Ok(mut messenger) = T::new().await {
+                messenger.add_stream(ACCOUNT_STREAM).await;
+                messenger.add_stream(SLOT_STREAM).await;
+                messenger.add_stream(TRANSACTION_STREAM).await;
+                messenger.add_stream(BLOCK_STREAM).await;
+                messenger.set_buffer_size(ACCOUNT_STREAM, 5000).await;
+                messenger.set_buffer_size(SLOT_STREAM, 5000).await;
+                messenger.set_buffer_size(TRANSACTION_STREAM, 5000).await;
+                messenger.set_buffer_size(BLOCK_STREAM, 5000).await;
+
+                // Receive messages in a loop as long as at least one Sender is in scope.
+                while let Some(data) = receiver.recv().await {
+                    let bytes = data.builder.finished_data();
+                    let _ = messenger.send(data.stream, bytes).await;
+                }
+            }
+        });
+
+        self.runtime = Some(runtime);
 
         Ok(())
     }
@@ -217,11 +222,8 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
         match account {
             ReplicaAccountInfoVersions::V0_0_1(account) => {
-                // Get inner struct and make sure all needed info present.
-                let inner = self.inner()?;
-
                 // Check if account was selected in config.
-                if let Some(accounts_selector) = &inner.accounts_selector {
+                if let Some(accounts_selector) = &self.accounts_selector {
                     if !accounts_selector.is_account_selected(account.pubkey, account.owner) {
                         return Ok(());
                     }
@@ -229,15 +231,21 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
                     return Ok(());
                 }
 
-                // Send account info over messenger.
-                let runtime = inner.runtime.as_ref().unwrap();
-                let inner = inner.clone();
+                // Get runtime and sender channel.
+                let runtime = self.get_runtime()?;
+                let sender = self.get_sender_clone()?;
+
+                // Serialize data.
                 let builder = FlatBufferBuilder::new();
                 let builder = serialize_account(builder, &account, slot, is_startup);
+
+                // Send account info over channel.
                 runtime.spawn(async move {
-                    let bytes = builder.finished_data();
-                    let mut messenger = inner.as_ref().messenger.as_ref().unwrap().lock().await;
-                    let _ = messenger.send(ACCOUNT_STREAM, &bytes).await;
+                    let data = SerializedData {
+                        stream: ACCOUNT_STREAM,
+                        builder,
+                    };
+                    let _ = sender.send(data).await;
                 });
             }
         }
@@ -257,18 +265,21 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
         parent: Option<u64>,
         status: SlotStatus,
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
-        // Get inner struct and make sure all needed info present.
-        let inner = self.inner()?;
+        // Get runtime and sender channel.
+        let runtime = self.get_runtime()?;
+        let sender = self.get_sender_clone()?;
 
-        // Send slot status over messenger.
-        let runtime = inner.runtime.as_ref().unwrap();
-        let inner = inner.clone();
+        // Serialize data.
         let builder = FlatBufferBuilder::new();
         let builder = serialize_slot_status(builder, slot, parent, status);
+
+        // Send slot status over channel.
         runtime.spawn(async move {
-            let bytes = builder.finished_data();
-            let mut messenger = inner.as_ref().messenger.as_ref().unwrap().lock().await;
-            let _ = messenger.send(SLOT_STREAM, &bytes).await;
+            let data = SerializedData {
+                stream: SLOT_STREAM,
+                builder,
+            };
+            let _ = sender.send(data).await;
         });
 
         Ok(())
@@ -281,9 +292,6 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
         match transaction_info {
             ReplicaTransactionInfoVersions::V0_0_1(transaction_info) => {
-                // Get inner struct and make sure all needed info present.
-                let inner = self.inner()?;
-
                 // Don't log votes or transactions with error status.
                 if transaction_info.is_vote
                     || transaction_info.transaction_status_meta.status.is_err()
@@ -292,7 +300,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
                 }
 
                 // Check if transaction was selected in config.
-                if let Some(transaction_selector) = &inner.transaction_selector {
+                if let Some(transaction_selector) = &self.transaction_selector {
                     if !transaction_selector.is_transaction_selected(
                         transaction_info.is_vote,
                         Box::new(transaction_info.transaction.message().account_keys().iter()),
@@ -303,15 +311,21 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
                     return Ok(());
                 }
 
-                // Send transaction info over messenger.
-                let runtime = inner.runtime.as_ref().unwrap();
-                let inner = inner.clone();
+                // Get runtime and sender channel.
+                let runtime = self.get_runtime()?;
+                let sender = self.get_sender_clone()?;
+
+                // Serialize data.
                 let builder = FlatBufferBuilder::new();
                 let builder = serialize_transaction(builder, transaction_info, slot);
+
+                // Send transaction info over channel.
                 runtime.spawn(async move {
-                    let bytes = builder.finished_data();
-                    let mut messenger = inner.as_ref().messenger.as_ref().unwrap().lock().await;
-                    let _ = messenger.send(TRANSACTION_STREAM, &bytes).await;
+                    let data = SerializedData {
+                        stream: TRANSACTION_STREAM,
+                        builder,
+                    };
+                    let _ = sender.send(data).await;
                 });
             }
         }
@@ -325,18 +339,21 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
         match blockinfo {
             ReplicaBlockInfoVersions::V0_0_1(block_info) => {
-                // Get inner struct and make sure all needed info present.
-                let inner = self.inner()?;
+                // Get runtime and sender channel.
+                let runtime = self.get_runtime()?;
+                let sender = self.get_sender_clone()?;
 
-                // Send block info over messenger.
-                let runtime = inner.runtime.as_ref().unwrap();
-                let inner = inner.clone();
+                // Serialize data.
                 let builder = FlatBufferBuilder::new();
                 let builder = serialize_block(builder, block_info);
+
+                // Send block info over channel.
                 runtime.spawn(async move {
-                    let bytes = builder.finished_data();
-                    let mut messenger = inner.as_ref().messenger.as_ref().unwrap().lock().await;
-                    let _ = messenger.send(BLOCK_STREAM, &bytes).await;
+                    let data = SerializedData {
+                        stream: BLOCK_STREAM,
+                        builder,
+                    };
+                    let _ = sender.send(data).await;
                 });
             }
         }
@@ -345,25 +362,15 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<T>
     }
 
     fn account_data_notifications_enabled(&self) -> bool {
-        if let Ok(inner) = self.inner() {
-            inner
-                .accounts_selector
-                .as_ref()
-                .map_or_else(|| false, |selector| selector.is_enabled())
-        } else {
-            false
-        }
+        self.accounts_selector
+            .as_ref()
+            .map_or_else(|| false, |selector| selector.is_enabled())
     }
 
     fn transaction_notifications_enabled(&self) -> bool {
-        if let Ok(inner) = self.inner() {
-            inner
-                .transaction_selector
-                .as_ref()
-                .map_or_else(|| false, |selector| selector.is_enabled())
-        } else {
-            false
-        }
+        self.transaction_selector
+            .as_ref()
+            .map_or_else(|| false, |selector| selector.is_enabled())
     }
 }
 
