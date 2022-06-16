@@ -377,13 +377,13 @@ export class NFTDatabaseConnection {
       treeId
     );
     if (gapIndex && gapIndex.seq < latestSeq) {
-      return await this.inferProof(hash, treeId, gapIndex.seq, check);
+      return await this.inferProofWithKnownGap(hash, treeId, gapIndex.seq, check);
     } else {
       return await this.getProof(hash, treeId, check);
     }
   }
 
-  async inferProof(
+  async inferProofWithKnownGap(
     hash: Buffer,
     treeId: string,
     seq: number,
