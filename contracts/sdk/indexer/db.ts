@@ -37,6 +37,10 @@ export class NFTDatabaseConnection {
     return await this.connection.run("BEGIN TRANSACTION");
   }
 
+  async rollback() {
+    return await this.connection.run("ROLLBACK");
+  }
+
   async commit() {
     return await this.connection.run("COMMIT");
   }
@@ -255,23 +259,28 @@ export class NFTDatabaseConnection {
   }
 
   async getMissingData(minSeq: number, treeId: string) {
-    let res = await this.connection.all(
-      `
+    let gaps: Array<GapInfo> = [];
+    let res = await this.connection
+      .all(
+        `
         SELECT DISTINCT seq, slot
         FROM merkle
         where tree_id = ? and seq >= ?
         order by seq
       `,
-      treeId,
-      minSeq
-    );
-    let gaps: Array<GapInfo> = [];
+        treeId,
+        minSeq
+      )
+      .catch((e) => {
+        console.log("Failed to make query", e);
+        return [gaps, null, null];
+      });
     for (let i = 0; i < res.length - 1; ++i) {
       let [prevSeq, prevSlot] = [res[i].seq, res[i].slot];
       let [currSeq, currSlot] = [res[i + 1].seq, res[i + 1].slot];
       if (currSeq === prevSeq) {
         throw new Error(
-          "Error in DB, encountered identical sequence numbers with different slots"
+          `Error in DB, encountered identical sequence numbers with different slots: ${prevSlot} ${currSlot}`
         );
       }
       if (currSeq - prevSeq > 1) {
@@ -285,15 +294,20 @@ export class NFTDatabaseConnection {
   }
 
   async getTrees() {
-    return (
-      await this.connection.all(
+    let res = await this.connection
+      .all(
         `
         SELECT DISTINCT tree_id, max(level) as depth
         FROM merkle
         GROUP BY tree_id
       `
       )
-    ).map((x) => {
+      .catch((e) => {
+        console.log("Failed to query table", e);
+        return [];
+      });
+
+    return res.map((x) => {
       return [x.tree_id, x.depth];
     });
   }
@@ -377,7 +391,12 @@ export class NFTDatabaseConnection {
       treeId
     );
     if (gapIndex && gapIndex.seq < latestSeq) {
-      return await this.inferProofWithKnownGap(hash, treeId, gapIndex.seq, check);
+      return await this.inferProofWithKnownGap(
+        hash,
+        treeId,
+        gapIndex.seq,
+        check
+      );
     } else {
       return await this.getProof(hash, treeId, check);
     }
@@ -707,7 +726,7 @@ export async function bootstrap(
   });
 
   // Allows concurrency in SQLITE
-  await db.run('PRAGMA journal_mode = WAL;');
+  await db.run("PRAGMA journal_mode = WAL;");
 
   if (create) {
     db.db.serialize(() => {
@@ -796,23 +815,6 @@ export async function bootstrap(
             level INT,
             hash TEXT
           );
-        `
-      );
-      db.run(
-        `
-        CREATE TABLE IF NOT EXISTS leaf_schema_snapshot (
-          max_seq INT,
-          tree_id TEXT,
-          nonce BIGINT,
-          seq INT,
-          transaction_id TEXT,
-          owner TEXT,
-          delegate TEXT,
-          data_hash TEXT,
-          creator_hash TEXT,
-          leaf_hash TEXT,
-          PRIMARY KEY (tree_id, nonce)
-        );
         `
       );
       db.run("COMMIT");

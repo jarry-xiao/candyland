@@ -1,23 +1,11 @@
-import { Keypair, PublicKey } from "@solana/web3.js";
-import { Connection, Context, Logs } from "@solana/web3.js";
-import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "../bubblegum/src/generated";
-import {
-  decodeMerkleRoll,
-  PROGRAM_ID as GUMMYROLL_PROGRAM_ID,
-} from "../gummyroll/index";
-import * as anchor from "@project-serum/anchor";
-import { Bubblegum } from "../../target/types/bubblegum";
-import { Gummyroll } from "../../target/types/gummyroll";
-import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
-import { loadProgram, handleLogs, ParserState } from "./indexer/utils";
-import { bootstrap, hash, NFTDatabaseConnection } from "./db";
+import { PublicKey } from "@solana/web3.js";
+import { Connection } from "@solana/web3.js";
+import { decodeMerkleRoll } from "../gummyroll/index";
+import { ParserState, handleLogsAtomic } from "./indexer/utils";
+import { hash, NFTDatabaseConnection } from "./db";
 import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
 
-const localhostUrl = "http://127.0.0.1:8899";
-let Bubblegum: anchor.Program<Bubblegum>;
-let Gummyroll: anchor.Program<Gummyroll>;
-
-async function validateTreeAndUpdateSnapshot(
+export async function validateTree(
   nftDb: NFTDatabaseConnection,
   depth: number,
   treeId: string,
@@ -60,12 +48,6 @@ async function validateTreeAndUpdateSnapshot(
   return true;
 }
 
-function chunks(array, size) {
-  return Array.apply(0, new Array(Math.ceil(array.length / size))).map(
-    (_, index) => array.slice(index * size, (index + 1) * size)
-  );
-}
-
 async function plugGapsFromSlot(
   connection: Connection,
   nftDb: NFTDatabaseConnection,
@@ -92,7 +74,7 @@ async function plugGapsFromSlot(
     if (tx.meta.err) {
       continue;
     }
-    await handleLogs(
+    handleLogsAtomic(
       nftDb,
       {
         err: null,
@@ -131,7 +113,7 @@ async function plugGaps(
   }
 }
 
-async function fetchAndPlugGaps(
+export async function fetchAndPlugGaps(
   connection: Connection,
   nftDb: NFTDatabaseConnection,
   minSeq: number,
@@ -142,16 +124,20 @@ async function fetchAndPlugGaps(
     minSeq,
     treeId
   );
+  console.log(`Found ${missingData.length} gaps`);
   let currSlot = await connection.getSlot("confirmed");
 
   let merkleAccount = await connection.getAccountInfo(
     new PublicKey(treeId),
     "confirmed"
   );
+  if (!merkleAccount) {
+    return;
+  }
   let merkleRoll = decodeMerkleRoll(merkleAccount.data);
   let merkleSeq = merkleRoll.roll.sequenceNumber.toNumber() - 1;
 
-  if (merkleSeq - maxDbSeq > 1 && maxDbSeq < currSlot) {
+  if (merkleSeq - maxDbSeq > 1 && maxDbSlot < currSlot) {
     console.log("Running forward filler");
     missingData.push({
       prevSeq: maxDbSeq,
@@ -161,67 +147,19 @@ async function fetchAndPlugGaps(
     });
   }
 
-  let backfillJobs = [];
   for (const { prevSeq, currSeq, prevSlot, currSlot } of missingData) {
     console.log(prevSeq, currSeq, prevSlot, currSlot);
-    backfillJobs.push(
-      plugGaps(
-        connection,
-        nftDb,
-        parserState,
-        treeId,
-        prevSlot,
-        currSlot,
-        prevSeq,
-        currSeq
-      )
+    await plugGaps(
+      connection,
+      nftDb,
+      parserState,
+      treeId,
+      prevSlot,
+      currSlot,
+      prevSeq,
+      currSeq
     );
   }
-  if (backfillJobs.length > 0) {
-    await Promise.all(backfillJobs);
-  }
+  console.log("Done");
   return maxDbSeq;
 }
-
-async function main() {
-  const endpoint = localhostUrl;
-  const connection = new Connection(endpoint, "confirmed");
-  const payer = Keypair.generate();
-  const provider = new anchor.Provider(connection, new NodeWallet(payer), {
-    commitment: "confirmed",
-  });
-  let nftDb = await bootstrap(false);
-  Gummyroll = loadProgram(
-    provider,
-    GUMMYROLL_PROGRAM_ID,
-    "target/idl/gummyroll.json"
-  ) as anchor.Program<Gummyroll>;
-  Bubblegum = loadProgram(
-    provider,
-    BUBBLEGUM_PROGRAM_ID,
-    "target/idl/bubblegum.json"
-  ) as anchor.Program<Bubblegum>;
-  while (true) {
-    for (const [treeId, depth] of await nftDb.getTrees()) {
-      try {
-        let maxSeq = await fetchAndPlugGaps(connection, nftDb, 0, treeId, {
-          Gummyroll,
-          Bubblegum,
-        });
-        console.log(
-          `Off-chain tree ${treeId} is consistent: ${await validateTreeAndUpdateSnapshot(
-            nftDb,
-            depth,
-            maxSeq,
-            treeId
-          )}`
-        );
-      } catch {
-        continue;
-      }
-    }
-    await new Promise((r) => setTimeout(r, 1000));
-  }
-}
-
-main();

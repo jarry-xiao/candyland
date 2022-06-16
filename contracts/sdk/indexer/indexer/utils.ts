@@ -125,12 +125,12 @@ export function loadProgram(
 }
 
 /**
- * Performs a depth-first traversal of the ParsedLog data structure 
- * @param db 
- * @param optionalInfo 
- * @param slot 
- * @param parsedState 
- * @param parsedLog 
+ * Performs a depth-first traversal of the ParsedLog data structure
+ * @param db
+ * @param optionalInfo
+ * @param slot
+ * @param parsedState
+ * @param parsedLog
  * @returns
  */
 async function indexParsedLog(
@@ -152,15 +152,45 @@ async function indexParsedLog(
   }
 }
 
+export function handleLogsAtomic(
+  db: NFTDatabaseConnection,
+  logs: Logs,
+  context: Context,
+  parsedState: ParserState,
+  startSeq: number | null = null,
+  endSeq: number | null = null
+) {
+  if (logs.err) {
+    return;
+  }
+  const parsedLogs = parseLogs(logs.logs);
+  if (parsedLogs.length == 0) {
+    return;
+  }
+  db.connection.db.serialize(() => {
+    db.beginTransaction();
+    for (const parsedLog of parsedLogs) {
+      indexParsedLog(
+        db,
+        { txId: logs.signature, startSeq, endSeq },
+        context.slot,
+        parsedState,
+        parsedLog
+      );
+    }
+    db.commit();
+  });
+}
+
 /**
- * Processes the logs from a new transaction and searches for the programs 
- * specified in the ParserState 
- * @param db 
- * @param logs 
- * @param context 
- * @param parsedState 
- * @param startSeq 
- * @param endSeq 
+ * Processes the logs from a new transaction and searches for the programs
+ * specified in the ParserState
+ * @param db
+ * @param logs
+ * @param context
+ * @param parsedState
+ * @param startSeq
+ * @param endSeq
  * @returns
  */
 export async function handleLogs(
