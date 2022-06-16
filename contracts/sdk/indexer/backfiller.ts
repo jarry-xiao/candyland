@@ -1,7 +1,10 @@
 import { Keypair, PublicKey } from "@solana/web3.js";
 import { Connection, Context, Logs } from "@solana/web3.js";
 import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "../bubblegum/src/generated";
-import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from "../gummyroll/index";
+import {
+  decodeMerkleRoll,
+  PROGRAM_ID as GUMMYROLL_PROGRAM_ID,
+} from "../gummyroll/index";
 import * as anchor from "@project-serum/anchor";
 import { Bubblegum } from "../../target/types/bubblegum";
 import { Gummyroll } from "../../target/types/gummyroll";
@@ -141,9 +144,32 @@ async function fetchAndPlugGaps(
   treeId: string,
   parserState: ParserState
 ) {
-  let [missingData, maxSeq] = await nftDb.getMissingData(minSeq, treeId);
+  let [missingData, maxDbSeq, maxDbSlot] = await nftDb.getMissingData(
+    minSeq,
+    treeId
+  );
+  let currSlot = await connection.getSlot("confirmed");
+
+  let merkleAccount = await connection.getAccountInfo(
+    new PublicKey(treeId),
+    "confirmed"
+  );
+  let merkleRoll = decodeMerkleRoll(merkleAccount.data);
+  let merkleSeq = merkleRoll.roll.sequenceNumber.toNumber() - 1;
+
+  if (merkleSeq - maxDbSeq > 1 && maxDbSeq < currSlot) {
+    console.log("Running forward filler");
+    missingData.push({
+      prevSeq: maxDbSeq,
+      currSeq: merkleSeq,
+      prevSlot: maxDbSlot,
+      currSlot: currSlot,
+    });
+  }
+
   let backfillJobs = [];
   for (const { prevSeq, currSeq, prevSlot, currSlot } of missingData) {
+    console.log(prevSeq, currSeq, prevSlot, currSlot);
     backfillJobs.push(
       plugGaps(
         connection,
@@ -160,7 +186,7 @@ async function fetchAndPlugGaps(
   if (backfillJobs.length > 0) {
     await Promise.all(backfillJobs);
   }
-  return maxSeq;
+  return maxDbSeq;
 }
 
 async function main() {

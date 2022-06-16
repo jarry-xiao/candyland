@@ -142,41 +142,6 @@ async function indexParsedLog(
   }
 }
 
-export function handleLogsAtomic(
-  db: NFTDatabaseConnection,
-  logs: Logs,
-  context: Context,
-  parsedState: ParserState,
-  useRng: boolean = false
-) {
-  if (logs.err) {
-    return;
-  }
-  const parsedLogs = parseLogs(logs.logs);
-  if (parsedLogs.length == 0) {
-    return;
-  }
-  if (useRng && Math.random() > 0.92) {
-    console.log(`Oh no, I "dropped" a packet`);
-    return;
-  }
-  db.connection.db.serialize(() => {
-    db.beginTransaction();
-    for (const parsedLog of parsedLogs) {
-      indexParsedLog(
-        db,
-        { txId: logs.signature, startSeq: null, endSeq: null },
-        context.slot,
-        parsedState,
-        parsedLog
-      );
-    }
-    console.log("Done executing queries");
-    db.commit();
-    console.log("Committed");
-  });
-}
-
 export async function handleLogs(
   db: NFTDatabaseConnection,
   logs: Logs,

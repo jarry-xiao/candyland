@@ -1,13 +1,13 @@
 import { Keypair } from "@solana/web3.js";
-import { Connection  } from "@solana/web3.js";
+import { Connection } from "@solana/web3.js";
 import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "../bubblegum/src/generated";
 import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from "../gummyroll/index";
 import * as anchor from "@project-serum/anchor";
 import { Bubblegum } from "../../target/types/bubblegum";
 import { Gummyroll } from "../../target/types/gummyroll";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
-import { loadProgram, handleLogsAtomic } from "./indexer/utils";
-import { bootstrap, NFTDatabaseConnection } from "./db";
+import { loadProgram, handleLogs } from "./indexer/utils";
+import { bootstrap } from "./db";
 
 const localhostUrl = "http://127.0.0.1:8899";
 let Bubblegum: anchor.Program<Bubblegum>;
@@ -35,8 +35,8 @@ async function main() {
   console.log("loaded programs...");
   let subscriptionId = connection.onLogs(
     BUBBLEGUM_PROGRAM_ID,
-    async (logs, ctx) => await handleLogsAtomic(db, logs, ctx, { Gummyroll, Bubblegum}, true)
-
+    async (logs, ctx) =>
+      await handleLogs(db, logs, ctx, { Gummyroll, Bubblegum })
   );
 }
 

@@ -40,14 +40,23 @@ app.get("/proof", async (req, res) => {
   const treeId = req.query.treeId;
   const leafHash: Buffer = bs58.decode(leafHashString);
   try {
-    const proof = await nftDb.getProof(leafHash, treeId, false);
+    let proof;
+    if (req.query.robust) {
+      console.log("Serving robust proof");
+      proof = await nftDb.getInferredProof(leafHash, treeId, false);
+    } else {
+      console.log("Serving live proof");
+      proof = await nftDb.getProof(leafHash, treeId, false);
+    }
     if (proof) {
       res.send(stringifyProof(proof));
     } else {
       res.send(JSON.stringify({ err: "Failed to fetch proof" }));
     }
-  } catch {
-    res.send(JSON.stringify({ err: "Encounter error while fetching proof" }));
+  } catch (e) {
+    res.send(
+      JSON.stringify({ err: `Encounter error while fetching proof: ${e}` })
+    );
   }
 });
 
