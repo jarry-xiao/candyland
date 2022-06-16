@@ -20,6 +20,12 @@ function parseIxName(logLine: string): BubblegumIx | null {
   return logLine.match(ixRegEx)[1] as BubblegumIx;
 }
 
+function skipTx(sequenceNumber, startSeq, endSeq): boolean {
+  let left = startSeq !== null ? sequenceNumber <= startSeq : false;
+  let right = endSeq !== null ? sequenceNumber >= endSeq : false;
+  return left || right;
+}
+
 export type BubblegumIx =
   | "Redeem"
   | "Decompress"
@@ -127,10 +133,7 @@ export async function parseBubblegumMint(
   let treeId = changeLog.id.toBase58();
   let sequenceNumber = changeLog.seq;
   let { startSeq, endSeq, txId } = optionalInfo;
-  if (startSeq && sequenceNumber <= startSeq) {
-    return;
-  }
-  if (endSeq && sequenceNumber >= endSeq) {
+  if (skipTx(sequenceNumber, startSeq, endSeq)) {
     return;
   }
   console.log(`Sequence Number: ${sequenceNumber}`);
@@ -159,10 +162,7 @@ export async function parseBubblegumTransfer(
   let treeId = changeLog.id.toBase58();
   let sequenceNumber = changeLog.seq;
   let { startSeq, endSeq, txId } = optionalInfo;
-  if (startSeq && sequenceNumber <= startSeq) {
-    return;
-  }
-  if (endSeq && sequenceNumber >= endSeq) {
+  if (skipTx(sequenceNumber, startSeq, endSeq)) {
     return;
   }
   console.log(`Sequence Number: ${sequenceNumber}`);
@@ -202,10 +202,7 @@ export async function parseBubblegumDelegate(
   let treeId = changeLog.id.toBase58();
   let sequenceNumber = changeLog.seq;
   let { startSeq, endSeq, txId } = optionalInfo;
-  if (startSeq && sequenceNumber <= startSeq) {
-    return;
-  }
-  if (endSeq && sequenceNumber >= endSeq) {
+  if (skipTx(sequenceNumber, startSeq, endSeq)) {
     return;
   }
   console.log(`Sequence Number: ${sequenceNumber}`);
@@ -230,10 +227,7 @@ export async function parseBubblegumRedeem(
   const changeLog = findGummyrollEvent(logs, parser);
   const sequenceNumber = changeLog.seq;
   let { startSeq, endSeq, txId } = optionalInfo;
-  if (startSeq && sequenceNumber <= startSeq) {
-    return;
-  }
-  if (endSeq && sequenceNumber >= endSeq) {
+  if (skipTx(sequenceNumber, startSeq, endSeq)) {
     return;
   }
   console.log(`Sequence Number: ${sequenceNumber}`);
@@ -254,10 +248,7 @@ export async function parseBubblegumCancelRedeem(
   let treeId = changeLog.id.toBase58();
   let sequenceNumber = changeLog.seq;
   let { startSeq, endSeq, txId } = optionalInfo;
-  if (startSeq && sequenceNumber <= startSeq) {
-    return;
-  }
-  if (endSeq && sequenceNumber >= endSeq) {
+  if (skipTx(sequenceNumber, startSeq, endSeq)) {
     return;
   }
   console.log(`Sequence Number: ${sequenceNumber}`);

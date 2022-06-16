@@ -394,6 +394,7 @@ export class NFTDatabaseConnection {
     if (!depth) {
       return null;
     }
+
     let res = await this.connection.get(
       `
         SELECT 
@@ -493,7 +494,7 @@ export class NFTDatabaseConnection {
     owner: string,
     delegate: string,
     check: boolean = true,
-    seq: number | null = null
+    maxSequenceNumber: number | null = null
   ): Promise<Proof | null> {
     let nodes = [];
     let n = nodeIdx;
@@ -507,7 +508,7 @@ export class NFTDatabaseConnection {
     }
     nodes.push(1);
     let res;
-    if (seq) {
+    if (maxSequenceNumber) {
       res = await this.connection.all(
         `
         SELECT DISTINCT node_idx, hash, level, max(seq) as seq
@@ -517,7 +518,7 @@ export class NFTDatabaseConnection {
         ORDER BY level
         `,
         treeId,
-        seq
+        maxSequenceNumber
       );
     } else {
       res = await this.connection.all(
@@ -558,7 +559,8 @@ export class NFTDatabaseConnection {
       owner: owner,
       delegate: delegate,
     };
-    if (seq) {
+    if (maxSequenceNumber) {
+      // If this parameter is set, we directly attempt to infer the root value
       inferredProof.root = bs58.encode(this.generateRoot(inferredProof));
     }
     if (check && !this.verifyProof(inferredProof)) {
@@ -703,6 +705,9 @@ export async function bootstrap(
     filename: `${dir}/merkle.db`,
     driver: sqlite3.Database,
   });
+
+  // Allows concurrency in SQLITE
+  await db.run('PRAGMA journal_mode = WAL;');
 
   if (create) {
     db.db.serialize(() => {

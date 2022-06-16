@@ -40,14 +40,7 @@ app.get("/proof", async (req, res) => {
   const treeId = req.query.treeId;
   const leafHash: Buffer = bs58.decode(leafHashString);
   try {
-    let proof;
-    if (req.query.robust) {
-      console.log("Serving robust proof");
-      proof = await nftDb.getInferredProof(leafHash, treeId, false);
-    } else {
-      console.log("Serving live proof");
-      proof = await nftDb.getProof(leafHash, treeId, false);
-    }
+    let proof = await nftDb.getInferredProof(leafHash, treeId, true);
     if (proof) {
       res.send(stringifyProof(proof));
     } else {

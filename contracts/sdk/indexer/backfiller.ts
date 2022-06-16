@@ -17,10 +17,6 @@ const localhostUrl = "http://127.0.0.1:8899";
 let Bubblegum: anchor.Program<Bubblegum>;
 let Gummyroll: anchor.Program<Gummyroll>;
 
-async function runSnapshot() {
-  // TODO
-}
-
 async function validateTreeAndUpdateSnapshot(
   nftDb: NFTDatabaseConnection,
   depth: number,
@@ -31,39 +27,37 @@ async function validateTreeAndUpdateSnapshot(
   for (const row of await nftDb.getTree(treeId, maxSeq)) {
     tree.set(row.node_idx, [row.seq, row.hash]);
   }
-  let i = 1;
-  while (i < 1 << depth) {
-    if (!tree.has(i)) {
+  let nodeIdx = 1;
+  while (nodeIdx < 1 << depth) {
+    if (!tree.has(nodeIdx)) {
       // Just trust, bro
-      i = 1 << (Math.floor(Math.log2(i)) + 1);
+      nodeIdx = 1 << (Math.floor(Math.log2(nodeIdx)) + 1);
       continue;
     }
-    let expected = tree.get(i)[1];
+    let expected = tree.get(nodeIdx)[1];
     let left, right;
-    if (tree.has(2 * i)) {
-      left = bs58.decode(tree.get(2 * i)[1]);
+    if (tree.has(2 * nodeIdx)) {
+      left = bs58.decode(tree.get(2 * nodeIdx)[1]);
     } else {
-      left = nftDb.emptyNode(depth - Math.floor(Math.log2(2 * i)));
+      left = nftDb.emptyNode(depth - Math.floor(Math.log2(2 * nodeIdx)));
     }
-    if (tree.has(2 * i + 1)) {
-      right = bs58.decode(tree.get(2 * i + 1)[1]);
+    if (tree.has(2 * nodeIdx + 1)) {
+      right = bs58.decode(tree.get(2 * nodeIdx + 1)[1]);
     } else {
-      right = nftDb.emptyNode(depth - Math.floor(Math.log2(2 * i)));
+      right = nftDb.emptyNode(depth - Math.floor(Math.log2(2 * nodeIdx)));
     }
     let actual = bs58.encode(hash(left, right));
     if (expected !== actual) {
       console.log(
-        `Node mismatch ${i}, expected: ${expected}, actual: ${actual}, left: ${bs58.encode(
+        `Node mismatch ${nodeIdx}, expected: ${expected}, actual: ${actual}, left: ${bs58.encode(
           left
         )}, right: ${bs58.encode(right)}`
       );
       return false;
     }
-    ++i;
+    ++nodeIdx;
   }
-  await runSnapshot();
   return true;
-  //   nftDb.updateSnapshot
 }
 
 function chunks(array, size) {

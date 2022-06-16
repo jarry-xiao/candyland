@@ -26,6 +26,7 @@ export type ParsedLog = {
 
 export type OptionalInfo = {
   txId: string;
+
   startSeq: number | null;
   endSeq: number | null;
 };
@@ -123,6 +124,15 @@ export function loadProgram(
   return new anchor.Program(IDL, programId, provider);
 }
 
+/**
+ * Performs a depth-first traversal of the ParsedLog data structure 
+ * @param db 
+ * @param optionalInfo 
+ * @param slot 
+ * @param parsedState 
+ * @param parsedLog 
+ * @returns
+ */
 async function indexParsedLog(
   db: NFTDatabaseConnection,
   optionalInfo: OptionalInfo,
@@ -142,6 +152,17 @@ async function indexParsedLog(
   }
 }
 
+/**
+ * Processes the logs from a new transaction and searches for the programs 
+ * specified in the ParserState 
+ * @param db 
+ * @param logs 
+ * @param context 
+ * @param parsedState 
+ * @param startSeq 
+ * @param endSeq 
+ * @returns
+ */
 export async function handleLogs(
   db: NFTDatabaseConnection,
   logs: Logs,
