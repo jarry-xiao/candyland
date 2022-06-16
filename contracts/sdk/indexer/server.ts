@@ -1,10 +1,11 @@
 import express from "express";
 import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
-import { bootstrap, Proof } from "./db";
+import { bootstrap, NFTDatabaseConnection, Proof } from "./db";
 
 const app = express();
 app.use(express.json());
 
+let nftDb: NFTDatabaseConnection;
 const port = 4000;
 
 type JsonProof = {
@@ -37,23 +38,26 @@ function stringifyProof(proof: Proof): string {
 app.get("/proof", async (req, res) => {
   const leafHashString = req.query.leafHash;
   const treeId = req.query.treeId;
-  const nftDb = await bootstrap(false);
   const leafHash: Buffer = bs58.decode(leafHashString);
-  const proof = await nftDb.getProof(leafHash, treeId, false);
-  if (proof) {
-    res.send(stringifyProof(proof));
-  } else {
-    res.send(JSON.stringify({"err": "Failed to fetch proof"}))
+  try {
+    const proof = await nftDb.getProof(leafHash, treeId, false);
+    if (proof) {
+      res.send(stringifyProof(proof));
+    } else {
+      res.send(JSON.stringify({ err: "Failed to fetch proof" }));
+    }
+  } catch {
+    res.send(JSON.stringify({ err: "Encounter error while fetching proof" }));
   }
 });
 
 app.get("/assets", async (req, res) => {
   const owner = req.query.owner;
-  const nftDb = await bootstrap(false);
   const assets = await nftDb.getAssetsForOwner(owner);
   res.send(JSON.stringify(assets));
 });
 
-app.listen(port, () => {
+app.listen(port, async () => {
+  nftDb = await bootstrap(false);
   console.log(`Tree server listening on port ${port}`);
 });

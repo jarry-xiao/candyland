@@ -241,17 +241,32 @@ export class NFTDatabaseConnection {
     return result;
   }
 
-  async getTree(treeId: string) {
-    let res = await this.connection.all(
-      `
-        SELECT DISTINCT 
-        node_idx, hash, level, max(seq) as seq
-        FROM merkle
-        where tree_id = ?
-        GROUP BY node_idx
-      `,
-      treeId
-    );
+  async getTree(treeId: string, maxSeq: number | null) {
+    let res;
+    if (maxSeq) {
+      res = await this.connection.all(
+        `
+          SELECT DISTINCT 
+          node_idx, hash, level, max(seq) as seq
+          FROM merkle
+          where tree_id = ? and seq <= ?
+          GROUP BY node_idx
+        `,
+        treeId,
+        maxSeq
+      );
+    } else {
+      res = await this.connection.all(
+        `
+          SELECT DISTINCT 
+          node_idx, hash, level, max(seq) as seq
+          FROM merkle
+          where tree_id = ?
+          GROUP BY node_idx
+        `,
+        treeId
+      );
+    }
     return res;
   }
 
@@ -285,11 +300,14 @@ export class NFTDatabaseConnection {
         );
       }
       if (currSeq - prevSeq > 1) {
-        console.log(prevSeq, currSeq)
+        console.log(prevSeq, currSeq);
         gaps.push({ prevSeq, currSeq, prevSlot, currSlot });
       }
     }
-    return gaps;
+    if (res.length > 0) {
+      return [gaps, res[res.length - 1].seq];
+    }
+    return [gaps, null];
   }
 
   async getTrees() {
@@ -661,7 +679,6 @@ export async function bootstrap(
         `
           CREATE TABLE IF NOT EXISTS merkle_snapshot (
             max_seq INT,
-            max_transaction_id TEXT,
             tree_id TEXT,
             transaction_id TEXT,
             node_idx INT,
@@ -675,7 +692,6 @@ export async function bootstrap(
         `
         CREATE TABLE IF NOT EXISTS leaf_schema_snapshot (
           max_seq INT,
-          max_transaction_id TEXT,
           tree_id TEXT,
           nonce BIGINT,
           seq INT,

@@ -21,13 +21,12 @@ async function runSnapshot() {
 async function validateTreeAndUpdateSnapshot(
   nftDb: NFTDatabaseConnection,
   depth: number,
-  treeId: string
+  treeId: string,
+  maxSeq: number | null
 ) {
   let tree = new Map<number, [number, string]>();
-  let maxSeq = 0;
-  for (const row of await nftDb.getTree(treeId)) {
+  for (const row of await nftDb.getTree(treeId, maxSeq)) {
     tree.set(row.node_idx, [row.seq, row.hash]);
-    maxSeq = Math.max(row.seq, maxSeq);
   }
   let i = 1;
   while (i < 1 << depth) {
@@ -142,7 +141,7 @@ async function fetchAndPlugGaps(
   treeId: string,
   parserState: ParserState
 ) {
-  let missingData = await nftDb.getMissingData(minSeq, treeId);
+  let [missingData, maxSeq] = await nftDb.getMissingData(minSeq, treeId);
   let backfillJobs = [];
   for (const { prevSeq, currSeq, prevSlot, currSlot } of missingData) {
     backfillJobs.push(
@@ -161,6 +160,7 @@ async function fetchAndPlugGaps(
   if (backfillJobs.length > 0) {
     await Promise.all(backfillJobs);
   }
+  return maxSeq;
 }
 
 async function main() {
@@ -184,7 +184,7 @@ async function main() {
   while (true) {
     for (const [treeId, depth] of await nftDb.getTrees()) {
       try {
-        await fetchAndPlugGaps(connection, nftDb, 0, treeId, {
+        let maxSeq = await fetchAndPlugGaps(connection, nftDb, 0, treeId, {
           Gummyroll,
           Bubblegum,
         });
@@ -192,6 +192,7 @@ async function main() {
           `Off-chain tree ${treeId} is consistent: ${await validateTreeAndUpdateSnapshot(
             nftDb,
             depth,
+            maxSeq,
             treeId
           )}`
         );
