@@ -20,7 +20,7 @@ use async_trait::async_trait;
 
 pubkeys!(
     BubblegumProgramID,
-    "BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o"
+    "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY"
 );
 
 const SET_NFT_APPSQL: &str = r#"
