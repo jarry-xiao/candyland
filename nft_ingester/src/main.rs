@@ -5,21 +5,22 @@ pub mod utils;
 
 use sqlx::{Pool, Postgres};
 use {
-    futures_util::TryFutureExt,
-    messenger::{ACCOUNT_STREAM, TRANSACTION_STREAM},
     crate::{
         parsers::*,
         utils::{order_instructions, parse_logs},
     },
-    plerkle::async_redis_messenger::AsyncRedisMessenger,
+    futures_util::TryFutureExt,
+    messenger::{Messenger, RedisMessenger, ACCOUNT_STREAM, TRANSACTION_STREAM},
     plerkle_serialization::account_info_generated::account_info::root_as_account_info,
     plerkle_serialization::transaction_info_generated::transaction_info::root_as_transaction_info,
     solana_sdk::pubkey::Pubkey,
     sqlx::{self, postgres::PgPoolOptions},
-    std::sync::Arc,
 };
 
-async fn setup_manager<'a, 'b>(mut manager: ProgramHandlerManager<'a>, pool: Pool<Postgres>) -> ProgramHandlerManager<'a> {
+async fn setup_manager<'a, 'b>(
+    mut manager: ProgramHandlerManager<'a>,
+    pool: Pool<Postgres>,
+) -> ProgramHandlerManager<'a> {
     // TODO setup figment gor db configuration
     let bubblegum_parser = BubblegumHandler::new(pool.clone());
     let gummyroll_parser = GummyRollHandler::new(pool.clone());
@@ -38,7 +39,7 @@ async fn main() {
         .await
         .unwrap();
     // Service streams as separate concurrent processes.
-    tasks.push(service_transaction_stream(pool).await);
+    tasks.push(service_transaction_stream::<RedisMessenger>(pool).await);
     // Wait for ctrl-c.
     match tokio::signal::ctrl_c().await {
         Ok(()) => {}
@@ -54,32 +55,34 @@ async fn main() {
     }
 }
 
-async fn service_transaction_stream(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
+async fn service_transaction_stream<T: Messenger>(
+    pool: Pool<Postgres>,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut manager = ProgramHandlerManager::new();
         manager = setup_manager(manager, pool).await;
-        let mut messenger = AsyncRedisMessenger::new(TRANSACTION_STREAM).await.unwrap();
+        let mut messenger = T::new().await.unwrap();
         loop {
             println!("RECV");
             // This call to messenger.recv() blocks with no timeout until
             // a message is received on the stream.
-            if let Ok(data) = messenger.recv().await {
+            if let Ok(data) = messenger.recv(TRANSACTION_STREAM).await {
                 handle_transaction(&manager, data).await;
             }
         }
     })
 }
 
-async fn service_account_stream(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
+async fn service_account_stream<T: Messenger>(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut manager = ProgramHandlerManager::new();
         manager = setup_manager(manager, pool).await;
-        let mut messenger = AsyncRedisMessenger::new(ACCOUNT_STREAM).await.unwrap();
+        let mut messenger = T::new().await.unwrap();
 
         loop {
             // This call to messenger.recv() blocks with no timeout until
             // a message is received on the stream.
-            if let Ok(data) = messenger.recv().await {
+            if let Ok(data) = messenger.recv(ACCOUNT_STREAM).await {
                 handle_account(&manager, data).await
             }
         }
@@ -100,12 +103,10 @@ async fn handle_account(manager: &ProgramHandlerManager<'static>, data: Vec<(i64
         let parser = manager.match_program(program_id.unwrap());
         match parser {
             Some(p) if p.config().responds_to_account == true => {
-                let _ = p
-                    .handle_account(&account_update)
-                    .map_err(|e| {
-                        println!("Error in instruction handling {:?}", e);
-                        e
-                    });
+                let _ = p.handle_account(&account_update).map_err(|e| {
+                    println!("Error in instruction handling {:?}", e);
+                    e
+                });
             }
             _ => {
                 println!(
@@ -166,7 +167,8 @@ async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<
                             instruction,
                             keys,
                             instruction_logs: parsed_log.1,
-                        }).await
+                        })
+                        .await
                         .map_err(|e| {
                             // Just for logging
                             println!("Error in instruction handling {:?}", e);
