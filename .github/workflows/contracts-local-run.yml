@@ -17,9 +17,8 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 16.14.2
-          cache: "yarn"
-      - run: yarn install
-      - run: git submodule update --init --recursive
+          cache: "npm"
+      - run: npm install
       - run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
         shell: bash
       - run: echo "/home/runner/.cargo/bin" >> $GITHUB_PATH
@@ -29,5 +28,4 @@ jobs:
       - run: echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
         shell: bash
       - run: npm i -g @project-serum/anchor-cli@$ANCHOR_VERSION ts-mocha typescript
-      - run: cd contracts/
       - run: anchor test
