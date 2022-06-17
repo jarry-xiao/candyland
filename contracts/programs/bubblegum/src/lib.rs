@@ -25,7 +25,6 @@ use crate::utils::{append_leaf, insert_or_append_leaf, replace_leaf};
 
 const NONCE_SIZE: usize = 8 + 16;
 const VOUCHER_SIZE: usize = 8 + 1 + 32 + 32 + 16 + 32 + 4 + 32 + 32 + 32;
-const NONCE_PREFIX: &str = "bubblegum";
 
 declare_id!("BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY");
 
@@ -33,22 +32,16 @@ declare_id!("BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY");
 pub struct CreateTree<'info> {
     #[account(
         init,
-        seeds = [NONCE_PREFIX.as_ref(), merkle_slab.key().as_ref()],
+        seeds = [merkle_slab.key().as_ref()],
         payer = payer,
         space = NONCE_SIZE,
         bump,
     )]
-    pub nonce: Account<'info, Nonce>,
+    pub authority: Account<'info, Nonce>,
     #[account(mut)]
     pub payer: Signer<'info>,
     pub tree_creator: Signer<'info>,
     pub system_program: Program<'info, System>,
-    #[account(
-        seeds = [merkle_slab.key().as_ref()],
-        bump,
-    )]
-    /// CHECK: This account is neither written to nor read from.
-    pub authority: UncheckedAccount<'info>,
     pub gummyroll_program: Program<'info, Gummyroll>,
     #[account(zero)]
     /// CHECK: This account must be all zeros
@@ -64,13 +57,7 @@ pub struct Mint<'info> {
         bump,
     )]
     /// CHECK: This account is neither written to nor read from.
-    pub authority: UncheckedAccount<'info>,
-    #[account(
-        mut,
-        seeds = [NONCE_PREFIX.as_ref(), merkle_slab.key.as_ref()],
-        bump,
-    )]
-    pub nonce: Account<'info, Nonce>,
+    pub authority: Account<'info, Nonce>,
     pub gummyroll_program: Program<'info, Gummyroll>,
     pub owner: Signer<'info>,
     /// CHECK: This account is neither written to nor read from.
@@ -87,7 +74,7 @@ pub struct Burn<'info> {
         bump,
     )]
     /// CHECK: This account is neither written to nor read from.
-    pub authority: UncheckedAccount<'info>,
+    pub authority: Account<'info, Nonce>,
     pub gummyroll_program: Program<'info, Gummyroll>,
     /// CHECK: This account is checked in the instruction
     pub owner: UncheckedAccount<'info>,
@@ -105,7 +92,7 @@ pub struct Transfer<'info> {
         bump,
     )]
     /// CHECK: This account is neither written to nor read from.
-    pub authority: UncheckedAccount<'info>,
+    pub authority: Account<'info, Nonce>,
     /// CHECK: This account is checked in the instruction
     pub owner: UncheckedAccount<'info>,
     /// CHECK: This account is chekced in the instruction
@@ -125,7 +112,7 @@ pub struct Delegate<'info> {
         bump,
     )]
     /// CHECK: This account is neither written to nor read from.
-    pub authority: UncheckedAccount<'info>,
+    pub authority: Account<'info, Nonce>,
     pub owner: Signer<'info>,
     /// CHECK: This account is neither written to nor read from.
     pub previous_delegate: UncheckedAccount<'info>,
@@ -152,7 +139,7 @@ pub struct Redeem<'info> {
         bump,
     )]
     /// CHECK: This account is neither written to nor read from.
-    pub authority: UncheckedAccount<'info>,
+    pub authority: Account<'info, Nonce>,
     pub gummyroll_program: Program<'info, Gummyroll>,
     #[account(mut)]
     pub owner: Signer<'info>,
@@ -179,7 +166,7 @@ pub struct CancelRedeem<'info> {
         bump,
     )]
     /// CHECK: This account is neither written to nor read from.
-    pub authority: UncheckedAccount<'info>,
+    pub authority: Account<'info, Nonce>,
     pub gummyroll_program: Program<'info, Gummyroll>,
     #[account(mut)]
     /// CHECK: unsafe
@@ -187,7 +174,10 @@ pub struct CancelRedeem<'info> {
     #[account(
         mut,
         close = owner,
-        seeds = [merkle_slab.key().as_ref(), voucher.leaf_schema.nonce.to_le_bytes().as_ref()],
+        seeds = [
+            merkle_slab.key().as_ref(),
+            voucher.leaf_schema.nonce.to_le_bytes().as_ref()
+        ],
         bump
     )]
     pub voucher: Account<'info, Voucher>,
@@ -200,17 +190,28 @@ pub struct Decompress<'info> {
     #[account(
         mut,
         close = owner,
-        seeds = [voucher.merkle_slab.as_ref(), voucher.leaf_schema.nonce.to_le_bytes().as_ref()],
+        seeds = [
+            voucher.merkle_slab.as_ref(),
+            voucher.leaf_schema.nonce.to_le_bytes().as_ref()
+        ],
         bump
     )]
-    pub voucher: Account<'info, Voucher>,
+    pub voucher: Box<Account<'info, Voucher>>,
     #[account(mut)]
     pub owner: Signer<'info>,
     /// CHECK: versioning is handled in the instruction
     #[account(mut)]
     pub token_account: UncheckedAccount<'info>,
     /// CHECK: versioning is handled in the instruction
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [
+            voucher.merkle_slab.as_ref(),
+            voucher.leaf_schema.nonce.to_le_bytes().as_ref(),
+            token_program.key().as_ref()
+        ],
+        bump
+    )]
     pub mint: UncheckedAccount<'info>,
     /// CHECK:
     #[account(
@@ -327,8 +328,8 @@ pub mod bubblegum {
         let owner = ctx.accounts.owner.key();
         let delegate = ctx.accounts.delegate.key();
         let merkle_slab = ctx.accounts.merkle_slab.to_account_info();
-        let nonce = &mut ctx.accounts.nonce;
         let data_hash = keccak::hashv(&[message.try_to_vec()?.as_slice()]);
+        let mut nonce = &mut ctx.accounts.authority;
         let creator_data = message
             .creators
             .iter()
@@ -505,7 +506,6 @@ pub mod bubblegum {
             LeafSchema::new(version, owner, delegate, nonce, data_hash, creator_hash);
         emit!(previous_leaf.to_event());
         let new_leaf = Node::default();
-        msg!("{}", ctx.accounts.authority.key());
         replace_leaf(
             &merkle_slab.key(),
             *ctx.bumps.get("authority").unwrap(),
@@ -549,10 +549,11 @@ pub mod bubblegum {
         // Allocate and create mint
         let data_hash = hash_metadata(&metadata)?;
         assert_eq!(ctx.accounts.voucher.leaf_schema.data_hash, data_hash);
+        let voucher = &ctx.accounts.voucher;
         match metadata.token_program_version {
             TokenProgramVersion::Original => {
                 if ctx.accounts.mint.data_is_empty() {
-                    invoke(
+                    invoke_signed(
                         &system_instruction::create_account(
                             &ctx.accounts.owner.key(),
                             &ctx.accounts.mint.key(),
@@ -565,6 +566,12 @@ pub mod bubblegum {
                             ctx.accounts.mint.to_account_info(),
                             ctx.accounts.system_program.to_account_info(),
                         ],
+                        &[&[
+                            voucher.merkle_slab.as_ref(),
+                            voucher.leaf_schema.nonce.to_le_bytes().as_ref(),
+                            spl_token::id().as_ref(),
+                            &[*ctx.bumps.get("mint").unwrap()],
+                        ]],
                     )?;
                     invoke(
                         &spl_token::instruction::initialize_mint2(

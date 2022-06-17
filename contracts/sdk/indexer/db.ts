@@ -89,7 +89,8 @@ export class NFTDatabaseConnection {
     txId: string,
     slot: number,
     sequenceNumber: number,
-    treeId: string
+    treeId: string,
+    compressed: boolean = true,
   ) {
     await this.connection.run(
       `
@@ -104,9 +105,10 @@ export class NFTDatabaseConnection {
           delegate,
           data_hash,
           creator_hash,
-          leaf_hash  
+          leaf_hash,
+          compressed
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (nonce, tree_id)
         DO UPDATE SET 
           seq = excluded.seq,
@@ -115,7 +117,8 @@ export class NFTDatabaseConnection {
           delegate = excluded.delegate,
           data_hash = excluded.data_hash,
           creator_hash = excluded.creator_hash,
-          leaf_hash = excluded.leaf_hash
+          leaf_hash = excluded.leaf_hash,
+          compressed = excluded.compressed
       `,
       (leafSchema.nonce.valueOf() as BN).toNumber(),
       treeId,
@@ -126,7 +129,8 @@ export class NFTDatabaseConnection {
       leafSchema.delegate.toBase58(),
       bs58.encode(leafSchema.dataHash),
       bs58.encode(leafSchema.creatorHash),
-      leafHash.toBase58()
+      leafHash.toBase58(),
+      compressed
     );
   }
 
@@ -800,6 +804,7 @@ export async function bootstrap(
           data_hash TEXT,
           creator_hash TEXT,
           leaf_hash TEXT,
+          compressed BOOLEAN,
           PRIMARY KEY (tree_id, nonce)
         );
         `
