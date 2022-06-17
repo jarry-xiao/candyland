@@ -13,7 +13,7 @@ impl EntityName for Entity {
 
 #[derive(Clone, Debug, PartialEq, DeriveModel, DeriveActiveModel)]
 pub struct Model {
-    pub id: Vec<u8>,
+    pub id: i64,
     pub asset_id: Vec<u8>,
     pub scopes: Option<String>,
     pub authority: Vec<u8>,
@@ -33,9 +33,9 @@ pub enum PrimaryKey {
 }
 
 impl PrimaryKeyTrait for PrimaryKey {
-    type ValueType = Vec<u8>;
+    type ValueType = i64;
     fn auto_increment() -> bool {
-        false
+        true
     }
 }
 
@@ -48,7 +48,7 @@ impl ColumnTrait for Column {
     type EntityName = Entity;
     fn def(&self) -> ColumnDef {
         match self {
-            Self::Id => ColumnType::Binary.def(),
+            Self::Id => ColumnType::BigInteger.def(),
             Self::AssetId => ColumnType::Binary.def(),
             Self::Scopes => ColumnType::Custom("array".to_owned()).def().null(),
             Self::Authority => ColumnType::Binary.def(),

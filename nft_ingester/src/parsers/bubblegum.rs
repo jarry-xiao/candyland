@@ -272,7 +272,6 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                             asset_authority::ActiveModel {
                                 asset_id: Set(id.to_bytes().to_vec()),
                                 authority: Set(update_authority),
-                                scopes: Set(None),
                                 ..Default::default()
                             }.insert(txn)
                                 .await

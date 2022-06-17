@@ -90,9 +90,9 @@ create index asset_grouping_value on asset_grouping (group_key, asset_id);
 -- authority
 create table asset_authority
 (
-    id        bytea PRIMARY KEY,
+    id        bigserial PRIMARY KEY,
     asset_id  bytea references asset (id) not null,
-    scopes    varchar(10)[] DEFAULT '{}',
+    scopes    text[],
     authority bytea                       not null
 );
 create index asset_authority_idx on asset_authority (asset_id, authority);

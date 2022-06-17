@@ -1,3 +1,6 @@
+use anchor_client::RequestNamespace::State;
+use sea_orm::DbBackend;
+use sea_orm::sea_query::{OnConflict, OnConflictAction, OnConflictTarget};
 use {
     sea_orm::{
         DbErr,
@@ -130,9 +133,8 @@ pub async fn handle_gummyroll_instruction(
 pub async fn gummyroll_change_log_event_to_database(
     change_log_event: ChangeLogEvent,
     txn: &DatabaseTransaction,
-) -> Result<InsertResult<cl_items::ActiveModel>, IngesterError> {
+) -> Result<(), IngesterError> {
     let mut i: i64 = 0;
-    let mut items = Vec::with_capacity(change_log_event.path.len());
     for p in change_log_event.path.into_iter() {
         println!("level {}, node {:?}", i, p.node.inner);
         let tree_id = change_log_event.id.as_ref();
@@ -144,10 +146,20 @@ pub async fn gummyroll_change_log_event_to_database(
             seq: Set(change_log_event.seq as i64), // this is bad
             ..Default::default()
         };
-        items.push(item);
         i += 1;
+        let mut query = cl_items::Entity::insert(item)
+            .on_conflict(
+                OnConflict::columns([cl_items::Column::Tree, cl_items::Column::NodeIdx])
+                    .update_columns([cl_items::Column::Hash, cl_items::Column::Seq])
+                    .to_owned()
+            )
+            .build(DbBackend::Postgres);
+        query.sql = format!("{} WHERE excluded.seq > cl_items.seq", query.sql);
+        txn.execute(query).await
+            .map_err(|db_err| {
+                IngesterError::StorageWriteError(db_err.to_string())
+            })?;
     }
-    cl_items::Entity::insert_many(items).exec(txn).await.map_err(|db_err| {
-        IngesterError::StorageWriteError(db_err.to_string())
-    })
+    Ok(())
+    //TODO -> set maximum size of path and break into multiple statements
 }
