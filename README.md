@@ -1,6 +1,6 @@
 # 🍬 Candyland 🍬
 
-Smart contracts and indexing services necessary to migrate the Solana ecosystem to a 10,000x cheaper NFT standard.
+Smart contracts and indexing services necessary to migrate the Solana ecosystem to a 10,000x cheaper NFT standard!
 
 ```mermaid
 graph TD;
