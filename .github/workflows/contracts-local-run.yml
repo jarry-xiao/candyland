@@ -14,32 +14,21 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Setup Node.js environment
-      uses: actions/setup-node@v3.3.0
+    - name: Use Node.js
+    - uses: actions/setup-node@v3
       with:
-        node-version: 16.15.1
-    - name: Enable Corepack
-      run: corepack enable
-    - name: Install Solana
-      run: |
-        sh -c "$(curl -sSfL https://release.solana.com/v1.10.25/install)"
-        export PATH="/home/runner/.local/share/solana/install/active_release/bin:$PATH"
-        solana --help
-        solana-keygen --help
-        solana-keygen new --no-outfile
-    - name: Install Anchor
-      run: |
-        sudo apt-get update && sudo apt-get upgrade && sudo apt-get install -y pkg-config build-essential libudev-dev
-        cargo install --git https://github.com/project-serum/anchor avm --locked --force
-        avm install latest
-        avm use latest
-    - name: Setup repo and test
-      run: |
-        solana-keygen new --no-outfile
-        git submodule update --init --recursive
-        yarn install
-        cd contracts/
-        anchor test
-      
-
-      
+        node-version: 16.14.2
+        cache: "yarn"
+    - run: git submodule update --init --recursive
+    - run: yarn install
+    - run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      shell: bash
+    - run: echo "/home/runner/.cargo/bin" >> $GITHUB_PATH
+      shell: bash
+    - run: curl -sSfL https://release.solana.com/$SOLANA_VERSION/install | sh
+      shell: bash
+    - run: echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+      shell: bash
+    - run: npm i -g @project-serum/anchor-cli@$ANCHOR_VERSION ts-mocha typescript
+    - run: cd contracts/
+    - run: anchor test
