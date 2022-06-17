@@ -224,6 +224,12 @@ export async function parseBubblegumCreateTree(
   optionalInfo: OptionalInfo
 ) {
   const changeLog = findGummyrollEvent(logs, parser);
+  const sequenceNumber = changeLog.seq;
+  let { startSeq, endSeq, txId } = optionalInfo;
+  if (skipTx(sequenceNumber, startSeq, endSeq)) {
+    return;
+  }
+  console.log(`Sequence Number: ${sequenceNumber}`);
   let treeId = changeLog.id.toBase58();
   await db.updateChangeLogs(changeLog, optionalInfo.txId, slot, treeId);
 }

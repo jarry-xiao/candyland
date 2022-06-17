@@ -13,7 +13,6 @@ documentation = "https://docs.rs/solana-geyser-plugin-interface"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-redis = {version = "0.21.5", features = ["aio", "tokio-comp", "streams"]}
 log = "0.4.11"
 async-trait = "0.1.53"
 solana-sdk = { version = "=1.10.10" }
@@ -39,6 +38,7 @@ hex = "0.4.3"
 messenger={path= "../messenger"}
 flatbuffers = "2.1.2"
 plerkle-serialization={path= "../plerkle_serialization"}
+tokio = { version = "1.17.0", features = ["full"] }
 
 [dependencies.num-integer]
 version = "0.1.44"

@@ -15,11 +15,11 @@ use {
 };
 
 pub fn serialize_account<'a>(
-    builder: &'a mut FlatBufferBuilder,
+    mut builder: FlatBufferBuilder<'a>,
     account: &ReplicaAccountInfo,
     slot: u64,
     is_startup: bool,
-) -> &'a [u8] {
+) -> FlatBufferBuilder<'a> {
     // Serialize vector data.
     let pubkey = builder.create_vector(account.pubkey);
     let owner = builder.create_vector(account.owner);
@@ -27,7 +27,7 @@ pub fn serialize_account<'a>(
 
     // Serialize everything into Account Info table.
     let account_info = AccountInfo::create(
-        builder,
+        &mut builder,
         &AccountInfoArgs {
             pubkey: Some(pubkey),
             lamports: account.lamports,
@@ -43,15 +43,15 @@ pub fn serialize_account<'a>(
 
     // Finalize buffer and return to caller.
     builder.finish(account_info, None);
-    builder.finished_data()
+    builder
 }
 
 pub fn serialize_slot_status<'a>(
-    builder: &'a mut FlatBufferBuilder,
+    mut builder: FlatBufferBuilder<'a>,
     slot: u64,
     parent: Option<u64>,
     status: SlotStatus,
-) -> &'a [u8] {
+) -> FlatBufferBuilder<'a> {
     // Convert to flatbuffer enum.
     let status = match status {
         SlotStatus::Confirmed => slot_status_info::Status::Confirmed,
@@ -61,7 +61,7 @@ pub fn serialize_slot_status<'a>(
 
     // Serialize everything into Slot Status Info table.
     let slot_status = SlotStatusInfo::create(
-        builder,
+        &mut builder,
         &SlotStatusInfoArgs {
             slot,
             parent,
@@ -71,14 +71,14 @@ pub fn serialize_slot_status<'a>(
 
     // Finalize buffer and return to caller.
     builder.finish(slot_status, None);
-    builder.finished_data()
+    builder
 }
 
 pub fn serialize_transaction<'a>(
-    builder: &'a mut FlatBufferBuilder,
+    mut builder: FlatBufferBuilder<'a>,
     transaction_info: &ReplicaTransactionInfo,
     slot: u64,
-) -> &'a [u8] {
+) -> FlatBufferBuilder<'a> {
     // Flatten and serialize account keys.
     let account_keys = transaction_info.transaction.message().account_keys();
     let account_keys_len = account_keys.len();
@@ -88,7 +88,7 @@ pub fn serialize_transaction<'a>(
         for key in account_keys.iter() {
             let key = builder.create_vector(&key.to_bytes());
             let pubkey = transaction_info::Pubkey::create(
-                builder,
+                &mut builder,
                 &transaction_info::PubkeyArgs { key: Some(key) },
             );
             account_keys_fb_vec.push(pubkey);
@@ -128,7 +128,7 @@ pub fn serialize_transaction<'a>(
                 let accounts = Some(builder.create_vector(&compiled_instruction.accounts));
                 let data = Some(builder.create_vector(&compiled_instruction.data));
                 instructions_fb_vec.push(transaction_info::CompiledInstruction::create(
-                    builder,
+                    &mut builder,
                     &transaction_info::CompiledInstructionArgs {
                         program_id_index,
                         accounts,
@@ -139,7 +139,7 @@ pub fn serialize_transaction<'a>(
 
             let instructions = Some(builder.create_vector(&instructions_fb_vec));
             overall_fb_vec.push(transaction_info::InnerInstructions::create(
-                builder,
+                &mut builder,
                 &transaction_info::InnerInstructionsArgs {
                     index,
                     instructions,
@@ -161,7 +161,7 @@ pub fn serialize_transaction<'a>(
             let accounts = Some(builder.create_vector(&compiled_instruction.accounts));
             let data = Some(builder.create_vector(&compiled_instruction.data));
             instructions_fb_vec.push(transaction_info::CompiledInstruction::create(
-                builder,
+                &mut builder,
                 &transaction_info::CompiledInstructionArgs {
                     program_id_index,
                     accounts,
@@ -176,7 +176,7 @@ pub fn serialize_transaction<'a>(
 
     // Serialize everything into Transaction Info table.
     let transaction_info = TransactionInfo::create(
-        builder,
+        &mut builder,
         &TransactionInfoArgs {
             is_vote: transaction_info.is_vote,
             account_keys,
@@ -189,13 +189,13 @@ pub fn serialize_transaction<'a>(
 
     // Finalize buffer and return to caller.
     builder.finish(transaction_info, None);
-    builder.finished_data()
+    builder
 }
 
 pub fn serialize_block<'a>(
-    builder: &'a mut FlatBufferBuilder,
+    mut builder: FlatBufferBuilder<'a>,
     block_info: &ReplicaBlockInfo,
-) -> &'a [u8] {
+) -> FlatBufferBuilder<'a> {
     // Serialize blockash.
     let blockhash = Some(builder.create_string(&block_info.blockhash));
 
@@ -225,7 +225,7 @@ pub fn serialize_block<'a>(
             let commission = reward.commission;
 
             rewards_fb_vec.push(block_info_generated::block_info::Reward::create(
-                builder,
+                &mut builder,
                 &block_info_generated::block_info::RewardArgs {
                     pubkey,
                     lamports,
@@ -242,7 +242,7 @@ pub fn serialize_block<'a>(
 
     // Serialize everything into Block Info table.
     let block_info = block_info_generated::block_info::BlockInfo::create(
-        builder,
+        &mut builder,
         &block_info_generated::block_info::BlockInfoArgs {
             slot: block_info.slot,
             blockhash,
@@ -254,5 +254,5 @@ pub fn serialize_block<'a>(
 
     // Finalize buffer and return to caller.
     builder.finish(block_info, None);
-    builder.finished_data()
+    builder
 }

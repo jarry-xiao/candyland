@@ -1,7 +1,7 @@
-use std::rc::Rc;
 use anchor_client::anchor_lang::prelude::Pubkey;
 use lazy_static::lazy_static;
 use solana_sdk::pubkeys;
+use std::rc::Rc;
 use std::sync::Arc;
 use {
     crate::events::handle_event,
