@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
-use gummyroll::Node;
 use anchor_lang::solana_program::program_memory::sol_memcmp;
 use anchor_lang::solana_program::pubkey::PUBKEY_BYTES;
+use gummyroll::Node;
 
 pub fn replace_leaf<'info>(
     seed: &Pubkey,
@@ -25,7 +25,7 @@ pub fn replace_leaf<'info>(
         },
         authority_pda_signer,
     )
-        .with_remaining_accounts(remaining_accounts.to_vec());
+    .with_remaining_accounts(remaining_accounts.to_vec());
     gummyroll::cpi::replace_leaf(cpi_ctx, root_node, previous_leaf, new_leaf, index)
 }
 
@@ -73,7 +73,7 @@ pub fn insert_or_append_leaf<'info>(
         },
         authority_pda_signer,
     )
-        .with_remaining_accounts(remaining_accounts.to_vec());
+    .with_remaining_accounts(remaining_accounts.to_vec());
     gummyroll::cpi::insert_or_append(cpi_ctx, root_node, leaf, index)
 }
 
@@ -92,10 +92,8 @@ pub fn assert_owned_by(account: &AccountInfo, owner: &Pubkey) -> Result<()> {
 
 pub fn get_asset_id(tree_id: &Pubkey, nonce: u64) -> Pubkey {
     Pubkey::find_program_address(
-        &[
-            tree_id.as_ref(),
-            nonce.to_le_bytes().as_ref()
-        ],
+        &[tree_id.as_ref(), nonce.to_le_bytes().as_ref()],
         &crate::id(),
-    ).0
+    )
+    .0
 }

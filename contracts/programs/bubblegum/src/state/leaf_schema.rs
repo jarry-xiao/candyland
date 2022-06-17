@@ -94,9 +94,7 @@ impl LeafSchema {
     }
 
     pub fn to_event(&self) -> LeafSchemaEvent {
-        LeafSchemaEvent {
-            schema: *self,
-        }
+        LeafSchemaEvent { schema: *self }
     }
 
     pub fn to_node(&self) -> Node {
