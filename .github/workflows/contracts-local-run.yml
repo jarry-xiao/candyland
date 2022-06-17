@@ -5,30 +5,29 @@ on:
     branches: [ "add-local-contracts-workflow" ]
 
 env:
-  CARGO_TERM_COLOR: always
+  SOLANA_VERSION: v1.9.9
+  ANCHOR_VERSION: 0.24.2
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v3
-    - name: Use Node.js
-    - uses: actions/setup-node@v3
-      with:
-        node-version: 16.14.2
-        cache: "yarn"
-    - run: git submodule update --init --recursive
-    - run: yarn install
-    - run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-      shell: bash
-    - run: echo "/home/runner/.cargo/bin" >> $GITHUB_PATH
-      shell: bash
-    - run: curl -sSfL https://release.solana.com/$SOLANA_VERSION/install | sh
-      shell: bash
-    - run: echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
-      shell: bash
-    - run: npm i -g @project-serum/anchor-cli@$ANCHOR_VERSION ts-mocha typescript
-    - run: cd contracts/
-    - run: anchor test
+      - uses: actions/checkout@v2
+      - name: Use Node.js
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 16.14.2
+          cache: "yarn"
+      - run: yarn install
+      - run: git submodule update --init --recursive
+      - run: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        shell: bash
+      - run: echo "/home/runner/.cargo/bin" >> $GITHUB_PATH
+        shell: bash
+      - run: curl -sSfL https://release.solana.com/$SOLANA_VERSION/install | sh
+        shell: bash
+      - run: echo "/home/runner/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+        shell: bash
+      - run: npm i -g @project-serum/anchor-cli@$ANCHOR_VERSION ts-mocha typescript
+      - run: cd contracts/
+      - run: anchor test
