@@ -909,26 +909,9 @@
       "name": "LeafSchemaEvent",
       "fields": [
         {
-          "name": "version",
-          "type": {
-            "defined": "Version"
-          },
-          "index": false
-        },
-        {
           "name": "schema",
           "type": {
             "defined": "LeafSchema"
-          },
-          "index": false
-        },
-        {
-          "name": "leafHash",
-          "type": {
-            "array": [
-              "u8",
-              32
-            ]
           },
           "index": false
         }

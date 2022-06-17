@@ -95,10 +95,6 @@ async function main() {
     [merkleRollKeypair.publicKey.toBuffer()],
     BubblegumCtx.programId
   );
-  let [nonce] = await PublicKey.findProgramAddress(
-    [Buffer.from("bubblegum"), merkleRollKeypair.publicKey.toBuffer()],
-    BubblegumCtx.programId
-  );
   let createTreeIx = createCreateTreeInstruction(
     {
       treeCreator: payer.publicKey,
@@ -106,7 +102,6 @@ async function main() {
       authority: authority,
       gummyrollProgram: GummyrollCtx.programId,
       merkleSlab: merkleRollKeypair.publicKey,
-      nonce: nonce,
     },
     {
       maxDepth,
@@ -140,7 +135,6 @@ async function main() {
             gummyrollProgram: GummyrollCtx.programId,
             owner: wallets[i].publicKey,
             delegate: wallets[i].publicKey,
-            nonce: nonce,
           },
           {
             version: Version.V0,
@@ -163,10 +157,13 @@ async function main() {
           }
         )
       );
-      await BubblegumCtx.provider.connection.sendTransaction(tx, [
-        payer,
-        wallets[i],
-      ]);
+      await BubblegumCtx.provider.connection.sendTransaction(
+        tx,
+        [payer, wallets[i]],
+        {
+          skipPreflight: true,
+        }
+      );
       numMints++;
     } else {
       let response = await fetch(
@@ -184,7 +181,7 @@ async function main() {
       );
       const proof = await response.json();
       if ("err" in proof) {
-        console.log(proof)
+        console.log(proof);
         continue;
       }
       const proofNodes: Array<AccountMeta> = proof.proofNodes.map((key) => {
@@ -208,7 +205,6 @@ async function main() {
           gummyrollProgram: GummyrollCtx.programId,
         },
         {
-          version: Version.V0,
           dataHash: [...bs58.decode(proof.dataHash)],
           creatorHash: [...bs58.decode(proof.creatorHash)],
           root: [...bs58.decode(proof.root)],
@@ -220,7 +216,7 @@ async function main() {
       replaceIx.keys = [...replaceIx.keys, ...proofNodes];
       let tx = new Transaction().add(replaceIx);
       await BubblegumCtx.provider.connection
-        .sendTransaction(tx, [wallets[i]])
+        .sendTransaction(tx, [wallets[i]], {skipPreflight: true})
         .then(() =>
           console.log(
             `Successfully transferred asset (${assets[k].leafHash} from tree: ${

@@ -3,9 +3,7 @@ use gummyroll::Node;
 
 #[event]
 pub struct LeafSchemaEvent {
-    pub version: Version,
     pub schema: LeafSchema,
-    pub leaf_hash: [u8; 32],
 }
 
 #[derive(AnchorDeserialize, AnchorSerialize, Clone, Copy, Debug)]
@@ -97,9 +95,7 @@ impl LeafSchema {
 
     pub fn to_event(&self) -> LeafSchemaEvent {
         LeafSchemaEvent {
-            version: self.version(),
             schema: *self,
-            leaf_hash: self.to_node(),
         }
     }
 

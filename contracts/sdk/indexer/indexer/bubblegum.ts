@@ -11,7 +11,6 @@ import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from "../../gummyroll";
 import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "../../bubblegum/src/generated";
 import { ChangeLogEvent, parseEventGummyroll } from "./gummyroll";
 import {
-  LeafSchema,
   TokenProgramVersion,
   MetadataArgs,
 } from "../../bubblegum/src/generated/types";
@@ -46,6 +45,19 @@ export type NewLeafEvent = {
   nonce: BN;
 };
 
+export type LeafSchemaEvent = {
+  schema: {
+    v0: {
+      id: PublicKey;
+      owner: PublicKey;
+      delegate: PublicKey;
+      nonce: BN;
+      dataHash: number[] /* size: 32 */;
+      creatorHash: number[] /* size: 32 */;
+    };
+  };
+};
+
 export async function parseBubblegum(
   db: NFTDatabaseConnection,
   parsedLog: ParsedLog,
@@ -78,41 +90,17 @@ export async function parseBubblegum(
         false
       );
       break;
-    case "CancelRedeem": 
-      await parseReplaceLeaf(
-        db,
-        parsedLog.logs,
-        slot,
-        parser,
-        optionalInfo
-      );
+    case "CancelRedeem":
+      await parseReplaceLeaf(db, parsedLog.logs, slot, parser, optionalInfo);
       break;
-    case "Burn": 
-      await parseReplaceLeaf(
-        db,
-        parsedLog.logs,
-        slot,
-        parser,
-        optionalInfo
-      );
+    case "Burn":
+      await parseReplaceLeaf(db, parsedLog.logs, slot, parser, optionalInfo);
       break;
-    case "Transfer": 
-      await parseReplaceLeaf(
-        db,
-        parsedLog.logs,
-        slot,
-        parser,
-        optionalInfo
-      );
+    case "Transfer":
+      await parseReplaceLeaf(db, parsedLog.logs, slot, parser, optionalInfo);
       break;
-    case "Delegate": 
-      await parseReplaceLeaf(
-        db,
-        parsedLog.logs,
-        slot,
-        parser,
-        optionalInfo
-      );
+    case "Delegate":
+      await parseReplaceLeaf(db, parsedLog.logs, slot, parser, optionalInfo);
       break;
   }
 }
@@ -163,7 +151,7 @@ export async function parseBubblegumMint(
     return;
   }
   const newLeafData = events[0].data as NewLeafEvent;
-  const leafSchema = events[1].data as LeafSchema;
+  const leafSchema = events[1].data as LeafSchemaEvent;
   let treeId = changeLog.id.toBase58();
   let sequenceNumber = changeLog.seq;
   let { startSeq, endSeq, txId } = optionalInfo;
@@ -171,7 +159,7 @@ export async function parseBubblegumMint(
     return;
   }
   console.log(`Sequence Number: ${sequenceNumber}`);
-  await db.updateNFTMetadata(newLeafData, leafSchema.nonce, treeId);
+  await db.updateNFTMetadata(newLeafData, leafSchema.schema.v0.id.toBase58());
   await db.updateLeafSchema(
     leafSchema,
     new PublicKey(changeLog.path[0].node),
@@ -189,14 +177,14 @@ export async function parseReplaceLeaf(
   slot: number,
   parser: ParserState,
   optionalInfo: OptionalInfo,
-  compressed: boolean = true,
+  compressed: boolean = true
 ) {
   const changeLog = findGummyrollEvent(logs, parser);
   const events = findBubblegumEvents(logs, parser);
   if (events.length !== 1) {
     return;
   }
-  const leafSchema = events[0].data as LeafSchema;
+  const leafSchema = events[0].data as LeafSchemaEvent;
   let treeId = changeLog.id.toBase58();
   let sequenceNumber = changeLog.seq;
   let { startSeq, endSeq, txId } = optionalInfo;
@@ -211,7 +199,7 @@ export async function parseReplaceLeaf(
     slot,
     sequenceNumber,
     treeId,
-    compressed,
+    compressed
   );
   await db.updateChangeLogs(changeLog, optionalInfo.txId, slot, treeId);
 }
