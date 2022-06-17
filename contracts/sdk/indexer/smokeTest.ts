@@ -215,20 +215,29 @@ async function main() {
       replaceIx.keys[1].isSigner = true;
       replaceIx.keys = [...replaceIx.keys, ...proofNodes];
       let tx = new Transaction().add(replaceIx);
-      await BubblegumCtx.provider.connection
-        .sendTransaction(tx, [wallets[i]], { skipPreflight: true })
-        .then(() => {
-          let txSize = tx.serialize().length;
-          console.log("Transaction Size", txSize);
-          console.log(
-            `Successfully transferred asset (${assets[k].leafHash} from tree: ${
-              assets[k].treeId
-            }) - ${wallets[i].publicKey.toBase58()} -> ${wallets[
-              j
-            ].publicKey.toBase58()}`
-          );
-        })
-        .catch((e) => console.log("Encountered Error when transferring", e));
+      let txId = await BubblegumCtx.provider.connection.sendTransaction(
+        tx,
+        [wallets[i]],
+        { skipPreflight: true }
+      );
+      let res = await BubblegumCtx.provider.connection.confirmTransaction(
+        txId,
+        "confirmed"
+      );
+      if (!res.value.err) {
+        let txSize = tx.serialize().length;
+        console.log("Transaction Size", txSize);
+        console.log(
+          `Successfully transferred asset (${assets[k].leafHash} from tree: ${
+            assets[k].treeId
+          }) - ${wallets[i].publicKey.toBase58()} -> ${wallets[
+            j
+          ].publicKey.toBase58()}`
+        );
+      } else {
+        console.log("Encountered Error when transferring");
+        await logTx(BubblegumCtx.provider, txId);
+      }
     }
   }
 }
