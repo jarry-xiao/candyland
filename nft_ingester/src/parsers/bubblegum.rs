@@ -251,22 +251,24 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                                 .map_err(|txn_err| {
                                     IngesterError::StorageWriteError(txn_err.to_string())
                                 })?;
-                            let mut creators = Vec::with_capacity(metadata.creators.len());
-                            for c in metadata.creators {
-                                creators.push(asset_creators::ActiveModel {
-                                    asset_id: Set(id.to_bytes().to_vec()),
-                                    creator: Set(c.address.to_bytes().to_vec()),
-                                    share: Set(c.share as i32),
-                                    verified: Set(c.verified),
-                                    ..Default::default()
-                                });
+                            if metadata.creators.len() > 0 {
+                                let mut creators = Vec::with_capacity(metadata.creators.len());
+                                for c in metadata.creators {
+                                    creators.push(asset_creators::ActiveModel {
+                                        asset_id: Set(id.to_bytes().to_vec()),
+                                        creator: Set(c.address.to_bytes().to_vec()),
+                                        share: Set(c.share as i32),
+                                        verified: Set(c.verified),
+                                        ..Default::default()
+                                    });
+                                }
+                                asset_creators::Entity::insert_many(creators)
+                                    .exec(txn)
+                                    .await
+                                    .map_err(|txn_err| {
+                                        IngesterError::StorageWriteError(txn_err.to_string())
+                                    })?;
                             }
-                            asset_creators::Entity::insert_many(creators)
-                                .exec(txn)
-                                .await
-                                .map_err(|txn_err| {
-                                    IngesterError::StorageWriteError(txn_err.to_string())
-                                })?;
                             asset_authority::ActiveModel {
                                 asset_id: Set(id.to_bytes().to_vec()),
                                 authority: Set(update_authority),
