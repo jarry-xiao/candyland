@@ -81,6 +81,6 @@ cargo install sea-orm-cli
 make sure you `docker compose up db`. and have a ENV var setup `DATABASE_URL=postgres://solana:solana@localhost/solana`
 
 `
-sea-orm-cli generate entity -o entity/src --database-url $DATABASE_URL
+sea-orm-cli generate entity -o entity/src --database-url $DATABASE_URL --expanded-format
 `
 
