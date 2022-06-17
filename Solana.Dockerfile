@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.2
 FROM solanalabs/solana:v1.10.10 as builder
 RUN apt-get update \
       && apt-get -y install \
@@ -15,8 +16,9 @@ WORKDIR /rust/
 COPY deps /rust/deps
 COPY programs /rust/programs/
 COPY Anchor.toml /rust/programs/
-RUN ls -la /rust/programs
-
+COPY plerkle_serialization /rust/plerkle_serialization
+COPY digital_asset_types /rust/digital_asset_types
+COPY messenger /rust/messenger
 WORKDIR /rust/deps/metaplex-program-library/token-metadata/program
 RUN cargo build-bpf --bpf-out-dir /so/
 WORKDIR /rust/deps/solana-program-library/associated-token-account/program
@@ -27,8 +29,6 @@ WORKDIR /rust/deps/solana-program-library/token/program
 RUN cargo build-bpf --bpf-out-dir /so/
 WORKDIR /rust/programs
 RUN cargo build-bpf --bpf-out-dir /so/
-COPY plerkle_serialization /rust/plerkle_serialization
-COPY messenger /rust/messenger
 COPY plerkle /rust/plerkle
 WORKDIR /rust/plerkle
 RUN cargo build

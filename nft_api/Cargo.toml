@@ -28,7 +28,6 @@ flatbuffers = "2.1.2"
 solana-sdk = { version = "=1.10.10" }
 lazy_static = "1.4.0"
 regex = "1.5.5"
-gummyroll-crud = { path = "../programs/gummyroll_crud", features = ["no-entrypoint"] }
 plerkle-serialization = { path = "../plerkle_serialization" }
 uuid = "1.0.0"
 

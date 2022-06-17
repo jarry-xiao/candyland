@@ -982,16 +982,16 @@ dependencies = [
 name = "digital_asset_types"
 version = "0.1.0"
 dependencies = [
- "async-trait",
+ "borsh",
+ "borsh-derive",
  "bs58 0.4.0",
- "lazy_static",
- "plerkle-serialization",
+ "mpl-token-metadata",
+ "num-derive",
+ "num-traits",
  "sea-orm",
  "serde",
- "sqlx",
- "tokio",
- "tokio-postgres",
- "uuid 1.0.0",
+ "serde_json",
+ "solana-program",
 ]
 
 [[package]]
@@ -1451,15 +1451,6 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "bytemuck",
-]
-
-[[package]]
-name = "gummyroll-crud"
-version = "0.1.0"
-dependencies = [
- "anchor-lang",
- "bytemuck",
- "gummyroll",
 ]
 
 [[package]]
@@ -2111,7 +2102,6 @@ dependencies = [
  "flatbuffers",
  "futures-util",
  "gummyroll",
- "gummyroll-crud",
  "hex",
  "hyper",
  "lazy_static",
@@ -2147,12 +2137,12 @@ dependencies = [
  "flatbuffers",
  "futures-util",
  "gummyroll",
- "gummyroll-crud",
  "hex",
  "hyper",
  "lazy_static",
  "messenger",
  "num-integer",
+ "num-traits",
  "plerkle",
  "plerkle-serialization",
  "redis",
@@ -2162,6 +2152,7 @@ dependencies = [
  "routerify-json-response",
  "sea-orm",
  "serde",
+ "serde_json",
  "solana-sdk",
  "sqlx",
  "thiserror",
@@ -2236,9 +2227,9 @@ dependencies = [
 
 [[package]]
 name = "num-traits"
-version = "0.2.14"
+version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a64b1ec5cda2586e284722486d802acf1f7dbdc623e2bfc57e65ca1cd099290"
+checksum = "578ede34cf02f8924ab9447f50c28075b4d3e5b269972345e7e0372b38c6cdcd"
 dependencies = [
  "autocfg",
 ]
@@ -2539,7 +2530,6 @@ dependencies = [
  "bytemuck",
  "flatbuffers",
  "gummyroll",
- "gummyroll-crud",
  "hex",
  "lazy_static",
  "log",
@@ -3208,8 +3198,7 @@ dependencies = [
 [[package]]
 name = "sea-orm"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51de529763804dd4f74c133055f53eccdda2221bdded94351009be28cc80d2fb"
+source = "git+https://github.com/liberwang1013/sea-orm?branch=insert-on-conflict#41ce3e7817a8d18ad95c353a330bde326e75df61"
 dependencies = [
  "async-stream",
  "async-trait",
@@ -3234,8 +3223,7 @@ dependencies = [
 [[package]]
 name = "sea-orm-macros"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f9378e21366b119d281489013c8170c49972fd3709c2155eb4504a913715d2d"
+source = "git+https://github.com/liberwang1013/sea-orm?branch=insert-on-conflict#41ce3e7817a8d18ad95c353a330bde326e75df61"
 dependencies = [
  "bae",
  "heck",
@@ -3380,9 +3368,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.79"
+version = "1.0.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e8d9fa5c3b304765ce1fd9c4c8a3de2c8db365a5b91be52f186efc675681d95"
+checksum = "9b7ce2b32a1aed03c558dc61a5cd328f15aff2dbc17daad8fb8af04d2100e15c"
 dependencies = [
  "itoa 1.0.1",
  "ryu",

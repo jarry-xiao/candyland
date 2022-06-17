@@ -9,6 +9,7 @@ COPY Anchor.toml /rust/programs/
 COPY deps /rust/deps
 COPY plerkle /rust/plerkle
 COPY plerkle_serialization /rust/plerkle_serialization
+COPY digital_asset_types /rust/digital_asset_types
 COPY messenger /rust/messenger
 WORKDIR /rust/nft_api
 COPY ./nft_api/Cargo.toml ./Cargo.toml
@@ -29,7 +30,7 @@ ENV TZ=Etc/UTC \
 RUN groupadd $APP_USER \
     && useradd -g $APP_USER $APP_USER \
     && mkdir -p ${APP}
-COPY --from=builder /rust/bin ${APP}
+COPY --from=builder /rust/bin/nft_api ${APP}
 RUN chown -R $APP_USER:$APP_USER ${APP}
 USER $APP_USER
 WORKDIR ${APP}

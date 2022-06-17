@@ -60,7 +60,6 @@ async fn service_transaction_stream(pool: Pool<Postgres>) -> tokio::task::JoinHa
         manager = setup_manager(manager, pool).await;
         let mut messenger = AsyncRedisMessenger::new(TRANSACTION_STREAM).await.unwrap();
         loop {
-            println!("RECV");
             // This call to messenger.recv() blocks with no timeout until
             // a message is received on the stream.
             if let Ok(data) = messenger.recv().await {
@@ -145,17 +144,17 @@ async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<
         // Update metadata associated with the programs that store data in leaves
         let instructions = order_instructions(&transaction);
         let parsed_logs = parse_logs(transaction.log_messages()).unwrap();
-        for (program_instruction, parsed_log) in std::iter::zip(instructions, parsed_logs) {
+        for ((outer_ix, inner_ix), parsed_log) in std::iter::zip(instructions, parsed_logs) {
             // Sanity check that instructions and logs were parsed correctly
             assert_eq!(
-                program_instruction.0.key().unwrap(),
+                outer_ix.0.key().unwrap(),
                 parsed_log.0.to_bytes(),
                 "expected {:?}, but program log was {:?}",
-                program_instruction.0,
+                outer_ix.0,
                 parsed_log.0
             );
 
-            let (program, instruction) = program_instruction;
+            let (program, instruction) = outer_ix;
             let parser = manager.match_program(program.key().unwrap());
             match parser {
                 Some(p) if p.config().responds_to_instruction == true => {
@@ -164,6 +163,7 @@ async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<
                             message_id,
                             txn_id: "".to_string(),
                             instruction,
+                            inner_ix,
                             keys,
                             instruction_logs: parsed_log.1,
                         }).await

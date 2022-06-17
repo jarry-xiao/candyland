@@ -17,9 +17,8 @@ pub mod utils;
 use crate::state::metaplex_anchor::MplTokenMetadata;
 use crate::state::{
     leaf_schema::{LeafSchema, Version},
-    metaplex_adapter::{MetadataArgs, TokenProgramVersion},
     metaplex_anchor::{MasterEdition, TokenMetadata},
-    Nonce, Voucher,
+    Nonce, Voucher, metaplex_adapter::{MetadataArgs, TokenProgramVersion}
 };
 use crate::utils::{append_leaf, insert_or_append_leaf, replace_leaf, get_asset_id, assert_derivation};
 
@@ -79,15 +78,20 @@ pub struct Mint<'info> {
     pub nonce: Account<'info, Nonce>,
     /// CHECK: This account is neither written to nor read from.
     pub gummyroll_program: Program<'info, Gummyroll>,
-    pub owner: Signer<'info>,
     /// CHECK: This account is neither written to nor read from.
-    pub delegate: UncheckedAccount<'info>,
+    pub owner: AccountInfo<'info>,
+    /// CHECK: This account is neither written to nor read from.
+    pub delegate: AccountInfo<'info>,
     #[account(mut)]
     /// CHECK: unsafe
     pub merkle_slab: UncheckedAccount<'info>,
-    #[account(zero)]
+    #[account(
+    mut,
+    seeds = [nonce.key().as_ref(), nonce.count.to_le_bytes().as_ref()],
+    bump
+    )]
     /// CHECK: Checked in program
-    pub id: UncheckedAccount<'info>,
+    pub asset_id: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -153,7 +157,7 @@ _version: Version,
 _root: [u8; 32],
 _data_hash: [u8; 32],
 _creator_hash: [u8; 32],
-nonce: u128,
+nonce: u64,
 _index: u32,
 )]
 pub struct Redeem<'info> {
@@ -340,11 +344,14 @@ pub mod bubblegum {
     }
 
     pub fn mint(ctx: Context<Mint>, version: Version, message: MetadataArgs) -> Result<()> {
+        // TODO -> Pass collection in check collection authority or collection delegate authority signer
+        // TODO -> Separate V1 / V1 into seperate instructions
+        //
         let owner = ctx.accounts.owner.key();
         let delegate = ctx.accounts.delegate.key();
         let merkle_slab = ctx.accounts.merkle_slab.to_account_info();
         let nonce = &mut ctx.accounts.nonce;
-        let asset_id = ctx.accounts.id.key();
+        let asset_id = ctx.accounts.asset_id.key();
         let data_hash = keccak::hashv(&[message.try_to_vec()?.as_slice()]);
         let creator_data = message
             .creators
@@ -366,12 +373,6 @@ pub mod bubblegum {
             data_hash.to_bytes(),
             creator_hash.to_bytes(),
         );
-        assert_derivation(
-            &id(),
-            &ctx.accounts.id.to_account_info(),
-            &[nonce.key().as_ref(), (nonce.count).to_le_bytes().as_ref()],
-            None,
-        )?;
         emit!(leaf.to_event());
         nonce.count = nonce.count.saturating_add(1);
         append_leaf(
@@ -391,7 +392,7 @@ pub mod bubblegum {
         root: [u8; 32],
         data_hash: [u8; 32],
         creator_hash: [u8; 32],
-        nonce: u128,
+        nonce: u64,
         index: u32,
     ) -> Result<()> {
         let merkle_slab = ctx.accounts.merkle_slab.to_account_info();
@@ -441,7 +442,7 @@ pub mod bubblegum {
         root: [u8; 32],
         data_hash: [u8; 32],
         creator_hash: [u8; 32],
-        nonce: u128,
+        nonce: u64,
         index: u32,
     ) -> Result<()> {
         let merkle_slab = ctx.accounts.merkle_slab.to_account_info();
@@ -482,7 +483,7 @@ pub mod bubblegum {
         root: [u8; 32],
         data_hash: [u8; 32],
         creator_hash: [u8; 32],
-        nonce: u128,
+        nonce: u64,
         index: u32,
     ) -> Result<()> {
         let owner = ctx.accounts.owner.to_account_info();
@@ -522,7 +523,7 @@ pub mod bubblegum {
         root: [u8; 32],
         data_hash: [u8; 32],
         creator_hash: [u8; 32],
-        nonce: u128,
+        nonce: u64,
         index: u32,
     ) -> Result<()> {
         let owner = ctx.accounts.owner.key();

@@ -1,16 +1,29 @@
 use anchor_client::anchor_lang::prelude::Pubkey;
 use lazy_static::lazy_static;
-use sea_orm::ActiveValue::Set;
-use sea_orm::sea_query::ColumnSpec::Default;
-use sea_orm::SqlxPostgresConnector;
+use sea_orm::{DatabaseConnection, DbErr, InsertResult, TransactionError};
+use digital_asset_types::json::ChainDataV1;
+use num_traits::FromPrimitive;
 use solana_sdk::pubkeys;
 use sqlx::{PgPool, query};
 use {
     crate::{
         events::handle_event,
         parsers::{InstructionBundle, ProgramHandler, ProgramHandlerConfig},
-        utils::{filter_events_from_logs, pubkey_from_fb_table},
+        utils::{filter_events_from_logs},
         error::IngesterError,
+    },
+    sea_orm::{
+        entity::*,
+        query::*,
+        JsonValue, SqlxPostgresConnector, TransactionTrait,
+    },
+    digital_asset_types::dao::{
+        asset,
+        asset_data,
+        asset_creators,
+        asset_authority,
+        asset_grouping,
+        sea_orm_active_enums::{ChainMutability, Mutability, OwnerType, RoyaltyTargetType},
     },
     anchor_client::anchor_lang::AnchorDeserialize,
     bubblegum::state::leaf_schema::LeafSchemaEvent,
@@ -21,9 +34,10 @@ use {
     async_trait::async_trait,
 };
 use bubblegum::state::leaf_schema::{LeafSchema, Version};
-use digital_asset_types::{asset, asset_data};
-use digital_asset_types::sea_orm_active_enums::{OwnerType, RoyaltyTargetType};
-use crate::{get_gummy_roll_events, gummyroll_change_log_event_to_database};
+use serde_json;
+use digital_asset_types::adapter::{TokenStandard, UseMethod, Uses};
+use crate::{get_gummy_roll_events, gummyroll_change_log_event_to_database, save_changelog_events};
+use crate::utils::{bytes_from_fb_table, pubkey_from_fb_table};
 
 pubkeys!(
     Bubblegum_Program_ID,
@@ -32,7 +46,7 @@ pubkeys!(
 
 pub struct BubblegumHandler {
     id: Pubkey,
-    storage: Pool<Postgres>,
+    storage: DatabaseConnection,
 }
 
 #[async_trait]
@@ -67,42 +81,26 @@ impl BubblegumHandler {
     pub fn new(pool: Pool<Postgres>) -> Self {
         BubblegumHandler {
             id: Bubblegum_Program_ID(),
-            storage: pool,
+            storage: SqlxPostgresConnector::from_sqlx_postgres_pool(pool),
         }
     }
 }
 
-fn get_bubblegum_leaf_event(logs: &Vec<&str>) -> Result<LeafSchemaEvent, ()> {
+fn get_bubblegum_leaf_event(logs: &Vec<&str>) -> Result<LeafSchemaEvent, IngesterError> {
     let event_logs = filter_events_from_logs(logs);
     if event_logs.is_err() {
         println!("Error finding event logs in bubblegum logs");
-        return Err(());
+        return Err(IngesterError::CompressedAssetEventMalformed);
     }
 
     let mut found_event: Option<LeafSchemaEvent> = None;
     for event in event_logs.unwrap() {
-        match handle_event::<LeafSchemaEvent>(event) {
-            Ok(leaf_event) => {
-                if found_event.is_some() {
-                    println!("\tOnly expected one leaf event per bubblegum ix");
-                    return Err(());
-                }
-                found_event = Some(leaf_event);
-            }
-            Err(_) => {
-                println!("\tMalformed bubblegum log event data");
-                return Err(());
-            }
+        let event = handle_event::<LeafSchemaEvent>(event);
+        if event.is_ok() {
+            found_event = event.ok()
         }
     }
-
-    match found_event {
-        Some(leaf_event) => Ok(leaf_event),
-        _ => {
-            println!("No bubblegum event found in logs");
-            Err(())
-        }
-    }
+    found_event.ok_or(IngesterError::CompressedAssetEventMalformed)
 }
 
 async fn handle_bubblegum_instruction<'a, 'b>(
@@ -110,112 +108,200 @@ async fn handle_bubblegum_instruction<'a, 'b>(
     logs: &Vec<&'a str>,
     keys: &Vector<'b, ForwardsUOffset<transaction_info::Pubkey<'b>>>,
     pid: i64,
-    pool: &Pool<Postgres>,
+    db: &DatabaseConnection,
 ) -> Result<(), IngesterError> {
-    println!("{:?}", logs);
-    let db = SqlxPostgresConnector::from_sqlx_postgres_pool(PgPool(pool));
-    let txn = pool.begin().await.unwrap();
-    for change_log_event in get_gummy_roll_events(logs)? {
-        gummyroll_change_log_event_to_database(
-            change_log_event,
-            pid,
-            pool,
-        ).await;
-    }
-    match bubblegum::get_instruction_type(instruction.data().unwrap()) {
+    let ix_type = bubblegum::get_instruction_type(instruction.data().unwrap());
+    match ix_type {
         bubblegum::InstructionName::Transfer => {
-            println!("Bubblegum: Transfer");
-            // TODO(): insert uuid with new owner with a greater PID
+            println!("BGUM: Transfer");
+            let gummy_roll_events = get_gummy_roll_events(logs)?;
+            let leaf_event = get_bubblegum_leaf_event(logs)?;
+            let data = instruction.data().unwrap()[8..].to_owned();
+            let data_buf = &mut data.as_slice();
+            let ix: bubblegum::instruction::Transfer =
+                bubblegum::instruction::Transfer::deserialize(data_buf).unwrap();
+            db.transaction::<_, _, IngesterError>(|txn| {
+                Box::pin(async move {
+                    save_changelog_events(gummy_roll_events, txn).await?;
+                    match (ix.version, leaf_event.schema) {
+                        (Version::V0, LeafSchema::V0 {
+                            nonce,
+                            id,
+                            owner,
+                            ..
+                        }) => {
+                            let owner_bytes = owner.to_bytes().to_vec();
+                            let id_bytes = id.to_bytes().to_vec();
+                            let asset_to_update = asset::ActiveModel {
+                                id: Unchanged(id_bytes.clone()),
+                                leaf: Set(Some(leaf_event.schema.to_node().inner.to_vec())),
+                                owner: Set(owner_bytes),
+                                nonce: Set(nonce as i64),
+                                ..Default::default()
+                            };
+                            asset::Entity::update(asset_to_update)
+                                .filter(asset::Column::Id.eq(id_bytes))
+                                .exec(txn)
+                                .await
+                                .map_err(|db_error| {
+                                    IngesterError::StorageWriteError(db_error.to_string())
+                                })
+                        }
+                        _ => Err(IngesterError::NotImplemented)
+                    }
+                })
+            }).await
+                .map_err(|txn_err| {
+                    IngesterError::StorageWriteError(txn_err.to_string())
+                })?;
         }
         bubblegum::InstructionName::Mint => {
-            println!("Bubblegum: Mint");
-
-            // Retrieve nonce value from the LeafSchemaEvent emitted
-            let leaf_event_result = get_bubblegum_leaf_event(logs);
-            if leaf_event_result.is_err() {
-                println!("Could not find leaf event");
-                return Err(IngesterError::ChangeLogEventMalformed);
-            };
-            let leaf_event = leaf_event_result.unwrap();
-
-
-            let accounts = instruction.accounts().unwrap();
-            let owner = pubkey_from_fb_table(keys, accounts[4] as usize);
-            let delegate = pubkey_from_fb_table(keys, accounts[5] as usize);
-
+            println!("BGUM: MINT");
+            let gummy_roll_events = get_gummy_roll_events(logs)?;
+            let leaf_event = get_bubblegum_leaf_event(logs)?;
             let data = instruction.data().unwrap()[8..].to_owned();
             let data_buf = &mut data.as_slice();
             let ix: bubblegum::instruction::Mint =
                 bubblegum::instruction::Mint::deserialize(data_buf).unwrap();
-            let metadata = ix.message;
+            let accounts = instruction.accounts().unwrap();
+            let update_authority = bytes_from_fb_table(keys, accounts[0] as usize);
+            let id = pubkey_from_fb_table(keys, accounts[7] as usize);
+            let owner = bytes_from_fb_table(keys, accounts[4] as usize);
+            let delegate = bytes_from_fb_table(keys, accounts[5] as usize);
+            let merkle_slab = bytes_from_fb_table(keys, accounts[6] as usize);
+            db.transaction::<_, _, IngesterError>(|txn| {
+                Box::pin(async move {
+                    save_changelog_events(gummy_roll_events, txn).await?;
+                    match (ix.version, leaf_event.schema) {
+                        (Version::V0, LeafSchema::V0 {
+                            nonce,
+                            ..
+                        }) => {
+                            let metadata = ix.message;
+                            // Printing metadata instruction arguments for debugging
+                            println!(
+                                "\tMetadata info: {} {} {} {}",
+                                &metadata.name,
+                                metadata.seller_fee_basis_points,
+                                metadata.primary_sale_happened,
+                                metadata.is_mutable,
+                            );
+                            let chain_data = ChainDataV1 {
+                                name: metadata.name,
+                                symbol: metadata.symbol,
+                                edition_nonce: metadata.edition_nonce,
+                                primary_sale_happened: metadata.primary_sale_happened,
+                                token_standard: metadata.token_standard.and_then(|ts| {
+                                    TokenStandard::from_u8(ts as u8)
+                                }),
+                                uses: metadata.uses.map(|u| {
+                                    Uses {
+                                        use_method: UseMethod::from_u8(u.use_method as u8).unwrap(),
+                                        remaining: u.remaining,
+                                        total: u.total,
+                                    }
+                                }),
+                            };
+                            let chain_data_json = serde_json::to_value(chain_data).map_err(|e| {
+                                IngesterError::DeserializationError(e.to_string())
+                            })?;
+                            let chain_mutability = match metadata.is_mutable {
+                                true => ChainMutability::Mutable,
+                                false => ChainMutability::Immutable
+                            };
 
-            // Printing metadata instruction arguments for debugging
-            println!(
-                "\tMetadata info: {} {} {} {}",
-                &metadata.name,
-                metadata.seller_fee_basis_points,
-                metadata.primary_sale_happened,
-                metadata.is_mutable,
-            );
-
-            let inserted = match (ix.version, leaf_event.schema) {
-                (Version::V0, LeafSchema::V0 {
-                    id,
-                    owner,
-                    delegate,
-                    nonce,
-                    ..
-                }) => {
-                    let data = asset_data::ActiveModel {
-
-                    };
-
-                    let delegate = if owner == delegate {
-                        None
-                    } else {
-                        delegate
-                    };
-                    let asset = asset::ActiveModel {
-                        id: Set(bs58::decode(id).into_vec().unwrap()),
-                        owner: Set(bs58::decode(&owner).into_vec().unwrap()),
-                        owner_type: Set(OwnerType::Single),
-                        delegate: Set(bs58::decode(&delegate).into_vec().unwrap()),
-                        frozen: Set(false),
-                        supply: Set(1),
-                        supply_mint: Set(None),
-                        compressed: Set(true),
-                        compressible: Set(false),
-                        tree_id: Some(Some(ix.merkle_slab)),
-                        leaf: Set(Some(leaf_event.schema.to_node().inner)),
-                        revision: Set(0), /// Get gummy roll seq
-                        royalty_target_type: RoyaltyTargetType::Creators,
-                        royalty_target: Set(None),
-                        ..Default::default()
-                    };
-                }
-                _ => {
-                    Err(IngesterError::NotImplemented)
-                }
-
-            };
-
-            // TODO(): insert ALL metadata for NFT so that it can be hashed on-chain
-            // sqlx::query(SET_NFT_APPSQL)
-            //     .bind()
-            //     .bind(&bs58::decode(&delegate).into_vec().unwrap())
-            //     .bind(&Uuid::from_u128(leaf_event.nonce))
-            //     // revision
-            //     .bind(&pid)
-            //     .bind(&metadata.name)
-            //     .bind(&metadata.symbol)
-            //     .bind(&metadata.uri)
-            //     .bind(metadata.seller_fee_basis_points as u32)
-            //     .bind(metadata.primary_sale_happened)
-            //     .bind(metadata.is_mutable)
-            //     .execute(pool)
-            //     .await
-            //     .unwrap();
-            println!("\tInserted metadata!");
+                            let data = asset_data::ActiveModel {
+                                chain_data_mutability: Set(chain_mutability),
+                                schema_version: Set(1),
+                                chain_data: Set(chain_data_json),
+                                metadata_url: Set(metadata.uri),
+                                metadata: Set(JsonValue::String("processing".to_string())),
+                                metadata_mutability: Set(Mutability::Mutable),
+                                ..Default::default()
+                            }.insert(txn).await
+                                .map_err(|txn_err| {
+                                    IngesterError::StorageWriteError(txn_err.to_string())
+                                })?;
+                            let delegate = if owner == delegate {
+                                None
+                            } else {
+                                Some(delegate)
+                            };
+                            asset::ActiveModel {
+                                id: Set(id.to_bytes().to_vec()),
+                                owner: Set(owner),
+                                owner_type: Set(OwnerType::Single),
+                                delegate: Set(delegate),
+                                frozen: Set(false),
+                                supply: Set(1),
+                                supply_mint: Set(None),
+                                compressed: Set(true),
+                                compressible: Set(false),
+                                tree_id: Set(Some(merkle_slab)),
+                                nonce: Set(nonce as i64),
+                                leaf: Set(Some(leaf_event.schema.to_node().inner.to_vec())),
+                                /// Get gummy roll seq
+                                royalty_target_type: Set(RoyaltyTargetType::Creators),
+                                royalty_target: Set(None),
+                                royalty_amount: Set(metadata.seller_fee_basis_points as i32), //basis points
+                                chain_data_id: Set(Some(data.id)),
+                                ..Default::default()
+                            }.insert(txn)
+                                .await
+                                .map_err(|txn_err| {
+                                    IngesterError::StorageWriteError(txn_err.to_string())
+                                })?;
+                            let mut creators = Vec::with_capacity(metadata.creators.len());
+                            for c in metadata.creators {
+                                creators.push(asset_creators::ActiveModel {
+                                    asset_id: Set(id.to_bytes().to_vec()),
+                                    creator: Set(c.address.to_bytes().to_vec()),
+                                    share: Set(c.share as i32),
+                                    verified: Set(c.verified),
+                                    ..Default::default()
+                                });
+                            }
+                            asset_creators::Entity::insert_many(creators)
+                                .exec(txn)
+                                .await
+                                .map_err(|txn_err| {
+                                    IngesterError::StorageWriteError(txn_err.to_string())
+                                })?;
+                            asset_authority::ActiveModel {
+                                asset_id: Set(id.to_bytes().to_vec()),
+                                authority: Set(update_authority),
+                                scopes: Set(None),
+                                ..Default::default()
+                            }.insert(txn)
+                                .await
+                                .map_err(|txn_err| {
+                                    IngesterError::StorageWriteError(txn_err.to_string())
+                                })?;
+                            if let Some(c) = metadata.collection {
+                                if c.verified {
+                                    asset_grouping::ActiveModel {
+                                        asset_id: Set(id.to_bytes().to_vec()),
+                                        group_key: Set("collection".to_string()),
+                                        group_value: Set(c.key.to_string()),
+                                        ..Default::default()
+                                    }.insert(txn)
+                                        .await
+                                        .map_err(|txn_err| {
+                                            IngesterError::StorageWriteError(txn_err.to_string())
+                                        })?;
+                                }
+                            }
+                            Ok(())
+                        }
+                        _ => {
+                            Err(IngesterError::NotImplemented)
+                        }
+                    }
+                })
+            }).await
+                .map_err(|txn_err| {
+                    IngesterError::StorageWriteError(txn_err.to_string())
+                })?;
         }
         // We should probably ignore Redeem & Cancel Redeem
         // Since redeemed voucher is non-transferable, the owner
@@ -227,17 +313,8 @@ async fn handle_bubblegum_instruction<'a, 'b>(
             println!("Bubblegum: Redeem");
             // TODO(): nothing
         }
-        bubblegum::InstructionName::CancelRedeem => {
-            println!("Bubblegum: CancelRedeem");
-            // TODO(): nothing
-        }
-        bubblegum::InstructionName::Decompress => {
-            println!("Bubblegum: Decompress");
-            // TODO(): set nonce uuid to a non-queryable state
-        }
-        _ => println!("Bubblegum: Ignored instruction"),
+
+        _ => println!("Bubblegum: Not Implemented Instruction"),
     }
-    txn.commit().await.map_err(|e| {
-        IngesterError::StorageWriteError(e.to_string())
-    })
+    Ok(())
 }

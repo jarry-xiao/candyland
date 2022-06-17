@@ -62,7 +62,7 @@ export function decodeMerkleRoll(buffer: Buffer): OnChainMerkleRoll {
     };
 
     // Decode MerkleRoll
-    let sequenceNumber = reader.readU128();
+    let sequenceNumber = reader.readU64();
     let activeIndex = reader.readU64().toNumber();
     let bufferSize = reader.readU64().toNumber();
 
@@ -117,6 +117,6 @@ export function getMerkleRollAccountSize(maxDepth: number, maxBufferSize: number
   let headerSize = 8 + 32 + 32;
   let changeLogSize = (maxDepth * 32 + 32 + 4 + 4) * maxBufferSize;
   let rightMostPathSize = maxDepth * 32 + 32 + 4 + 4;
-  let merkleRollSize = 8 + 8 + 16 + changeLogSize + rightMostPathSize;
+  let merkleRollSize = 8 + 8 + 8 + changeLogSize + rightMostPathSize;
   return merkleRollSize + headerSize; 
 }

@@ -2,7 +2,6 @@ import * as anchor from "@project-serum/anchor";
 import { keccak_256 } from "js-sha3";
 import { BN, Provider, Program } from "@project-serum/anchor";
 import { Bubblegum } from "../target/types/bubblegum";
-import { Gummyroll } from "../target/types/gummyroll";
 import { PROGRAM_ID } from "@metaplex-foundation/mpl-token-metadata";
 import {
   PublicKey,
@@ -45,16 +44,18 @@ describe("bubblegum", () => {
   let payer = Keypair.generate();
   let destination = Keypair.generate();
   let delegateKey = Keypair.generate();
-  let connection = new web3Connection("http://localhost:8899", {
+  let connection = new web3Connection("http://127.0.0.1:8899", {
     commitment: "confirmed",
   });
   let wallet = new NodeWallet(payer);
+
   anchor.setProvider(
     new Provider(connection, wallet, {
       commitment: connection.commitment,
       skipPreflight: true,
     })
   );
+
   Bubblegum = anchor.workspace.Bubblegum as Program<Bubblegum>;
   GummyrollProgramId = anchor.workspace.Gummyroll.programId;
 
@@ -198,14 +199,15 @@ describe("bubblegum", () => {
         uses: null,
         creators: [],
       };
-      let nonce = await Bubblegum.provider.getNonce(nonceAccount)
+
+      let nonce = await Bubblegum.account.nonce.fetch(nonceAccount)
       let version = { v0: {} };
-      let asset_id = PublicKey.findProgramAddress([
+      let [asset_id, _] = await PublicKey.findProgramAddress([
             nonceAccount.toBuffer(),
-            nonce.count
+            nonce.count.toBuffer("le", 8)
           ],
           Bubblegum.programId
-      )
+      );
       let mintIx = await Bubblegum.instruction.mint(version, metadata, {
         accounts: {
           mintAuthority: payer.publicKey,
@@ -215,7 +217,7 @@ describe("bubblegum", () => {
           owner: payer.publicKey,
           delegate: payer.publicKey,
           merkleSlab: merkleRollKeypair.publicKey,
-          id: asset_id
+          assetId: asset_id
         },
         signers: [payer],
       });
@@ -331,7 +333,7 @@ describe("bubblegum", () => {
         merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
 
       let [voucher] = await PublicKey.findProgramAddress(
-        [merkleRollKeypair.publicKey.toBuffer(), new BN(0).toBuffer("le", 16)],
+        [merkleRollKeypair.publicKey.toBuffer(), new BN(0).toBuffer("le", 8)],
         Bubblegum.programId
       );
 

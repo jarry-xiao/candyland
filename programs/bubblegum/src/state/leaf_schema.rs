@@ -33,7 +33,7 @@ pub enum LeafSchema {
         id: Pubkey,
         owner: Pubkey,
         delegate: Pubkey,
-        nonce: u128,
+        nonce: u64,
         data_hash: [u8; 32],
         creator_hash: [u8; 32],
     },
@@ -57,7 +57,7 @@ impl LeafSchema {
         id: Pubkey,
         owner: Pubkey,
         delegate: Pubkey,
-        nonce: u128,
+        nonce: u64,
         data_hash: [u8; 32],
         creator_hash: [u8; 32],
     ) -> Self {
@@ -79,7 +79,7 @@ impl LeafSchema {
         }
     }
 
-    pub fn nonce(&self) -> u128 {
+    pub fn nonce(&self) -> u64 {
         match self {
             LeafSchema::V0 {
                 nonce,

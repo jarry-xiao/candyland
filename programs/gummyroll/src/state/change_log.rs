@@ -21,7 +21,7 @@ pub struct ChangeLogEvent {
     pub id: Pubkey,
     /// Nodes of off-chain merkle tree
     pub path: Vec<PathNode>,
-    pub seq: u128,
+    pub seq: u64,
     /// Bitmap of node parity (used when hashing)
     pub index: u32,
 }
@@ -40,7 +40,7 @@ pub struct ChangeLog<const MAX_DEPTH: usize> {
 }
 
 impl<const MAX_DEPTH: usize> ChangeLog<MAX_DEPTH> {
-    pub fn to_event(&self, id: Pubkey, seq: u128) -> Box<ChangeLogEvent> {
+    pub fn to_event(&self, id: Pubkey, seq: u64) -> Box<ChangeLogEvent> {
         let path_len = self.path.len() as u32;
         let mut path: Vec<PathNode> = self
             .path
