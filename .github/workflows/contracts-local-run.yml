@@ -24,6 +24,8 @@ jobs:
       run: |
         sh -c "$(curl -sSfL https://release.solana.com/v1.10.25/install)"
         export PATH="/home/runner/.local/share/solana/install/active_release/bin:$PATH"
+        solana --help
+        solana-keygen --help
         solana-keygen new --no-outfile
     - name: Install Anchor
       run: |
