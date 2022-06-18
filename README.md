@@ -2,13 +2,27 @@
 
 Smart contracts and indexing services necessary to migrate the Solana ecosystem to a 10,000x cheaper NFT standard.
 
+```mermaid
+graph TD;
+    subgraph contracts
+        gummyroll-->concurrent-merkle-tree;
+        bubblegum-->gummyroll;
+        gumball-machine-->bubblegum;
+        gumdrop-->bubblegum;
+    end
+    subgraph indexer
+        plerkle-->solana-geyser-plugin;
+        nft-ingester-->|messenger|plerkle;
+        nft-api-->nft-ingester;
+    end
+```
 
 # Smart Contracts
 
 | Package | Description | Docs | Audit | Program Id |
 | :-- | :-- | :--| :-- | :-- |
 | `gummyroll` | On-chain merkle tree that supports concurrent writes | tbd | tbd | `GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD` |
-| `bubblegum` | Token transfer and metadata functionality built on top of gummyroll | tbd | tbd | `BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o` |
+| `bubblegum` | Token transfer and metadata functionality built on top of gummyroll | tbd | tbd | `BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY` |
 | `gumball-machine` | Candy machine built for bubblegum | tbd | tbd | `BRKyVDRGT7SPBtMhjHN4PVSPVYoc3Wa3QTyuRVM4iZkt` | 
 | `gumdrop` | Forked version of mpl gumdrop, with support for bubblegum | tbd | tbd | `gdrpGjVffourzkdDRrQmySw4aTHr8a3xmQzzxSwFD1a` | 
 | (deprecated) `gummyroll-CRUD` | an example messaging (CRUD) program built on top of gummyroll | deprecated | deprecated | deprecated |
@@ -54,8 +68,23 @@ This is the bread and butter of this project. Gummyroll relies on RPC indexers t
 | `messenger` | Traits needed to generalize messaging bus for NFT related indexing | tbd |
 
 ## Getting Started
+```
+cd candyland/
+git submodule update --init --recursive
+yarn install
+cd contracts/
+anchor build
+cd ..
+docker compose up --build --force-recreate
+```
 
-`git submodule init --update && yarn install`
+#### In another terminal:
+```
+cd candyland/contracts/
+yarn
+yarn run ts-mocha -t 1000000 tests/bubblegum-test.ts
+yarn run ts-mocha -t 1000000 tests/continuous_gummyroll-test.ts
+```
 
 ## Running Tests
 

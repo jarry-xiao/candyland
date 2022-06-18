@@ -1,25 +1,30 @@
-FROM rust:1.60-bullseye as builder
-ARG MODE=debug
+FROM rust:1.60-bullseye AS chef
+RUN cargo install cargo-chef
+FROM chef AS planner
+COPY nft_ingester/Cargo.toml /rust/nft_ingester/
+WORKDIR /rust/nft_ingester
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder
 RUN apt-get update -y && \
     apt-get install -y build-essential make git
-WORKDIR /rust
-RUN USER=root cargo new --lib nft_ingester
-COPY programs /rust/programs
-COPY Anchor.toml /rust/programs/
+COPY lib /rust/lib
+COPY contracts /rust/contracts
 COPY plerkle /rust/plerkle
 COPY deps /rust/deps
 COPY plerkle_serialization /rust/plerkle_serialization
 COPY digital_asset_types /rust/digital_asset_types
 COPY messenger /rust/messenger
+COPY nft_ingester /rust/nft_ingester
 WORKDIR /rust/nft_ingester
-COPY ./nft_ingester/Cargo.toml ./Cargo.toml
-
-RUN cargo build
-
-COPY ./nft_ingester .
-RUN ls -la
-RUN cargo build
-RUN cp -r /rust/nft_ingester/target/$MODE /rust/bin
+COPY --from=planner /rust/nft_ingester/recipe.json recipe.json
+# Build dependencies - this is the caching Docker layer!
+RUN cargo chef cook --release --recipe-path recipe.json
+# Build application
+RUN cargo build --release
+RUN ls /rust/nft_ingester/target/release/
+RUN mkdir -p /rust/bin/nft_ingester
+RUN cp -r /rust/nft_ingester/target/release/nft_ingester /rust/bin/nft_ingester
 
 FROM rust:1.61-slim-bullseye
 ARG APP=/usr/src/app

@@ -16,3 +16,4 @@ target
 .vscode
 
 *.swp
+*error.log

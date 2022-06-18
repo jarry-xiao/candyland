@@ -2,6 +2,9 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum PlerkleError {
+    #[error("General Plugin Config Error ({msg})")]
+    GeneralPluginConfigError { msg: String },
+
     #[error("Error connecting to the backend data store. Error message: ({msg})")]
     DataStoreConnectionError { msg: String },
 
@@ -16,7 +19,4 @@ pub enum PlerkleError {
 
     #[error("Unable to Send Event to Stream ({msg})")]
     EventStreamError { msg: String },
-
-    #[error("Unable to Deserialize data ({msg})")]
-    DeserializationError { msg: String },
 }

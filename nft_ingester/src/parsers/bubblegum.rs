@@ -5,6 +5,7 @@ use digital_asset_types::json::ChainDataV1;
 use num_traits::FromPrimitive;
 use solana_sdk::pubkeys;
 use sqlx::{PgPool, query};
+
 use {
     crate::{
         events::handle_event,
@@ -33,6 +34,7 @@ use {
     sqlx::{self, types::Uuid, Pool, Postgres},
     async_trait::async_trait,
 };
+
 use bubblegum::state::leaf_schema::{LeafSchema, Version};
 use serde_json;
 use digital_asset_types::adapter::{TokenStandard, UseMethod, Uses};
@@ -40,8 +42,8 @@ use crate::{get_gummy_roll_events, gummyroll_change_log_event_to_database, save_
 use crate::utils::{bytes_from_fb_table, pubkey_from_fb_table};
 
 pubkeys!(
-    Bubblegum_Program_ID,
-    "BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o"
+    BubblegumProgramID,
+    "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY"
 );
 
 pub struct BubblegumHandler {
@@ -80,7 +82,7 @@ impl ProgramHandler for BubblegumHandler {
 impl BubblegumHandler {
     pub fn new(pool: Pool<Postgres>) -> Self {
         BubblegumHandler {
-            id: Bubblegum_Program_ID(),
+            id: BubblegumProgramID(),
             storage: SqlxPostgresConnector::from_sqlx_postgres_pool(pool),
         }
     }
@@ -134,7 +136,7 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                             let id_bytes = id.to_bytes().to_vec();
                             let asset_to_update = asset::ActiveModel {
                                 id: Unchanged(id_bytes.clone()),
-                                leaf: Set(Some(leaf_event.schema.to_node().inner.to_vec())),
+                                leaf: Set(Some(leaf_event.schema.to_node().to_vec())),
                                 owner: Set(owner_bytes),
                                 nonce: Set(nonce as i64),
                                 ..Default::default()
@@ -155,14 +157,14 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                     IngesterError::StorageWriteError(txn_err.to_string())
                 })?;
         }
-        bubblegum::InstructionName::Mint => {
+        bubblegum::InstructionName::MintV1 => {
             println!("BGUM: MINT");
             let gummy_roll_events = get_gummy_roll_events(logs)?;
             let leaf_event = get_bubblegum_leaf_event(logs)?;
             let data = instruction.data().unwrap()[8..].to_owned();
             let data_buf = &mut data.as_slice();
-            let ix: bubblegum::instruction::Mint =
-                bubblegum::instruction::Mint::deserialize(data_buf).unwrap();
+            let ix: bubblegum::instruction::MintV1 =
+                bubblegum::instruction::MintV1::deserialize(data_buf).unwrap();
             let accounts = instruction.accounts().unwrap();
             let update_authority = bytes_from_fb_table(keys, accounts[0] as usize);
             let id = pubkey_from_fb_table(keys, accounts[7] as usize);
@@ -239,7 +241,7 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                                 compressible: Set(false),
                                 tree_id: Set(Some(merkle_slab)),
                                 nonce: Set(nonce as i64),
-                                leaf: Set(Some(leaf_event.schema.to_node().inner.to_vec())),
+                                leaf: Set(Some(leaf_event.schema.to_node().to_vec())),
                                 /// Get gummy roll seq
                                 royalty_target_type: Set(RoyaltyTargetType::Creators),
                                 royalty_target: Set(None),
@@ -312,7 +314,16 @@ async fn handle_bubblegum_instruction<'a, 'b>(
         //      otherwise, it becomes hard to reinsert data on a CancelRedeem
         bubblegum::InstructionName::Redeem => {
             println!("Bubblegum: Redeem");
-            // TODO(): nothing
+            let gummy_roll_events = get_gummy_roll_events(logs)?;
+            db.transaction::<_, _, IngesterError>(|txn| {
+                Box::pin(async move {
+                    save_changelog_events(gummy_roll_events, txn).await?;
+                    Ok(())
+                })
+            }).await
+                .map_err(|txn_err| {
+                    IngesterError::StorageWriteError(txn_err.to_string())
+                })?;
         }
 
         _ => println!("Bubblegum: Not Implemented Instruction"),

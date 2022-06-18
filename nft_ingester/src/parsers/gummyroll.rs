@@ -1,15 +1,18 @@
-use anchor_client::RequestNamespace::State;
-use sea_orm::DbBackend;
-use sea_orm::sea_query::{OnConflict, OnConflictAction, OnConflictTarget};
 use {
     sea_orm::{
-        DbErr,
+        DbBackend,
+        sea_query::OnConflict,
+        sea_query::OnConflictAction,
+        sea_query::OnConflictTarget,
         entity::*,
         query::*,
-        DatabaseConnection, DatabaseTransaction,
-        JsonValue, SqlxPostgresConnector, TransactionTrait,
+        DatabaseConnection,
+        DatabaseTransaction,
+        JsonValue,
+        SqlxPostgresConnector,
+        TransactionTrait,
     },
-    gummyroll::state::change_log::ChangeLogEvent,
+    gummyroll::state::ChangeLogEvent,
     serde::Deserialize,
     sqlx::{self, Pool, Postgres},
     async_trait::async_trait,
@@ -24,14 +27,8 @@ use {
         utils::{filter_events_from_logs, write_assets_to_file},
         InstructionBundle,
     },
+    digital_asset_types::dao::cl_items
 };
-use digital_asset_types::dao::cl_items;
-
-const SET_CLSQL_ITEM: &str = r#"
-INSERT INTO cl_items (tree, seq, level, hash, node_idx)
-VALUES ($1,$2,$3,$4,$5) ON CONFLICT (tree, node_idx)
-DO UPDATE SET hash = EXCLUDED.hash, seq = EXCLUDED.seq
-"#;
 
 #[derive(Debug, Deserialize)]
 pub struct CLRecord {
@@ -42,7 +39,7 @@ pub struct CLRecord {
 }
 
 pubkeys!(
-    Gummy_Roll_Program_ID,
+    GummyRollProgramID,
     "GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD"
 );
 
@@ -79,7 +76,7 @@ impl ProgramHandler for GummyRollHandler {
 impl GummyRollHandler {
     pub fn new(pool: Pool<Postgres>) -> Self {
         GummyRollHandler {
-            id: Gummy_Roll_Program_ID(),
+            id: GummyRollProgramID(),
             storage: SqlxPostgresConnector::from_sqlx_postgres_pool(pool),
         }
     }
@@ -95,7 +92,7 @@ pub fn get_gummy_roll_events(logs: &Vec<&str>) -> Result<Vec<ChangeLogEvent>, In
     let mut events = vec![];
     // Parse each change log event found in logs
     for event in change_log_event_vec {
-         if let Ok(change_log_event) = handle_event(event) {
+        if let Ok(change_log_event) = handle_event(event) {
             events.push(change_log_event);
         } else {
             continue;
@@ -136,13 +133,13 @@ pub async fn gummyroll_change_log_event_to_database(
 ) -> Result<(), IngesterError> {
     let mut i: i64 = 0;
     for p in change_log_event.path.into_iter() {
-        println!("level {}, node {:?}", i, p.node.inner);
+        println!("level {}, node {:?}", i, p.node);
         let tree_id = change_log_event.id.as_ref();
         let item = cl_items::ActiveModel {
             tree: Set(tree_id.to_vec()),
             level: Set(i),
             node_idx: Set(p.index as i64),
-            hash: Set(p.node.inner.as_ref().to_vec()),
+            hash: Set(p.node.as_ref().to_vec()),
             seq: Set(change_log_event.seq as i64), // this is bad
             ..Default::default()
         };

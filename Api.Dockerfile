@@ -4,8 +4,8 @@ RUN apt-get update -y && \
     apt-get install -y build-essential make git
 WORKDIR /rust
 RUN USER=root cargo new --lib nft_api
-COPY programs /rust/programs
-COPY Anchor.toml /rust/programs/
+COPY contracts /rust/contracts
+COPY lib /rust/lib
 COPY deps /rust/deps
 COPY plerkle /rust/plerkle
 COPY plerkle_serialization /rust/plerkle_serialization
@@ -19,6 +19,7 @@ RUN cargo build
 COPY ./nft_api .
 RUN cargo build
 RUN cp -r /rust/nft_api/target/$MODE /rust/bin
+RUN rm -rf /rust/nft_api/target/
 
 FROM rust:1.61-slim-bullseye
 ARG APP=/usr/src/app

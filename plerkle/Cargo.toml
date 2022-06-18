@@ -13,7 +13,6 @@ documentation = "https://docs.rs/solana-geyser-plugin-interface"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-redis = {version = "0.21.5", features = ["aio", "tokio-comp", "streams"]}
 log = "0.4.11"
 async-trait = "0.1.53"
 solana-sdk = { version = "=1.10.10" }
@@ -28,7 +27,6 @@ solana-measure = { version = "=1.10.10" }
 solana-metrics = { version = "=1.10.10" }
 solana-runtime = { version = "=1.10.10" }
 anchor-client = { path="../deps/anchor/client" }
-gummyroll={path= "../programs/gummyroll", features = ["no-entrypoint"]}
 bs58 = "0.4.0"
 bytemuck = "1.7.2"
 serde = "1.0.133"
@@ -38,6 +36,7 @@ hex = "0.4.3"
 messenger={path= "../messenger"}
 flatbuffers = "2.1.2"
 plerkle-serialization={path= "../plerkle_serialization"}
+tokio = { version = "1.17.0", features = ["full"] }
 
 [dependencies.num-integer]
 version = "0.1.44"

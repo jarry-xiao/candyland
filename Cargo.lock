@@ -684,6 +684,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "concurrent-merkle-tree"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "solana-program",
+ "thiserror",
+]
+
+[[package]]
 name = "console"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1451,6 +1460,16 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "bytemuck",
+ "concurrent-merkle-tree",
+]
+
+[[package]]
+name = "gummyroll-crud"
+version = "0.1.0"
+dependencies = [
+ "anchor-lang",
+ "bytemuck",
+ "gummyroll",
 ]
 
 [[package]]
@@ -1958,8 +1977,12 @@ dependencies = [
 name = "messenger"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "log",
  "plerkle-serialization",
+ "redis",
  "solana-geyser-plugin-interface",
+ "thiserror",
 ]
 
 [[package]]
@@ -2098,10 +2121,12 @@ dependencies = [
  "base64 0.13.0",
  "bs58 0.4.0",
  "bubblegum",
+ "concurrent-merkle-tree",
  "csv",
  "flatbuffers",
  "futures-util",
  "gummyroll",
+ "gummyroll-crud",
  "hex",
  "hyper",
  "lazy_static",
@@ -2529,14 +2554,12 @@ dependencies = [
  "bs58 0.4.0",
  "bytemuck",
  "flatbuffers",
- "gummyroll",
  "hex",
  "lazy_static",
  "log",
  "messenger",
  "num-integer",
  "plerkle-serialization",
- "redis",
  "regex",
  "serde",
  "serde_derive",
@@ -2549,6 +2572,7 @@ dependencies = [
  "solana-sdk",
  "solana-transaction-status",
  "thiserror",
+ "tokio",
 ]
 
 [[package]]

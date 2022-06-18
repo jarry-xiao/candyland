@@ -15,8 +15,6 @@ base64 = "0.13.0"
 thiserror = "1.0.31"
 serde_json = "1.0.81"
 tokio = { version = "1.17.0", features = ["full"] }
-gummyroll = { path = "../programs/gummyroll", features = ["no-entrypoint"] }
-bubblegum = { path = "../programs/bubblegum", features = ["no-entrypoint"] }
 sqlx = { version = "0.5.11", features = ["macros", "runtime-tokio-rustls", "postgres", "uuid", "offline", "json"] }
 sea-orm = { git = "https://github.com/liberwang1013/sea-orm", branch = "insert-on-conflict", features = ["macros", "runtime-tokio-rustls", "sqlx-postgres"] }
 tokio-postgres = "0.7.5"
@@ -35,6 +33,8 @@ digital_asset_types = { path = "../digital_asset_types", features = ["json_types
 uuid = "1.0.0"
 async-trait = "0.1.53"
 num-traits = "0.2.15"
+gummyroll = { path = "../contracts/programs/gummyroll", features = ["no-entrypoint"] }
+bubblegum = { path = "../contracts/programs/bubblegum", features = ["no-entrypoint"] }
 
 [dependencies.num-integer]
 version = "0.1.44"

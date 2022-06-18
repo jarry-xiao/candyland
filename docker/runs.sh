@@ -20,19 +20,21 @@ cat << EOL > accountsdb-plugin-config.json
     "accounts_selector" : {
         "accounts" : [
             "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+            "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS",
             "GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD",
             "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
             "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
-            "BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o"
+            "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY"
         ]
     },
     "transaction_selector" : {
         "mentions" : [
             "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+            "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS",
             "GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD",
             "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
             "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
-            "BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o"
+            "BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY"
         ]
     }
 }
@@ -50,7 +52,8 @@ args=(
   --reset
   --rpc-port 8899
   --bpf-program metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s /so/mpl_token_metadata.so
-  --bpf-program BGUMzZr2wWfD2yzrXFEWTK2HbdYhqQCP2EZoPEkZBD6o /so/bubblegum.so
+  --bpf-program BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY /so/bubblegum.so
+  --bpf-program Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS /so/gummyroll_crud.so
   --bpf-program GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD /so/gummyroll.so
   --bpf-program TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA /so/spl_token.so
   --bpf-program TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb /so/spl_token_2022.so
