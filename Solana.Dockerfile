@@ -13,11 +13,6 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 WORKDIR /rust/
 COPY deps /rust/deps
-COPY contracts /rust/contracts
-COPY lib /rust/lib
-COPY plerkle_serialization /rust/plerkle_serialization
-COPY digital_asset_types /rust/digital_asset_types
-COPY messenger /rust/messenger
 WORKDIR /rust/deps/metaplex-program-library/token-metadata/program
 RUN cargo build-bpf --bpf-out-dir /so/
 WORKDIR /rust/deps/solana-program-library/associated-token-account/program
@@ -26,6 +21,11 @@ WORKDIR /rust/deps/solana-program-library/token/program-2022
 RUN cargo build-bpf --bpf-out-dir /so/
 WORKDIR /rust/deps/solana-program-library/token/program
 RUN cargo build-bpf --bpf-out-dir /so/
+COPY lib /rust/lib
+COPY plerkle_serialization /rust/plerkle_serialization
+COPY digital_asset_types /rust/digital_asset_types
+COPY messenger /rust/messenger
+COPY contracts /rust/contracts
 WORKDIR /rust/contracts
 RUN cargo build-bpf --bpf-out-dir /so/
 COPY plerkle /rust/plerkle

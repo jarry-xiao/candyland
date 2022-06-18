@@ -163,16 +163,16 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                 bubblegum::instruction::MintV1::deserialize(data_buf).unwrap();
             let accounts = instruction.accounts().unwrap();
             let update_authority = bytes_from_fb_table(keys, accounts[0] as usize);
-            let id = pubkey_from_fb_table(keys, accounts[7] as usize);
-            let owner = bytes_from_fb_table(keys, accounts[4] as usize);
-            let delegate = bytes_from_fb_table(keys, accounts[5] as usize);
-            let merkle_slab = bytes_from_fb_table(keys, accounts[6] as usize);
+            let owner = bytes_from_fb_table(keys, accounts[3] as usize);
+            let delegate = bytes_from_fb_table(keys, accounts[4] as usize);
+            let merkle_slab = bytes_from_fb_table(keys, accounts[5] as usize);
             db.transaction::<_, _, IngesterError>(|txn| {
                 Box::pin(async move {
                     save_changelog_events(gummy_roll_events, txn).await?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
                             nonce,
+                            id,
                             ..
                         } => {
                             let metadata = ix.message;

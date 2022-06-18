@@ -1,7 +1,7 @@
 FROM rust:1.60-bullseye AS chef
 RUN cargo install cargo-chef
 FROM chef AS planner
-COPY nft_ingester/Cargo.toml /rust/nft_ingester/
+COPY nft_ingester /rust/nft_ingester/
 WORKDIR /rust/nft_ingester
 RUN cargo chef prepare --recipe-path recipe.json
 
@@ -15,16 +15,15 @@ COPY deps /rust/deps
 COPY plerkle_serialization /rust/plerkle_serialization
 COPY digital_asset_types /rust/digital_asset_types
 COPY messenger /rust/messenger
-COPY nft_ingester /rust/nft_ingester
+RUN mkdir -p /rust/nft_ingester
 WORKDIR /rust/nft_ingester
 COPY --from=planner /rust/nft_ingester/recipe.json recipe.json
 # Build dependencies - this is the caching Docker layer!
+COPY nft_ingester/Cargo.toml .
 RUN cargo chef cook --release --recipe-path recipe.json
+COPY nft_ingester .
 # Build application
 RUN cargo build --release
-RUN ls /rust/nft_ingester/target/release/
-RUN mkdir -p /rust/bin/nft_ingester
-RUN cp -r /rust/nft_ingester/target/release/nft_ingester /rust/bin/nft_ingester
 
 FROM rust:1.61-slim-bullseye
 ARG APP=/usr/src/app
@@ -36,7 +35,7 @@ ENV TZ=Etc/UTC \
 RUN groupadd $APP_USER \
     && useradd -g $APP_USER $APP_USER \
     && mkdir -p ${APP}
-COPY --from=builder /rust/bin/nft_ingester ${APP}
+COPY --from=builder /rust/nft_ingester/target/release/nft_ingester ${APP}
 RUN chown -R $APP_USER:$APP_USER ${APP}
 USER $APP_USER
 WORKDIR ${APP}
