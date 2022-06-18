@@ -1,10 +1,10 @@
 use anchor_client::anchor_lang::prelude::Pubkey;
 use lazy_static::lazy_static;
-use sea_orm::{DatabaseConnection, DbErr, InsertResult, TransactionError};
+use sea_orm::{DatabaseConnection};
 use digital_asset_types::json::ChainDataV1;
 use num_traits::FromPrimitive;
 use solana_sdk::pubkeys;
-use sqlx::{PgPool, query};
+
 
 use {
     crate::{
@@ -31,14 +31,14 @@ use {
     flatbuffers::{ForwardsUOffset, Vector},
     plerkle_serialization::transaction_info_generated::transaction_info::{self},
     solana_sdk,
-    sqlx::{self, types::Uuid, Pool, Postgres},
+    sqlx::{self, Pool, Postgres},
     async_trait::async_trait,
 };
 
-use bubblegum::state::leaf_schema::{LeafSchema, Version};
+use bubblegum::state::leaf_schema::{LeafSchema};
 use serde_json;
 use digital_asset_types::adapter::{TokenStandard, UseMethod, Uses};
-use crate::{get_gummy_roll_events, gummyroll_change_log_event_to_database, save_changelog_events};
+use crate::{get_gummy_roll_events, save_changelog_events};
 use crate::utils::{bytes_from_fb_table, pubkey_from_fb_table};
 
 pubkeys!(
@@ -109,7 +109,7 @@ async fn handle_bubblegum_instruction<'a, 'b>(
     instruction: &'a transaction_info::CompiledInstruction<'a>,
     logs: &Vec<&'a str>,
     keys: &Vector<'b, ForwardsUOffset<transaction_info::Pubkey<'b>>>,
-    pid: i64,
+    _pid: i64,
     db: &DatabaseConnection,
 ) -> Result<(), IngesterError> {
     let ix_type = bubblegum::get_instruction_type(instruction.data().unwrap());
@@ -118,20 +118,16 @@ async fn handle_bubblegum_instruction<'a, 'b>(
             println!("BGUM: Transfer");
             let gummy_roll_events = get_gummy_roll_events(logs)?;
             let leaf_event = get_bubblegum_leaf_event(logs)?;
-            let data = instruction.data().unwrap()[8..].to_owned();
-            let data_buf = &mut data.as_slice();
-            let ix: bubblegum::instruction::Transfer =
-                bubblegum::instruction::Transfer::deserialize(data_buf).unwrap();
             db.transaction::<_, _, IngesterError>(|txn| {
                 Box::pin(async move {
                     save_changelog_events(gummy_roll_events, txn).await?;
-                    match (ix.version, leaf_event.schema) {
-                        (Version::V0, LeafSchema::V0 {
+                    match leaf_event.schema {
+                        LeafSchema::V1 {
                             nonce,
                             id,
                             owner,
                             ..
-                        }) => {
+                        } => {
                             let owner_bytes = owner.to_bytes().to_vec();
                             let id_bytes = id.to_bytes().to_vec();
                             let asset_to_update = asset::ActiveModel {
@@ -174,11 +170,11 @@ async fn handle_bubblegum_instruction<'a, 'b>(
             db.transaction::<_, _, IngesterError>(|txn| {
                 Box::pin(async move {
                     save_changelog_events(gummy_roll_events, txn).await?;
-                    match (ix.version, leaf_event.schema) {
-                        (Version::V0, LeafSchema::V0 {
+                    match leaf_event.schema {
+                        LeafSchema::V1 {
                             nonce,
                             ..
-                        }) => {
+                        } => {
                             let metadata = ix.message;
                             // Printing metadata instruction arguments for debugging
                             println!(

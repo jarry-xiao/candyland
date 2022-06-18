@@ -2,13 +2,10 @@ use {
     sea_orm::{
         DbBackend,
         sea_query::OnConflict,
-        sea_query::OnConflictAction,
-        sea_query::OnConflictTarget,
         entity::*,
         query::*,
         DatabaseConnection,
         DatabaseTransaction,
-        JsonValue,
         SqlxPostgresConnector,
         TransactionTrait,
     },
@@ -24,7 +21,7 @@ use {
         ProgramHandlerConfig,
         error::IngesterError,
         events::handle_event,
-        utils::{filter_events_from_logs, write_assets_to_file},
+        utils::{filter_events_from_logs},
         InstructionBundle,
     },
     digital_asset_types::dao::cl_items
