@@ -23,7 +23,11 @@ use {
         io::Read,
         marker::PhantomData,
     },
-    tokio::sync::mpsc::{self, Sender},
+    tokio::{
+        self as tokio,
+        sync::mpsc::{self as mpsc, Sender},
+        runtime::{Runtime, Builder}
+    },
 };
 
 struct SerializedData<'a> {
@@ -33,7 +37,7 @@ struct SerializedData<'a> {
 
 #[derive(Default)]
 pub(crate) struct Plerkle<'a, T: Messenger + Default> {
-    runtime: Option<tokio::runtime::Runtime>,
+    runtime: Option<Runtime>,
     accounts_selector: Option<AccountsSelector>,
     transaction_selector: Option<TransactionSelector>,
     messenger: PhantomData<T>,
@@ -174,7 +178,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
         self.accounts_selector = Some(accounts_selector);
         self.transaction_selector = Some(transaction_selector);
 
-        let runtime = tokio::runtime::Builder::new_multi_thread()
+        let runtime = Builder::new_multi_thread()
             .enable_all()
             .thread_name("plerkle-runtime-worker")
             .build()

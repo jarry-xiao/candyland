@@ -4,10 +4,18 @@ use thiserror::Error;
 pub enum IngesterError {
     #[error("ChangeLog Event Malformed")]
     ChangeLogEventMalformed,
+    #[error("Compressed Asset Event Malformed")]
+    CompressedAssetEventMalformed,
     #[error("Error downloading batch files")]
     BatchInitNetworkingError,
     #[error("Error writing batch files")]
     BatchInitIOError,
+    #[error("Storage Write Error {0}")]
+    StorageWriteError(String),
+    #[error("NotImplemented")]
+    NotImplemented,
+    #[error("Deserialization Error {0}")]
+    DeserializationError(String),
 }
 
 impl From<reqwest::Error> for IngesterError {

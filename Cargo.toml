@@ -3,7 +3,8 @@ members = [
     "plerkle",
     "nft_api",
     "nft_ingester",
-    "messenger"
+    "messenger",
+    "digital_asset_types"
 ]
 exclude = [
     "deps",

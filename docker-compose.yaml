@@ -1,8 +1,6 @@
 version: "3.9"
 services:
   ingester:
-    volumes:
-      - ./target/debug/ingest:/bin/ingest
     depends_on:
       - api
       - redis
@@ -11,8 +9,6 @@ services:
       context: .
       dockerfile: Ingest.Dockerfile
   api:
-    volumes:
-      - ./target/debug/api:/bin/api
     restart: always
     build:
       context: .
@@ -36,6 +32,7 @@ services:
       - ./db-data/:/var/lib/postgresql/data/:rw
   solana:
     build:
+      context: .
       dockerfile: Solana.Dockerfile
     volumes:
     - ./ledger:/config:rw

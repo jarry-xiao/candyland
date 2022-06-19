@@ -99,3 +99,17 @@ For example: `cd deps/anchor/tests/misc && anchor build`
 If tests are failing by timing out, then this likely means that certain programs are not loaded in the local validator.
 This is remedied by adding the program & address to a `[[test.genesis]]` entry in `Anchor.toml`.
 You can tell if this is the issue by turning `skipPreflight` to `false`. Simulation error will show programId not found.
+
+## Generating typesafe query types
+Follow this guide Follow this guide https://www.sea-ql.org/SeaORM/docs/generate-entity/sea-orm-cli for setup
+```
+cd digital_asset_types
+cargo install sea-orm-cli
+```
+
+make sure you `docker compose up db`. and have a ENV var setup `DATABASE_URL=postgres://solana:solana@localhost/solana`
+
+`
+sea-orm-cli generate entity -o entity/src --database-url $DATABASE_URL --expanded-format
+`
+

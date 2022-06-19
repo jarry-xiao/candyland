@@ -1,10 +1,8 @@
 mod bubblegum;
-mod crud;
-mod gummy_roll;
+mod gummyroll;
 
 pub use self::bubblegum::*;
-pub use self::crud::*;
-pub use self::gummy_roll::*;
+pub use self::gummyroll::*;
 
 use async_trait::async_trait;
 use flatbuffers::{ForwardsUOffset, Vector};
@@ -16,6 +14,7 @@ use crate::error::IngesterError;
 use plerkle_serialization::transaction_info_generated::transaction_info::{
     self, CompiledInstruction,
 };
+use crate::utils::IxPair;
 
 pub struct ProgramHandlerManager<'a> {
     registered_parsers: HashMap<Pubkey, Box<dyn ProgramHandler + 'a>>,
@@ -49,6 +48,7 @@ pub struct InstructionBundle<'a, 'b> {
     pub message_id: i64,
     pub txn_id: String,
     pub instruction: CompiledInstruction<'a>,
+    pub inner_ix: Option<Vec<IxPair<'a>>>,
     pub keys: Vector<'b, ForwardsUOffset<transaction_info::Pubkey<'b>>>,
     pub instruction_logs: Vec<&'b str>,
 }

@@ -27,8 +27,6 @@ solana-measure = { version = "=1.10.10" }
 solana-metrics = { version = "=1.10.10" }
 solana-runtime = { version = "=1.10.10" }
 anchor-client = { path="../deps/anchor/client" }
-gummyroll={path= "../contracts/programs/gummyroll", features = ["no-entrypoint"]}
-gummyroll-crud={path= "../contracts/programs/gummyroll_crud", features = ["no-entrypoint"]}
 bs58 = "0.4.0"
 bytemuck = "1.7.2"
 serde = "1.0.133"
