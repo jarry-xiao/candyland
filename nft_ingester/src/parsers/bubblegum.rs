@@ -147,8 +147,8 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                             let asset_to_update = asset::ActiveModel {
                                 id: Unchanged(id_bytes.clone()),
                                 leaf: Set(Some(leaf_event.schema.to_node().to_vec())),
+                                delegate: Set(None),
                                 owner: Set(owner_bytes),
-                                nonce: Set(nonce as i64),
                                 ..Default::default()
                             };
                             asset::Entity::update(asset_to_update)
@@ -171,7 +171,42 @@ async fn handle_bubblegum_instruction<'a, 'b>(
             /// TODO
         }
         bubblegum::InstructionName::Delegate => {
-            /// TODO
+            println!("BGUM: Delegate");
+            let gummy_roll_events = get_gummy_roll_events(logs)?;
+            let leaf_event = get_bubblegum_leaf_event(logs)?;
+            db.transaction::<_, _, IngesterError>(|txn| {
+                Box::pin(async move {
+                    save_changelog_events(gummy_roll_events, txn).await?;
+                    match leaf_event.schema {
+                        LeafSchema::V1 {
+                            nonce,
+                            id,
+                            delegate,
+                            ..
+                        } => {
+                            let delegate_bytes = delegate.to_bytes().to_vec();
+                            let id_bytes = id.to_bytes().to_vec();
+                            let asset_to_update = asset::ActiveModel {
+                                id: Unchanged(id_bytes.clone()),
+                                leaf: Set(Some(leaf_event.schema.to_node().to_vec())),
+                                delegate: Set(Some(delegate_bytes)) ,
+                                ..Default::default()
+                            };
+                            asset::Entity::update(asset_to_update)
+                                .filter(asset::Column::Id.eq(id_bytes))
+                                .exec(txn)
+                                .await
+                                .map_err(|db_error| {
+                                    IngesterError::StorageWriteError(db_error.to_string())
+                                })
+                        }
+                        _ => Err(IngesterError::NotImplemented)
+                    }
+                })
+            }).await
+                .map_err(|txn_err| {
+                    IngesterError::StorageWriteError(txn_err.to_string())
+                })?;
         }
         bubblegum::InstructionName::MintV1 => {
             println!("BGUM: MINT");
