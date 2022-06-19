@@ -105,6 +105,20 @@ fn get_bubblegum_leaf_event(logs: &Vec<&str>) -> Result<LeafSchemaEvent, Ingeste
     found_event.ok_or(IngesterError::CompressedAssetEventMalformed)
 }
 
+
+async fn tree_change_only<'a>(db: &DatabaseConnection, logs: &Vec<&'a str>) -> Result<(), IngesterError>{
+    let gummy_roll_events = get_gummy_roll_events(logs)?;
+    db.transaction::<_, _, IngesterError>(|txn| {
+        Box::pin(async move {
+            save_changelog_events(gummy_roll_events, txn).await?;
+            Ok(())
+        })
+    }).await
+        .map_err(|txn_err| {
+            IngesterError::StorageWriteError(txn_err.to_string())
+        })
+}
+
 async fn handle_bubblegum_instruction<'a, 'b>(
     instruction: &'a transaction_info::CompiledInstruction<'a>,
     logs: &Vec<&'a str>,
@@ -152,6 +166,12 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                 .map_err(|txn_err| {
                     IngesterError::StorageWriteError(txn_err.to_string())
                 })?;
+        }
+        bubblegum::InstructionName::Burn => {
+            /// TODO
+        }
+        bubblegum::InstructionName::Delegate => {
+            /// TODO
         }
         bubblegum::InstructionName::MintV1 => {
             println!("BGUM: MINT");
@@ -310,16 +330,15 @@ async fn handle_bubblegum_instruction<'a, 'b>(
         //      otherwise, it becomes hard to reinsert data on a CancelRedeem
         bubblegum::InstructionName::Redeem => {
             println!("Bubblegum: Redeem");
-            let gummy_roll_events = get_gummy_roll_events(logs)?;
-            db.transaction::<_, _, IngesterError>(|txn| {
-                Box::pin(async move {
-                    save_changelog_events(gummy_roll_events, txn).await?;
-                    Ok(())
-                })
-            }).await
-                .map_err(|txn_err| {
-                    IngesterError::StorageWriteError(txn_err.to_string())
-                })?;
+            tree_change_only(db, logs).await?;
+        }
+        bubblegum::InstructionName::CancelRedeem => {
+            println!("Bubblegum: Cancel Redeem");
+            tree_change_only(db, logs).await?;
+        }
+
+        bubblegum::InstructionName::DecompressV1 => {
+            /// TODO
         }
 
         _ => println!("Bubblegum: Not Implemented Instruction"),
