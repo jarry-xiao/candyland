@@ -1,6 +1,4 @@
 use {
-    std::future::Future,
-    std::pin::Pin,
     chrono::Utc,
     lazy_static::lazy_static,
     crate::{
@@ -18,7 +16,6 @@ use {
         SqlxPostgresConnector,
         TransactionTrait,
         DatabaseTransaction,
-        DbErr,
     },
     solana_sdk::pubkeys,
     digital_asset_types::{
@@ -51,7 +48,7 @@ use serde_json;
 use bubblegum::state::NFTDecompressionEvent;
 use digital_asset_types::adapter::{TokenStandard, UseMethod, Uses};
 use crate::{get_gummy_roll_events, save_changelog_events};
-use crate::utils::{bytes_from_fb_table, pubkey_from_fb_table};
+use crate::utils::{bytes_from_fb_table};
 
 pubkeys!(
     BubblegumProgramID,
@@ -162,7 +159,7 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                     save_changelog_events(gummy_roll_events, txn).await?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
-                            nonce,
+                            nonce: _,
                             id,
                             owner,
                             ..
@@ -196,7 +193,7 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                             delegate,
                             ..
                         } => {
-                            let delegate_bytes = delegate.to_bytes().to_vec();
+                            let _delegate_bytes = delegate.to_bytes().to_vec();
                             let id_bytes = id.to_bytes().to_vec();
                             let asset_to_update = asset::ActiveModel {
                                 id: Unchanged(id_bytes.clone()),
