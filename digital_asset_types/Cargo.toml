@@ -9,7 +9,7 @@ json_types = ["serde", "serde_json"]
 sql_types = ["sea-orm"]
 
 [dependencies]
-sea-orm = { optional = true, git = "https://github.com/liberwang1013/sea-orm", branch = "insert-on-conflict", features = ["macros", "runtime-tokio-rustls", "sqlx-postgres"] }
+sea-orm = { optional = true, git = "https://github.com/liberwang1013/sea-orm", branch = "insert-on-conflict", features = ["macros", "runtime-tokio-rustls", "sqlx-postgres", "with-chrono"] }
 serde = { version = "1.0.137", optional = true }
 serde_json = { version = "1.0.81", optional = true }
 bs58 = "0.4.0"

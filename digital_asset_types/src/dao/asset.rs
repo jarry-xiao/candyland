@@ -31,6 +31,8 @@ pub struct Model {
     pub royalty_target: Option<Vec<u8>>,
     pub royalty_amount: i32,
     pub chain_data_id: Option<i64>,
+    pub created_at: Option<DateTimeUtc>,
+    pub burnt_at: Option<DateTimeUtc>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveColumn)]
@@ -51,6 +53,8 @@ pub enum Column {
     RoyaltyTarget,
     RoyaltyAmount,
     ChainDataId,
+    CreatedAt,
+    BurntAt,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DerivePrimaryKey)]
@@ -93,6 +97,8 @@ impl ColumnTrait for Column {
             Self::RoyaltyTarget => ColumnType::Binary.def().null(),
             Self::RoyaltyAmount => ColumnType::Integer.def(),
             Self::ChainDataId => ColumnType::BigInteger.def().null(),
+            Self::CreatedAt => ColumnType::Timestamp.def().null(),
+            Self::BurntAt => ColumnType::Timestamp.def().null(),
         }
     }
 }

@@ -1,32 +1,43 @@
-use anchor_client::anchor_lang::prelude::Pubkey;
-use lazy_static::lazy_static;
-use sea_orm::{DatabaseConnection};
-use digital_asset_types::json::ChainDataV1;
-use num_traits::FromPrimitive;
-use solana_sdk::pubkeys;
-
-
 use {
+    std::future::Future,
+    std::pin::Pin,
+    chrono::Utc,
+    lazy_static::lazy_static,
     crate::{
         events::handle_event,
         parsers::{InstructionBundle, ProgramHandler, ProgramHandlerConfig},
         utils::{filter_events_from_logs},
         error::IngesterError,
     },
+    num_traits::FromPrimitive,
     sea_orm::{
         entity::*,
         query::*,
-        JsonValue, SqlxPostgresConnector, TransactionTrait,
+        DatabaseConnection,
+        JsonValue,
+        SqlxPostgresConnector,
+        TransactionTrait,
+        DatabaseTransaction,
+        DbErr,
     },
-    digital_asset_types::dao::{
-        asset,
-        asset_data,
-        asset_creators,
-        asset_authority,
-        asset_grouping,
-        sea_orm_active_enums::{ChainMutability, Mutability, OwnerType, RoyaltyTargetType},
+    solana_sdk::pubkeys,
+    digital_asset_types::{
+        json::ChainDataV1,
+        dao::{
+            asset,
+            asset_data,
+            asset_creators,
+            asset_authority,
+            asset_grouping,
+            sea_orm_active_enums::{ChainMutability, Mutability, OwnerType, RoyaltyTargetType},
+        },
     },
-    anchor_client::anchor_lang::AnchorDeserialize,
+
+    anchor_client::anchor_lang::{
+        self,
+        AnchorDeserialize,
+        prelude::Pubkey,
+    },
     bubblegum::state::leaf_schema::LeafSchemaEvent,
     flatbuffers::{ForwardsUOffset, Vector},
     plerkle_serialization::transaction_info_generated::transaction_info::{self},
@@ -35,8 +46,9 @@ use {
     async_trait::async_trait,
 };
 
-use bubblegum::state::leaf_schema::{LeafSchema};
+use bubblegum::state::leaf_schema::{LeafSchema, Version};
 use serde_json;
+use bubblegum::state::NFTDecompressionEvent;
 use digital_asset_types::adapter::{TokenStandard, UseMethod, Uses};
 use crate::{get_gummy_roll_events, save_changelog_events};
 use crate::utils::{bytes_from_fb_table, pubkey_from_fb_table};
@@ -72,7 +84,6 @@ impl ProgramHandler for BubblegumHandler {
             &bundle.instruction,
             &bundle.instruction_logs,
             &bundle.keys,
-            bundle.message_id,
             &self.storage,
         )
             .await
@@ -88,16 +99,24 @@ impl BubblegumHandler {
     }
 }
 
-fn get_bubblegum_leaf_event(logs: &Vec<&str>) -> Result<LeafSchemaEvent, IngesterError> {
+fn get_leaf_event(logs: &Vec<&str>) -> Result<LeafSchemaEvent, IngesterError>  {
+    get_bubblegum_event(logs)
+}
+
+fn get_decompress_event(logs: &Vec<&str>) -> Result<NFTDecompressionEvent, IngesterError>  {
+    get_bubblegum_event(logs)
+}
+
+fn get_bubblegum_event<T: anchor_lang::Event + anchor_lang::AnchorDeserialize>(logs: &Vec<&str>) -> Result<T, IngesterError> {
     let event_logs = filter_events_from_logs(logs);
     if event_logs.is_err() {
         println!("Error finding event logs in bubblegum logs");
         return Err(IngesterError::CompressedAssetEventMalformed);
     }
 
-    let mut found_event: Option<LeafSchemaEvent> = None;
+    let mut found_event: Option<T> = None;
     for event in event_logs.unwrap() {
-        let event = handle_event::<LeafSchemaEvent>(event);
+        let event = handle_event::<T>(event);
         if event.is_ok() {
             found_event = event.ok()
         }
@@ -106,24 +125,30 @@ fn get_bubblegum_leaf_event(logs: &Vec<&str>) -> Result<LeafSchemaEvent, Ingeste
 }
 
 
-async fn tree_change_only<'a>(db: &DatabaseConnection, logs: &Vec<&'a str>) -> Result<(), IngesterError>{
+async fn tree_change_only<'a>(db: &DatabaseConnection, logs: &Vec<&'a str>) -> Result<(), IngesterError> {
     let gummy_roll_events = get_gummy_roll_events(logs)?;
     db.transaction::<_, _, IngesterError>(|txn| {
         Box::pin(async move {
             save_changelog_events(gummy_roll_events, txn).await?;
             Ok(())
         })
-    }).await
-        .map_err(|txn_err| {
-            IngesterError::StorageWriteError(txn_err.to_string())
-        })
+    })
+        .await
+        .map_err(Into::into)
+}
+
+async fn update_asset(txn: &DatabaseTransaction, id: Vec<u8>, model: asset::ActiveModel) -> Result<asset::Model, IngesterError> {
+    asset::Entity::update(model)
+        .filter(asset::Column::Id.eq(id))
+        .exec(txn)
+        .await
+        .map_err(Into::into)
 }
 
 async fn handle_bubblegum_instruction<'a, 'b>(
     instruction: &'a transaction_info::CompiledInstruction<'a>,
     logs: &Vec<&'a str>,
     keys: &Vector<'b, ForwardsUOffset<transaction_info::Pubkey<'b>>>,
-    _pid: i64,
     db: &DatabaseConnection,
 ) -> Result<(), IngesterError> {
     let ix_type = bubblegum::get_instruction_type(instruction.data().unwrap());
@@ -131,7 +156,7 @@ async fn handle_bubblegum_instruction<'a, 'b>(
         bubblegum::InstructionName::Transfer => {
             println!("BGUM: Transfer");
             let gummy_roll_events = get_gummy_roll_events(logs)?;
-            let leaf_event = get_bubblegum_leaf_event(logs)?;
+            let leaf_event = get_leaf_event(logs)?;
             db.transaction::<_, _, IngesterError>(|txn| {
                 Box::pin(async move {
                     save_changelog_events(gummy_roll_events, txn).await?;
@@ -151,35 +176,49 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                                 owner: Set(owner_bytes),
                                 ..Default::default()
                             };
-                            asset::Entity::update(asset_to_update)
-                                .filter(asset::Column::Id.eq(id_bytes))
-                                .exec(txn)
-                                .await
-                                .map_err(|db_error| {
-                                    IngesterError::StorageWriteError(db_error.to_string())
-                                })
+                            update_asset(txn, id_bytes, asset_to_update).await
                         }
                         _ => Err(IngesterError::NotImplemented)
                     }
                 })
-            }).await
-                .map_err(|txn_err| {
-                    IngesterError::StorageWriteError(txn_err.to_string())
-                })?;
+            }).await?;
         }
         bubblegum::InstructionName::Burn => {
-            /// TODO
-        }
-        bubblegum::InstructionName::Delegate => {
-            println!("BGUM: Delegate");
+            println!("BGUM: Burn");
             let gummy_roll_events = get_gummy_roll_events(logs)?;
-            let leaf_event = get_bubblegum_leaf_event(logs)?;
+            let leaf_event = get_leaf_event(logs)?;
             db.transaction::<_, _, IngesterError>(|txn| {
                 Box::pin(async move {
                     save_changelog_events(gummy_roll_events, txn).await?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
-                            nonce,
+                            id,
+                            delegate,
+                            ..
+                        } => {
+                            let delegate_bytes = delegate.to_bytes().to_vec();
+                            let id_bytes = id.to_bytes().to_vec();
+                            let asset_to_update = asset::ActiveModel {
+                                id: Unchanged(id_bytes.clone()),
+                                burnt_at: Set(Some(Utc::now())),
+                                ..Default::default()
+                            };
+                            update_asset(txn, id_bytes, asset_to_update).await
+                        }
+                        _ => Err(IngesterError::NotImplemented)
+                    }
+                })
+            }).await?;
+        }
+        bubblegum::InstructionName::Delegate => {
+            println!("BGUM: Delegate");
+            let gummy_roll_events = get_gummy_roll_events(logs)?;
+            let leaf_event = get_leaf_event(logs)?;
+            db.transaction::<_, _, IngesterError>(|txn| {
+                Box::pin(async move {
+                    save_changelog_events(gummy_roll_events, txn).await?;
+                    match leaf_event.schema {
+                        LeafSchema::V1 {
                             id,
                             delegate,
                             ..
@@ -189,29 +228,20 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                             let asset_to_update = asset::ActiveModel {
                                 id: Unchanged(id_bytes.clone()),
                                 leaf: Set(Some(leaf_event.schema.to_node().to_vec())),
-                                delegate: Set(Some(delegate_bytes)) ,
+                                delegate: Set(Some(delegate_bytes)),
                                 ..Default::default()
                             };
-                            asset::Entity::update(asset_to_update)
-                                .filter(asset::Column::Id.eq(id_bytes))
-                                .exec(txn)
-                                .await
-                                .map_err(|db_error| {
-                                    IngesterError::StorageWriteError(db_error.to_string())
-                                })
+                            update_asset(txn, id_bytes, asset_to_update).await
                         }
                         _ => Err(IngesterError::NotImplemented)
                     }
                 })
-            }).await
-                .map_err(|txn_err| {
-                    IngesterError::StorageWriteError(txn_err.to_string())
-                })?;
+            }).await?;
         }
         bubblegum::InstructionName::MintV1 => {
             println!("BGUM: MINT");
             let gummy_roll_events = get_gummy_roll_events(logs)?;
-            let leaf_event = get_bubblegum_leaf_event(logs)?;
+            let leaf_event = get_leaf_event(logs)?;
             let data = instruction.data().unwrap()[8..].to_owned();
             let data_buf = &mut data.as_slice();
             let ix: bubblegum::instruction::MintV1 =
@@ -352,17 +382,8 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                         }
                     }
                 })
-            }).await
-                .map_err(|txn_err| {
-                    IngesterError::StorageWriteError(txn_err.to_string())
-                })?;
+            }).await?;
         }
-        // We should probably ignore Redeem & Cancel Redeem
-        // Since redeemed voucher is non-transferable, the owner
-        // actually technically still owns the metadata
-        // i.e. even though gummyroll remove instruction executed in Redeem
-        //      we should remove metadata only in the Decompress ix
-        //      otherwise, it becomes hard to reinsert data on a CancelRedeem
         bubblegum::InstructionName::Redeem => {
             println!("Bubblegum: Redeem");
             tree_change_only(db, logs).await?;
@@ -371,11 +392,30 @@ async fn handle_bubblegum_instruction<'a, 'b>(
             println!("Bubblegum: Cancel Redeem");
             tree_change_only(db, logs).await?;
         }
-
         bubblegum::InstructionName::DecompressV1 => {
-            /// TODO
+            println!("BGUM: Decompress");
+            let decompress_event = get_decompress_event(logs)?;
+            db.transaction::<_, _, IngesterError>(|txn| {
+                Box::pin(async move {
+                    match decompress_event.version {
+                        Version::V1 => {
+                            let id_bytes = decompress_event.id.to_bytes().to_vec();
+                            let asset_to_update = asset::ActiveModel {
+                                id: Unchanged(id_bytes.clone()),
+                                leaf: Set(None),
+                                compressed: Set(false),
+                                compressible: Set(false),
+                                supply: Set(1),
+                                supply_mint: Set(Some(id_bytes.clone())),
+                                ..Default::default()
+                            };
+                            update_asset(txn, id_bytes, asset_to_update).await
+                        }
+                        _ => Err(IngesterError::NotImplemented)
+                    }
+                })
+            }).await?;
         }
-
         _ => println!("Bubblegum: Not Implemented Instruction"),
     }
     Ok(())

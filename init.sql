@@ -65,7 +65,10 @@ create table asset
     royalty_target      bytea,
     royalty_amount      int                 not null default 0,
     -- data
-    chain_data_id       bigint references asset_data (id)
+    chain_data_id       bigint references asset_data (id),
+    -- visibility
+    created_at          timestamp with time zone default (now() at time zone 'utc'),
+    burnt_at            timestamp with time zone
 );
 
 create index asset_tree on asset (tree_id);

@@ -1,3 +1,4 @@
+use sea_orm::{DbErr, TransactionError};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -29,3 +30,16 @@ impl From<std::io::Error> for IngesterError {
         IngesterError::BatchInitIOError
     }
 }
+
+impl From<DbErr> for IngesterError {
+    fn from(e: DbErr) -> Self {
+        IngesterError::StorageWriteError(e.to_string())
+    }
+}
+
+impl From<TransactionError<IngesterError>> for IngesterError {
+    fn from(e: TransactionError<IngesterError>) -> Self {
+        IngesterError::StorageWriteError(e.to_string())
+    }
+}
+
