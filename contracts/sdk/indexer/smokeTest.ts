@@ -22,12 +22,20 @@ import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
 import { logTx } from "../../tests/utils";
 
 async function main() {
-  const connection = new web3.Connection("http://127.0.0.1:8899", {
+  const url = "https://api.internal.mainnet-beta.solana.com";
+  const connection = new web3.Connection(url, {
     commitment: "confirmed",
   });
   const proofServerUrl = "http://127.0.0.1:4000/proof";
   const assetServerUrl = "http://127.0.0.1:4000/assets";
-  const payer = Keypair.generate();
+  // const payer = Keypair.generate();
+  const payer =   Keypair.fromSecretKey(
+    Buffer.from(
+      JSON.parse(
+        require("fs").readFileSync("EkGt5qAVhDYHjn5ZFtUvRbsKpCqRGZizRwkwG4X5sqHx.json")
+      )
+    )
+  );
   const wallet = new NodeWallet(payer);
   anchor.setProvider(
     new anchor.Provider(connection, wallet, {
@@ -37,13 +45,13 @@ async function main() {
   );
   let GummyrollCtx = anchor.workspace.Gummyroll as Program<Gummyroll>;
   let BubblegumCtx = anchor.workspace.Bubblegum as Program<Bubblegum>;
-  await BubblegumCtx.provider.connection.confirmTransaction(
-    await BubblegumCtx.provider.connection.requestAirdrop(
-      payer.publicKey,
-      1e10
-    ),
-    "confirmed"
-  );
+  // await BubblegumCtx.provider.connection.confirmTransaction(
+  //   await BubblegumCtx.provider.connection.requestAirdrop(
+  //     payer.publicKey,
+  //     1e10
+  //   ),
+  //   "confirmed"
+  // );
 
   let wallets = [];
   for (let i = 0; i < 20; ++i) {
@@ -76,7 +84,7 @@ async function main() {
     );
   }
 
-  let maxDepth = 20;
+  let maxDepth = 14;
   let maxSize = 1024;
   const merkleRollKeypair = Keypair.generate();
   const requiredSpace = getMerkleRollAccountSize(maxDepth, maxSize);

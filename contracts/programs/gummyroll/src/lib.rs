@@ -4,6 +4,8 @@ use anchor_lang::{
     solana_program::sysvar::{clock::Clock, rent::Rent},
 };
 use borsh::{BorshDeserialize, BorshSerialize};
+use bytemuck::cast_slice_mut;
+use concurrent_merkle_tree::utils::empty_node;
 use std::mem::size_of;
 
 pub mod error;
@@ -58,37 +60,110 @@ pub struct TransferAuthority<'info> {
     pub authority: Signer<'info>,
 }
 
+fn update_canopy(
+    canopy_bytes: &mut [u8],
+    max_height: u32,
+    change_log: Option<Box<ChangeLogEvent>>,
+) -> Result<()> {
+    if canopy_bytes.len() % size_of::<Node>() != 0 {
+        msg!(
+            "Canopy byte length {} is not a multiple of {}",
+            canopy_bytes.len(),
+            size_of::<Node>()
+        );
+        err!(GummyrollError::CanopyLengthMismatch)
+    } else {
+        let canopy = cast_slice_mut::<u8, Node>(canopy_bytes);
+        let closest_power_of_2 = (canopy.len() + 2) as u32;
+        if closest_power_of_2.leading_zeros() + closest_power_of_2.trailing_zeros() == 31 {
+            match change_log {
+                Some(cl) => {
+                    // Update the canopy from the newest change log
+                    let path_len = closest_power_of_2.trailing_zeros() - 1;
+                    for path_node in cl.path.iter().rev().skip(1).take(path_len as usize) {
+                        canopy[(path_node.index - 2) as usize] = path_node.node;
+                    }
+                }
+                None => {
+                    // Initialize the canopy with empty nodes
+                    for (i, node) in canopy.iter_mut().enumerate() {
+                        let node_idx = (i + 2) as u32;
+                        let level = max_height - (31 - node_idx.leading_zeros());
+                        *node = empty_node(level);
+                    }
+                }
+            }
+            Ok(())
+        } else {
+            msg!(
+                "Canopy length {} is not 2 less than a power of 2",
+                canopy.len()
+            );
+            err!(GummyrollError::CanopyLengthMismatch)
+        }
+    }
+}
+
+fn fill_in_proof_from_canopy(
+    canopy_bytes: &mut [u8],
+    max_height: u32,
+    mut index: u32,
+    proof: &mut Vec<Node>,
+) -> Result<()> {
+    if canopy_bytes.len() % size_of::<Node>() != 0 {
+        msg!(
+            "Canopy byte length {} is not a multiple of {}",
+            canopy_bytes.len(),
+            size_of::<Node>()
+        );
+        err!(GummyrollError::CanopyLengthMismatch)
+    } else {
+        let canopy = cast_slice_mut::<u8, Node>(canopy_bytes);
+        let closest_power_of_2 = (canopy.len() + 2) as u32;
+        if closest_power_of_2.leading_zeros() + closest_power_of_2.trailing_zeros() == 31 {
+            let path_len = closest_power_of_2.trailing_zeros() - 1;
+            index >>= max_height - path_len;
+            let mut inferred_nodes = vec![];
+            while index > 1 {
+                let shifted_index = index as usize - 2;
+                if shifted_index % 2 == 0 {
+                    inferred_nodes.push(canopy[shifted_index + 1])
+                } else {
+                    inferred_nodes.push(canopy[shifted_index - 1])
+                }
+                index >>= 1;
+            }
+            proof.extend(inferred_nodes.iter());
+            Ok(())
+        } else {
+            msg!(
+                "Canopy length {} is not 2 less than a power of 2",
+                canopy.len()
+            );
+            err!(GummyrollError::CanopyLengthMismatch)
+        }
+    }
+}
+
 /// This macro applies functions on a merkle roll and emits leaf information
 /// needed to sync the merkle tree state with off-chain indexers.
 macro_rules! merkle_roll_depth_size_apply_fn {
-    ($max_depth:literal, $max_size:literal, $emit_msg:ident, $id:ident, $bytes:ident, $func:ident, $($arg:tt)*) => {
-        if size_of::<MerkleRoll::<$max_depth, $max_size>>() != $bytes.len() {
-            msg!("{} {}", size_of::<MerkleRoll::<$max_depth, $max_size>>(), $bytes.len());
-            msg!("Received account of invalid length");
-            let expected_bytes = size_of::<MerkleRoll::<$max_depth, $max_size>>();
-            let bytes_received = $bytes.len();
-            msg!("Expected: {}, received: {}", expected_bytes, bytes_received);
-            err!(GummyrollError::MerkleRollByteLengthMismatch)
-        } else {
-            match MerkleRoll::<$max_depth, $max_size>::load_mut_bytes($bytes) {
-                Ok(merkle_roll) => {
-                    match merkle_roll.$func($($arg)*) {
-                        Ok(_) => {
-                            if $emit_msg {
-                                emit!(*Box::<ChangeLogEvent>::from((merkle_roll.get_change_log(), $id, merkle_roll.sequence_number)));
-                            }
-                            Ok(())
-                        }
-                        Err(err) => {
-                            msg!("Error using concurrent merkle tree: {}", err);
-                            err!(GummyrollError::ConcurrentMerkleTreeError)
-                        }
+    ($max_depth:literal, $max_size:literal, $id:ident, $bytes:ident, $func:ident, $($arg:tt)*) => {
+        match MerkleRoll::<$max_depth, $max_size>::load_mut_bytes($bytes) {
+            Ok(merkle_roll) => {
+                match merkle_roll.$func($($arg)*) {
+                    Ok(_) => {
+                        Ok(Box::<ChangeLogEvent>::from((merkle_roll.get_change_log(), $id, merkle_roll.sequence_number)))
+                    }
+                    Err(err) => {
+                        msg!("Error using concurrent merkle tree: {}", err);
+                        err!(GummyrollError::ConcurrentMerkleTreeError)
                     }
                 }
-                Err(err) => {
-                    msg!("Error zero copying merkle roll: {}", err);
-                    err!(GummyrollError::ZeroCopyError)
-                }
+            }
+            Err(err) => {
+                msg!("Error zero copying merkle roll: {}", err);
+                err!(GummyrollError::ZeroCopyError)
             }
         }
     }
@@ -97,31 +172,71 @@ macro_rules! merkle_roll_depth_size_apply_fn {
 /// This applies a given function on a merkle roll by
 /// allowing the compiler to infer the size of the tree based
 /// upon the header information stored on-chain
-macro_rules! merkle_roll_apply_fn {
-    ($header:ident, $emit_msg:ident, $id:ident, $bytes:ident, $func:ident, $($arg:tt)*) => {
+macro_rules! merkle_roll_get_size {
+    ($header:ident) => {
         // Note: max_buffer_size MUST be a power of 2
         match ($header.max_depth, $header.max_buffer_size) {
-            (3, 8) => merkle_roll_depth_size_apply_fn!(3, 8, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (14, 64) => merkle_roll_depth_size_apply_fn!(14, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (14, 256) => merkle_roll_depth_size_apply_fn!(14, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (14, 1024) => merkle_roll_depth_size_apply_fn!(14, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (14, 2048) => merkle_roll_depth_size_apply_fn!(14, 2048, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (16, 64) => merkle_roll_depth_size_apply_fn!(16, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (16, 256) => merkle_roll_depth_size_apply_fn!(16, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (16, 1024) => merkle_roll_depth_size_apply_fn!(16, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (16, 2048) => merkle_roll_depth_size_apply_fn!(16, 2048, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (18, 64) => merkle_roll_depth_size_apply_fn!(18, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (18, 256) => merkle_roll_depth_size_apply_fn!(18, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (18, 1024) => merkle_roll_depth_size_apply_fn!(18, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (18, 2048) => merkle_roll_depth_size_apply_fn!(18, 2048, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (20, 64) => merkle_roll_depth_size_apply_fn!(20, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (20, 256) => merkle_roll_depth_size_apply_fn!(20, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (20, 1024) => merkle_roll_depth_size_apply_fn!(20, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (20, 2048) => merkle_roll_depth_size_apply_fn!(20, 2048, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (22, 64) => merkle_roll_depth_size_apply_fn!(22, 64, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (22, 256) => merkle_roll_depth_size_apply_fn!(22, 256, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (22, 1024) => merkle_roll_depth_size_apply_fn!(22, 1024, $emit_msg, $id, $bytes, $func, $($arg)*),
-            (22, 2048) => merkle_roll_depth_size_apply_fn!(22, 2048, $emit_msg, $id, $bytes, $func, $($arg)*),
+            (3, 8) => Ok(size_of::<MerkleRoll<3, 8>>()),
+            (14, 64) => Ok(size_of::<MerkleRoll<14, 64>>()),
+            (14, 256) => Ok(size_of::<MerkleRoll<14, 256>>()),
+            (14, 1024) => Ok(size_of::<MerkleRoll<14, 1024>>()),
+            (14, 2048) => Ok(size_of::<MerkleRoll<14, 2048>>()),
+            (16, 64) => Ok(size_of::<MerkleRoll<16, 64>>()),
+            (16, 256) => Ok(size_of::<MerkleRoll<16, 256>>()),
+            (16, 1024) => Ok(size_of::<MerkleRoll<16, 1024>>()),
+            (16, 2048) => Ok(size_of::<MerkleRoll<16, 2048>>()),
+            (18, 64) => Ok(size_of::<MerkleRoll<18, 64>>()),
+            (18, 256) => Ok(size_of::<MerkleRoll<18, 256>>()),
+            (18, 1024) => Ok(size_of::<MerkleRoll<18, 1024>>()),
+            (18, 2048) => Ok(size_of::<MerkleRoll<18, 2048>>()),
+            (20, 64) => Ok(size_of::<MerkleRoll<20, 64>>()),
+            (20, 256) => Ok(size_of::<MerkleRoll<20, 256>>()),
+            (20, 1024) => Ok(size_of::<MerkleRoll<20, 1024>>()),
+            (20, 2048) => Ok(size_of::<MerkleRoll<20, 2048>>()),
+            (22, 64) => Ok(size_of::<MerkleRoll<22, 64>>()),
+            (22, 256) => Ok(size_of::<MerkleRoll<22, 256>>()),
+            (22, 1024) => Ok(size_of::<MerkleRoll<22, 1024>>()),
+            (22, 2048) => Ok(size_of::<MerkleRoll<22, 2048>>()),
+            _ => {
+                msg!(
+                    "Failed to get size of max depth {} and max buffer size {}",
+                    $header.max_depth,
+                    $header.max_buffer_size
+                );
+                err!(GummyrollError::MerkleRollConstantsError)
+            }
+        }
+    };
+}
+
+/// This applies a given function on a merkle roll by
+/// allowing the compiler to infer the size of the tree based
+/// upon the header information stored on-chain
+macro_rules! merkle_roll_apply_fn {
+    ($header:ident, $id:ident, $bytes:ident, $func:ident, $($arg:tt)*) => {
+        // Note: max_buffer_size MUST be a power of 2
+        match ($header.max_depth, $header.max_buffer_size) {
+            (3, 8) => merkle_roll_depth_size_apply_fn!(3, 8, $id, $bytes, $func, $($arg)*),
+            (14, 64) => merkle_roll_depth_size_apply_fn!(14, 64, $id, $bytes, $func, $($arg)*),
+            (14, 256) => merkle_roll_depth_size_apply_fn!(14, 256, $id, $bytes, $func, $($arg)*),
+            (14, 1024) => merkle_roll_depth_size_apply_fn!(14, 1024, $id, $bytes, $func, $($arg)*),
+            (14, 2048) => merkle_roll_depth_size_apply_fn!(14, 2048, $id, $bytes, $func, $($arg)*),
+            (16, 64) => merkle_roll_depth_size_apply_fn!(16, 64, $id, $bytes, $func, $($arg)*),
+            (16, 256) => merkle_roll_depth_size_apply_fn!(16, 256, $id, $bytes, $func, $($arg)*),
+            (16, 1024) => merkle_roll_depth_size_apply_fn!(16, 1024, $id, $bytes, $func, $($arg)*),
+            (16, 2048) => merkle_roll_depth_size_apply_fn!(16, 2048, $id, $bytes, $func, $($arg)*),
+            (18, 64) => merkle_roll_depth_size_apply_fn!(18, 64, $id, $bytes, $func, $($arg)*),
+            (18, 256) => merkle_roll_depth_size_apply_fn!(18, 256, $id, $bytes, $func, $($arg)*),
+            (18, 1024) => merkle_roll_depth_size_apply_fn!(18, 1024, $id, $bytes, $func, $($arg)*),
+            (18, 2048) => merkle_roll_depth_size_apply_fn!(18, 2048, $id, $bytes, $func, $($arg)*),
+            (20, 64) => merkle_roll_depth_size_apply_fn!(20, 64, $id, $bytes, $func, $($arg)*),
+            (20, 256) => merkle_roll_depth_size_apply_fn!(20, 256, $id, $bytes, $func, $($arg)*),
+            (20, 1024) => merkle_roll_depth_size_apply_fn!(20, 1024, $id, $bytes, $func, $($arg)*),
+            (20, 2048) => merkle_roll_depth_size_apply_fn!(20, 2048, $id, $bytes, $func, $($arg)*),
+            (22, 64) => merkle_roll_depth_size_apply_fn!(22, 64, $id, $bytes, $func, $($arg)*),
+            (22, 256) => merkle_roll_depth_size_apply_fn!(22, 256, $id, $bytes, $func, $($arg)*),
+            (22, 1024) => merkle_roll_depth_size_apply_fn!(22, 1024, $id, $bytes, $func, $($arg)*),
+            (22, 2048) => merkle_roll_depth_size_apply_fn!(22, 2048, $id, $bytes, $func, $($arg)*),
             _ => {
                 msg!("Failed to apply {} on merkle roll with max depth {} and max buffer size {}", stringify!($func), $header.max_depth, $header.max_buffer_size);
                 err!(GummyrollError::MerkleRollConstantsError)
@@ -151,7 +266,7 @@ pub mod gummyroll {
     ) -> Result<()> {
         let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
 
-        let (mut header_bytes, roll_bytes) =
+        let (mut header_bytes, rest) =
             merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
         let mut header = Box::new(MerkleRollHeader::try_from_slice(&header_bytes)?);
@@ -163,8 +278,12 @@ pub mod gummyroll {
             Clock::get()?.slot,
         );
         header.serialize(&mut header_bytes)?;
+        let merkle_roll_size = merkle_roll_get_size!(header)?;
+        let (roll_bytes, canopy_bytes) = rest.split_at_mut(merkle_roll_size);
         let id = ctx.accounts.merkle_roll.key();
-        merkle_roll_apply_fn!(header, true, id, roll_bytes, initialize,)
+        let change_log = merkle_roll_apply_fn!(header, id, roll_bytes, initialize,)?;
+        emit!(*change_log);
+        update_canopy(canopy_bytes, header.max_depth, None)
     }
 
     /// Note:
@@ -185,7 +304,7 @@ pub mod gummyroll {
     ) -> Result<()> {
         let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
 
-        let (mut header_bytes, roll_bytes) =
+        let (mut header_bytes, rest) =
             merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
         let mut header = Box::new(MerkleRollHeader::try_from_slice(&header_bytes)?);
@@ -197,19 +316,21 @@ pub mod gummyroll {
             Clock::get()?.slot,
         );
         header.serialize(&mut header_bytes)?;
+        let merkle_roll_size = merkle_roll_get_size!(header)?;
+        let (roll_bytes, canopy_bytes) = rest.split_at_mut(merkle_roll_size);
 
         // Get rightmost proof from accounts
         let mut proof = vec![];
         for node in ctx.remaining_accounts.iter() {
             proof.push(node.key().to_bytes());
         }
+        fill_in_proof_from_canopy(canopy_bytes, header.max_depth, index, &mut proof)?;
         assert_eq!(proof.len(), max_depth as usize);
 
         let id = ctx.accounts.merkle_roll.key();
         // A call is made to MerkleRoll::initialize_with_root(root, leaf, proof, index)
-        merkle_roll_apply_fn!(
+        let change_log = merkle_roll_apply_fn!(
             header,
-            true,
             id,
             roll_bytes,
             initialize_with_root,
@@ -217,7 +338,9 @@ pub mod gummyroll {
             leaf,
             &proof,
             index
-        )
+        )?;
+        emit!(*change_log);
+        update_canopy(canopy_bytes, header.max_depth, Some(change_log))
     }
 
     /// Executes an instruction that overwrites a leaf node.
@@ -231,22 +354,23 @@ pub mod gummyroll {
         index: u32,
     ) -> Result<()> {
         let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
-        let (header_bytes, roll_bytes) =
-            merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
+        let (header_bytes, rest) = merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
         let header = Box::new(MerkleRollHeader::try_from_slice(header_bytes)?);
         assert_eq!(header.authority, ctx.accounts.authority.key());
+        let merkle_roll_size = merkle_roll_get_size!(header)?;
+        let (roll_bytes, canopy_bytes) = rest.split_at_mut(merkle_roll_size);
 
         let mut proof = vec![];
         for node in ctx.remaining_accounts.iter() {
             proof.push(node.key().to_bytes());
         }
+        fill_in_proof_from_canopy(canopy_bytes, header.max_depth, index, &mut proof)?;
 
         let id = ctx.accounts.merkle_roll.key();
         // A call is made to MerkleRoll::set_leaf(root, previous_leaf, new_leaf, proof, index)
-        merkle_roll_apply_fn!(
+        let change_log = merkle_roll_apply_fn!(
             header,
-            true,
             id,
             roll_bytes,
             set_leaf,
@@ -254,8 +378,10 @@ pub mod gummyroll {
             previous_leaf,
             new_leaf,
             &proof,
-            index
-        )
+            index,
+        )?;
+        emit!(*change_log);
+        update_canopy(canopy_bytes, header.max_depth, Some(change_log))
     }
 
     /// Transfers authority or append authority
@@ -301,19 +427,20 @@ pub mod gummyroll {
         index: u32,
     ) -> Result<()> {
         let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
-        let (header_bytes, roll_bytes) =
-            merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
-
+        let (header_bytes, rest) = merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
         let header = Box::new(MerkleRollHeader::try_from_slice(header_bytes)?);
+        let merkle_roll_size = merkle_roll_get_size!(header)?;
+        let (roll_bytes, canopy_bytes) = rest.split_at_mut(merkle_roll_size);
 
         let mut proof = vec![];
         for node in ctx.remaining_accounts.iter() {
             proof.push(node.key().to_bytes());
         }
-
+        fill_in_proof_from_canopy(canopy_bytes, header.max_depth, index, &mut proof)?;
         let id = ctx.accounts.merkle_roll.key();
 
-        merkle_roll_apply_fn!(header, false, id, roll_bytes, prove_leaf, root, leaf, &proof, index)
+        merkle_roll_apply_fn!(header, id, roll_bytes, prove_leaf, root, leaf, &proof, index)?;
+        Ok(())
     }
 
     /// This instruction allows the tree's mint_authority to append a new leaf to the tree
@@ -323,15 +450,18 @@ pub mod gummyroll {
     /// valid proof, and then updating the rightmost_proof for the next leaf if possible.
     pub fn append(ctx: Context<Append>, leaf: [u8; 32]) -> Result<()> {
         let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
-        let (header_bytes, roll_bytes) =
-            merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
+        let (header_bytes, rest) = merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 
         let header = Box::new(MerkleRollHeader::try_from_slice(header_bytes)?);
         assert_eq!(header.authority, ctx.accounts.authority.key());
         assert_eq!(header.append_authority, ctx.accounts.append_authority.key());
 
         let id = ctx.accounts.merkle_roll.key();
-        merkle_roll_apply_fn!(header, true, id, roll_bytes, append, leaf)
+        let merkle_roll_size = merkle_roll_get_size!(header)?;
+        let (roll_bytes, canopy_bytes) = rest.split_at_mut(merkle_roll_size);
+        let change_log = merkle_roll_apply_fn!(header, id, roll_bytes, append, leaf)?;
+        emit!(*change_log);
+        update_canopy(canopy_bytes, header.max_depth, Some(change_log))
     }
 
     /// This instruction takes a proof, and will attempt to write the given leaf
@@ -345,29 +475,30 @@ pub mod gummyroll {
         index: u32,
     ) -> Result<()> {
         let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
-        let (header_bytes, roll_bytes) =
-            merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
-
+        let (header_bytes, rest) = merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
         let header = Box::new(MerkleRollHeader::try_from_slice(header_bytes)?);
         assert_eq!(header.authority, ctx.accounts.authority.key());
+        let merkle_roll_size = merkle_roll_get_size!(header)?;
+        let (roll_bytes, canopy_bytes) = rest.split_at_mut(merkle_roll_size);
 
         let mut proof = vec![];
         for node in ctx.remaining_accounts.iter() {
             proof.push(node.key().to_bytes());
         }
-
-        let id = ctx.accounts.merkle_roll.key();
+        fill_in_proof_from_canopy(canopy_bytes, header.max_depth, index, &mut proof)?;
         // A call is made to MerkleRoll::fill_empty_or_append
-        merkle_roll_apply_fn!(
+        let id = ctx.accounts.merkle_roll.key();
+        let change_log = merkle_roll_apply_fn!(
             header,
-            true,
             id,
             roll_bytes,
             fill_empty_or_append,
             root,
             leaf,
             &proof,
-            index
-        )
+            index,
+        )?;
+        emit!(*change_log);
+        update_canopy(canopy_bytes, header.max_depth, Some(change_log))
     }
 }
