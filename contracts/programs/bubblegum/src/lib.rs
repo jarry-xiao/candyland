@@ -13,7 +13,6 @@ use {
     },
     gummyroll::{program::Gummyroll, Node},
     crate::utils::{append_leaf,
-                   insert_or_append_leaf,
                    replace_leaf,
                    get_asset_id,
     },
@@ -567,7 +566,7 @@ pub mod bubblegum {
         }?;
         let merkle_slab = ctx.accounts.merkle_slab.to_account_info();
         emit!(voucher.leaf_schema.to_event());
-        insert_or_append_leaf(
+        replace_leaf(
             &merkle_slab.key(),
             *ctx.bumps.get("authority").unwrap(),
             &ctx.accounts.gummyroll_program.to_account_info(),
@@ -575,6 +574,7 @@ pub mod bubblegum {
             &ctx.accounts.merkle_slab.to_account_info(),
             ctx.remaining_accounts,
             root,
+            [0; 32], 
             voucher.leaf_schema.to_node(),
             voucher.index,
         )

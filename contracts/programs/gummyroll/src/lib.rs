@@ -5,7 +5,7 @@ use anchor_lang::{
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use bytemuck::cast_slice_mut;
-use concurrent_merkle_tree::utils::empty_node;
+use concurrent_merkle_tree::{utils::empty_node_cached, state::EMPTY};
 use std::mem::size_of;
 
 pub mod error;
@@ -65,6 +65,7 @@ fn update_canopy(
     max_height: u32,
     change_log: Option<Box<ChangeLogEvent>>,
 ) -> Result<()> {
+    let mut empty_node_cache = Box::new([EMPTY; 26]);
     if canopy_bytes.len() % size_of::<Node>() != 0 {
         msg!(
             "Canopy byte length {} is not a multiple of {}",
@@ -75,6 +76,7 @@ fn update_canopy(
     } else {
         let canopy = cast_slice_mut::<u8, Node>(canopy_bytes);
         let closest_power_of_2 = (canopy.len() + 2) as u32;
+        // This returns true is `closest_power_of_2` is actually a power of 2
         if closest_power_of_2.leading_zeros() + closest_power_of_2.trailing_zeros() == 31 {
             match change_log {
                 Some(cl) => {
@@ -89,7 +91,7 @@ fn update_canopy(
                     for (i, node) in canopy.iter_mut().enumerate() {
                         let node_idx = (i + 2) as u32;
                         let level = max_height - (31 - node_idx.leading_zeros());
-                        *node = empty_node(level);
+                        *node = empty_node_cached::<26>(level, &mut empty_node_cache);
                     }
                 }
             }
@@ -107,7 +109,7 @@ fn update_canopy(
 fn fill_in_proof_from_canopy(
     canopy_bytes: &mut [u8],
     max_height: u32,
-    mut index: u32,
+    index: u32,
     proof: &mut Vec<Node>,
 ) -> Result<()> {
     if canopy_bytes.len() % size_of::<Node>() != 0 {
@@ -122,16 +124,16 @@ fn fill_in_proof_from_canopy(
         let closest_power_of_2 = (canopy.len() + 2) as u32;
         if closest_power_of_2.leading_zeros() + closest_power_of_2.trailing_zeros() == 31 {
             let path_len = closest_power_of_2.trailing_zeros() - 1;
-            index >>= max_height - path_len;
+            let mut node_idx = ((1 << max_height) + index) >> (max_height - path_len);
             let mut inferred_nodes = vec![];
-            while index > 1 {
-                let shifted_index = index as usize - 2;
+            while node_idx > 1 {
+                let shifted_index = node_idx as usize - 2;
                 if shifted_index % 2 == 0 {
                     inferred_nodes.push(canopy[shifted_index + 1])
                 } else {
                     inferred_nodes.push(canopy[shifted_index - 1])
                 }
-                index >>= 1;
+                node_idx >>= 1;
             }
             proof.extend(inferred_nodes.iter());
             Ok(())
@@ -177,26 +179,24 @@ macro_rules! merkle_roll_get_size {
         // Note: max_buffer_size MUST be a power of 2
         match ($header.max_depth, $header.max_buffer_size) {
             (3, 8) => Ok(size_of::<MerkleRoll<3, 8>>()),
+            (5, 8) => Ok(size_of::<MerkleRoll<5, 8>>()),
             (14, 64) => Ok(size_of::<MerkleRoll<14, 64>>()),
             (14, 256) => Ok(size_of::<MerkleRoll<14, 256>>()),
             (14, 1024) => Ok(size_of::<MerkleRoll<14, 1024>>()),
-            (14, 2048) => Ok(size_of::<MerkleRoll<14, 2048>>()),
-            (16, 64) => Ok(size_of::<MerkleRoll<16, 64>>()),
-            (16, 256) => Ok(size_of::<MerkleRoll<16, 256>>()),
-            (16, 1024) => Ok(size_of::<MerkleRoll<16, 1024>>()),
-            (16, 2048) => Ok(size_of::<MerkleRoll<16, 2048>>()),
-            (18, 64) => Ok(size_of::<MerkleRoll<18, 64>>()),
-            (18, 256) => Ok(size_of::<MerkleRoll<18, 256>>()),
-            (18, 1024) => Ok(size_of::<MerkleRoll<18, 1024>>()),
-            (18, 2048) => Ok(size_of::<MerkleRoll<18, 2048>>()),
             (20, 64) => Ok(size_of::<MerkleRoll<20, 64>>()),
             (20, 256) => Ok(size_of::<MerkleRoll<20, 256>>()),
             (20, 1024) => Ok(size_of::<MerkleRoll<20, 1024>>()),
             (20, 2048) => Ok(size_of::<MerkleRoll<20, 2048>>()),
-            (22, 64) => Ok(size_of::<MerkleRoll<22, 64>>()),
-            (22, 256) => Ok(size_of::<MerkleRoll<22, 256>>()),
-            (22, 1024) => Ok(size_of::<MerkleRoll<22, 1024>>()),
-            (22, 2048) => Ok(size_of::<MerkleRoll<22, 2048>>()),
+            (24, 64) => Ok(size_of::<MerkleRoll<24, 64>>()),
+            (24, 256) => Ok(size_of::<MerkleRoll<24, 256>>()),
+            (24, 512) => Ok(size_of::<MerkleRoll<24, 512>>()),
+            (24, 1024) => Ok(size_of::<MerkleRoll<24, 1024>>()),
+            (24, 2048) => Ok(size_of::<MerkleRoll<24, 2048>>()),
+            (26, 64) => Ok(size_of::<MerkleRoll<26, 64>>()),
+            (26, 256) => Ok(size_of::<MerkleRoll<26, 256>>()),
+            (26, 512) => Ok(size_of::<MerkleRoll<26, 512>>()),
+            (26, 1024) => Ok(size_of::<MerkleRoll<26, 1024>>()),
+            (26, 2048) => Ok(size_of::<MerkleRoll<26, 2048>>()),
             _ => {
                 msg!(
                     "Failed to get size of max depth {} and max buffer size {}",
@@ -217,26 +217,25 @@ macro_rules! merkle_roll_apply_fn {
         // Note: max_buffer_size MUST be a power of 2
         match ($header.max_depth, $header.max_buffer_size) {
             (3, 8) => merkle_roll_depth_size_apply_fn!(3, 8, $id, $bytes, $func, $($arg)*),
+            (5, 8) => merkle_roll_depth_size_apply_fn!(5, 8, $id, $bytes, $func, $($arg)*),
             (14, 64) => merkle_roll_depth_size_apply_fn!(14, 64, $id, $bytes, $func, $($arg)*),
             (14, 256) => merkle_roll_depth_size_apply_fn!(14, 256, $id, $bytes, $func, $($arg)*),
             (14, 1024) => merkle_roll_depth_size_apply_fn!(14, 1024, $id, $bytes, $func, $($arg)*),
             (14, 2048) => merkle_roll_depth_size_apply_fn!(14, 2048, $id, $bytes, $func, $($arg)*),
-            (16, 64) => merkle_roll_depth_size_apply_fn!(16, 64, $id, $bytes, $func, $($arg)*),
-            (16, 256) => merkle_roll_depth_size_apply_fn!(16, 256, $id, $bytes, $func, $($arg)*),
-            (16, 1024) => merkle_roll_depth_size_apply_fn!(16, 1024, $id, $bytes, $func, $($arg)*),
-            (16, 2048) => merkle_roll_depth_size_apply_fn!(16, 2048, $id, $bytes, $func, $($arg)*),
-            (18, 64) => merkle_roll_depth_size_apply_fn!(18, 64, $id, $bytes, $func, $($arg)*),
-            (18, 256) => merkle_roll_depth_size_apply_fn!(18, 256, $id, $bytes, $func, $($arg)*),
-            (18, 1024) => merkle_roll_depth_size_apply_fn!(18, 1024, $id, $bytes, $func, $($arg)*),
-            (18, 2048) => merkle_roll_depth_size_apply_fn!(18, 2048, $id, $bytes, $func, $($arg)*),
             (20, 64) => merkle_roll_depth_size_apply_fn!(20, 64, $id, $bytes, $func, $($arg)*),
             (20, 256) => merkle_roll_depth_size_apply_fn!(20, 256, $id, $bytes, $func, $($arg)*),
             (20, 1024) => merkle_roll_depth_size_apply_fn!(20, 1024, $id, $bytes, $func, $($arg)*),
             (20, 2048) => merkle_roll_depth_size_apply_fn!(20, 2048, $id, $bytes, $func, $($arg)*),
-            (22, 64) => merkle_roll_depth_size_apply_fn!(22, 64, $id, $bytes, $func, $($arg)*),
-            (22, 256) => merkle_roll_depth_size_apply_fn!(22, 256, $id, $bytes, $func, $($arg)*),
-            (22, 1024) => merkle_roll_depth_size_apply_fn!(22, 1024, $id, $bytes, $func, $($arg)*),
-            (22, 2048) => merkle_roll_depth_size_apply_fn!(22, 2048, $id, $bytes, $func, $($arg)*),
+            (24, 64) => merkle_roll_depth_size_apply_fn!(24, 64, $id, $bytes, $func, $($arg)*),
+            (24, 256) => merkle_roll_depth_size_apply_fn!(24, 256, $id, $bytes, $func, $($arg)*),
+            (24, 512) => merkle_roll_depth_size_apply_fn!(24, 512, $id, $bytes, $func, $($arg)*),
+            (24, 1024) => merkle_roll_depth_size_apply_fn!(24, 1024, $id, $bytes, $func, $($arg)*),
+            (24, 2048) => merkle_roll_depth_size_apply_fn!(24, 2048, $id, $bytes, $func, $($arg)*),
+            (26, 64) => merkle_roll_depth_size_apply_fn!(26, 64, $id, $bytes, $func, $($arg)*),
+            (26, 256) => merkle_roll_depth_size_apply_fn!(26, 256, $id, $bytes, $func, $($arg)*),
+            (26, 512) => merkle_roll_depth_size_apply_fn!(26, 512, $id, $bytes, $func, $($arg)*),
+            (26, 1024) => merkle_roll_depth_size_apply_fn!(26, 1024, $id, $bytes, $func, $($arg)*),
+            (26, 2048) => merkle_roll_depth_size_apply_fn!(26, 2048, $id, $bytes, $func, $($arg)*),
             _ => {
                 msg!("Failed to apply {} on merkle roll with max depth {} and max buffer size {}", stringify!($func), $header.max_depth, $header.max_buffer_size);
                 err!(GummyrollError::MerkleRollConstantsError)
@@ -366,7 +365,6 @@ pub mod gummyroll {
             proof.push(node.key().to_bytes());
         }
         fill_in_proof_from_canopy(canopy_bytes, header.max_depth, index, &mut proof)?;
-
         let id = ctx.accounts.merkle_roll.key();
         // A call is made to MerkleRoll::set_leaf(root, previous_leaf, new_leaf, proof, index)
         let change_log = merkle_roll_apply_fn!(
