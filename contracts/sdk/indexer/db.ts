@@ -738,7 +738,7 @@ export async function bootstrap(
   create: boolean = true
 ): Promise<NFTDatabaseConnection> {
   // open the database
-  const dir = "mainnet-test3";
+  const dir = "db";
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir);
   }

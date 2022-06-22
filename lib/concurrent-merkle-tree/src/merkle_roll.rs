@@ -362,8 +362,9 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         }
         Ok(recompute(updatable_leaf_node, proof, leaf_index) == self.get_change_log().root)
     }
-    /// Note: Enabling `use_full_buffer` will skip root matching and just fast forward the given proof
-    /// from the beginning of the buffer. This option significantly reduces security
+
+    /// Note: Enabling `allow_inferred_proof` will fast forward the given proof
+    /// from the beginning of the buffer in the case that the supplied root is not in the buffer.
     #[inline(always)]
     fn try_apply_proof(
         &mut self,
