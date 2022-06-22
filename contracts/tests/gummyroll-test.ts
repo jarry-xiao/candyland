@@ -804,9 +804,6 @@ describe("gummyroll", () => {
       let i = 0;
       let stepSize = 8;
       while (i < 2 ** DEPTH) {
-        if (i % 8 == 0 && i > 0) {
-          console.log("Appended", i, "leaves");
-        }
         let ixs = [];
         for (let j = 0; j < stepSize; ++j) {
           const newLeaf = Array.from(Buffer.alloc(32, i + 1));
@@ -822,8 +819,8 @@ describe("gummyroll", () => {
         }
         await execute(Gummyroll.provider, ixs, [payer]);
         i += stepSize;
+        console.log("Appended", i, "leaves");
       }
-      console.log("Finished appending leaves");
 
       // Compare on-chain & off-chain roots
       let ixs = [];
@@ -836,7 +833,10 @@ describe("gummyroll", () => {
       );
 
       let root = merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root;
-      for (const [i, leaf] of leaves.entries()) {
+      let leafList = Array.from(leaves.entries());
+      leafList.sort(() => Math.random() - 0.5);
+      let replaces = 0;
+      for (const [i, leaf] of leafList) {
         const newLeaf = crypto.randomBytes(32);
         const replaceIx = createReplaceIx(
           Gummyroll,
@@ -850,8 +850,9 @@ describe("gummyroll", () => {
         );
         ixs.push(replaceIx);
         if (ixs.length == stepSize) {
+          replaces++;
           let tx = await execute(Gummyroll.provider, ixs, [payer]);
-          console.log("Replaced", i + 1, "leaves");
+          console.log("Replaced", replaces * stepSize, "leaves");
           ixs = [];
         }
       }

@@ -5,7 +5,7 @@ use anchor_lang::{
 };
 use borsh::{BorshDeserialize, BorshSerialize};
 use bytemuck::cast_slice_mut;
-use concurrent_merkle_tree::{utils::empty_node_cached, state::EMPTY};
+use concurrent_merkle_tree::{state::EMPTY, utils::empty_node_cached};
 use std::mem::size_of;
 
 pub mod error;
@@ -60,12 +60,8 @@ pub struct TransferAuthority<'info> {
     pub authority: Signer<'info>,
 }
 
-fn update_canopy(
-    canopy_bytes: &mut [u8],
-    max_height: u32,
-    change_log: Option<Box<ChangeLogEvent>>,
-) -> Result<()> {
-    let mut empty_node_cache = Box::new([EMPTY; 26]);
+#[inline(always)]
+fn check_canopy_bytes(canopy_bytes: &mut [u8]) -> Result<()> {
     if canopy_bytes.len() % size_of::<Node>() != 0 {
         msg!(
             "Canopy byte length {} is not a multiple of {}",
@@ -74,77 +70,95 @@ fn update_canopy(
         );
         err!(GummyrollError::CanopyLengthMismatch)
     } else {
-        let canopy = cast_slice_mut::<u8, Node>(canopy_bytes);
-        let closest_power_of_2 = (canopy.len() + 2) as u32;
-        // This returns true is `closest_power_of_2` is actually a power of 2
-        if closest_power_of_2.leading_zeros() + closest_power_of_2.trailing_zeros() == 31 {
-            match change_log {
-                Some(cl) => {
-                    // Update the canopy from the newest change log
-                    let path_len = closest_power_of_2.trailing_zeros() - 1;
-                    for path_node in cl.path.iter().rev().skip(1).take(path_len as usize) {
-                        canopy[(path_node.index - 2) as usize] = path_node.node;
-                    }
-                }
-                None => {
-                    // Initialize the canopy with empty nodes
-                    for (i, node) in canopy.iter_mut().enumerate() {
-                        let node_idx = (i + 2) as u32;
-                        let level = max_height - (31 - node_idx.leading_zeros());
-                        *node = empty_node_cached::<26>(level, &mut empty_node_cache);
-                    }
-                }
-            }
-            Ok(())
-        } else {
+        Ok(())
+    }
+}
+
+#[inline(always)]
+fn get_cached_path_length(canopy: &mut [Node], max_depth: u32) -> Result<u32> {
+    // The offset of 2 is applied because the canopy is a full binary tree without the root node
+    // Size: (2^n - 2) -> Size + 2 must be a power of 2
+    let closest_power_of_2 = (canopy.len() + 2) as u32;
+    // This expression will return true if `closest_power_of_2` is actually a power of 2
+    // A 32-bit number is a power of 2 iff all bits except for 1 (i.e. 31 bits) are 0
+    if closest_power_of_2.leading_zeros() + closest_power_of_2.trailing_zeros() == 31 {
+        // (1 << max_depth) returns the number of leaves in the full merkle tree
+        // (1 << (max_depth + 1)) - 1 returns the number of nodes in the full tree
+        // The canopy size cannot exceed the size of the tree
+        if closest_power_of_2 > (1 << (max_depth + 1)) {
             msg!(
-                "Canopy length {} is not 2 less than a power of 2",
-                canopy.len()
+                "Canopy size is too large. Size: {}. Max size: {}",
+                closest_power_of_2 - 2,
+                (1 << (max_depth + 1)) - 2
             );
-            err!(GummyrollError::CanopyLengthMismatch)
+            return err!(GummyrollError::CanopyLengthMismatch);
+        }
+    } else {
+        msg!(
+            "Canopy length {} is not 2 less than a power of 2",
+            canopy.len()
+        );
+        return err!(GummyrollError::CanopyLengthMismatch);
+    }
+    // 1 is subtracted from the trailing zeros because the root is not stored in the canopy
+    Ok(closest_power_of_2.trailing_zeros() - 1)
+}
+
+fn update_canopy(
+    canopy_bytes: &mut [u8],
+    max_depth: u32,
+    change_log: Option<Box<ChangeLogEvent>>,
+) -> Result<()> {
+    // 26 is hard coded as it is the current max depth that Gummyroll supports
+    let mut empty_node_cache = Box::new([EMPTY; 26]);
+    check_canopy_bytes(canopy_bytes)?;
+    let canopy = cast_slice_mut::<u8, Node>(canopy_bytes);
+    let path_len = get_cached_path_length(canopy, max_depth)?;
+    match change_log {
+        Some(cl) => {
+            // Update the canopy from the newest change log
+            for path_node in cl.path.iter().rev().skip(1).take(path_len as usize) {
+                // node_idx - 2 maps to the canopy index
+                canopy[(path_node.index - 2) as usize] = path_node.node;
+            }
+        }
+        None => {
+            // Initialize the canopy with empty nodes
+            for (i, node) in canopy.iter_mut().enumerate() {
+                let node_idx = (i + 2) as u32;
+                let level = max_depth - (31 - node_idx.leading_zeros());
+                *node = empty_node_cached::<26>(level, &mut empty_node_cache);
+            }
         }
     }
+    Ok(())
 }
 
 fn fill_in_proof_from_canopy(
     canopy_bytes: &mut [u8],
-    max_height: u32,
+    max_depth: u32,
     index: u32,
     proof: &mut Vec<Node>,
 ) -> Result<()> {
-    if canopy_bytes.len() % size_of::<Node>() != 0 {
-        msg!(
-            "Canopy byte length {} is not a multiple of {}",
-            canopy_bytes.len(),
-            size_of::<Node>()
-        );
-        err!(GummyrollError::CanopyLengthMismatch)
-    } else {
-        let canopy = cast_slice_mut::<u8, Node>(canopy_bytes);
-        let closest_power_of_2 = (canopy.len() + 2) as u32;
-        if closest_power_of_2.leading_zeros() + closest_power_of_2.trailing_zeros() == 31 {
-            let path_len = closest_power_of_2.trailing_zeros() - 1;
-            let mut node_idx = ((1 << max_height) + index) >> (max_height - path_len);
-            let mut inferred_nodes = vec![];
-            while node_idx > 1 {
-                let shifted_index = node_idx as usize - 2;
-                if shifted_index % 2 == 0 {
-                    inferred_nodes.push(canopy[shifted_index + 1])
-                } else {
-                    inferred_nodes.push(canopy[shifted_index - 1])
-                }
-                node_idx >>= 1;
-            }
-            proof.extend(inferred_nodes.iter());
-            Ok(())
+    check_canopy_bytes(canopy_bytes)?;
+    let canopy = cast_slice_mut::<u8, Node>(canopy_bytes);
+    let path_len = get_cached_path_length(canopy, max_depth)?;
+    // We want to compute the node index (w.r.t. the canopy) where the current path
+    // intersects the leaves of the canopy
+    let mut node_idx = ((1 << max_depth) + index) >> (max_depth - path_len);
+    let mut inferred_nodes = vec![];
+    while node_idx > 1 {
+        // node_idx - 2 maps to the canopy index
+        let shifted_index = node_idx as usize - 2;
+        if shifted_index % 2 == 0 {
+            inferred_nodes.push(canopy[shifted_index + 1])
         } else {
-            msg!(
-                "Canopy length {} is not 2 less than a power of 2",
-                canopy.len()
-            );
-            err!(GummyrollError::CanopyLengthMismatch)
+            inferred_nodes.push(canopy[shifted_index - 1])
         }
+        node_idx >>= 1;
     }
+    proof.extend(inferred_nodes.iter());
+    Ok(())
 }
 
 /// This macro applies functions on a merkle roll and emits leaf information
