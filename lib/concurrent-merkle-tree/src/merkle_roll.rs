@@ -127,7 +127,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             let mut proof: [Node; MAX_DEPTH] = [Node::default(); MAX_DEPTH];
             fill_in_proof::<MAX_DEPTH>(proof_vec, &mut proof);
             let valid_root =
-                self.check_valid_proof(current_root, leaf, &mut proof, leaf_index, true)?;
+                self.check_valid_leaf(current_root, leaf, &mut proof, leaf_index, true)?;
             if !valid_root {
                 solana_logging!("Proof failed to verify");
                 return Err(CMTError::InvalidProof);
@@ -274,7 +274,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
     /// Returns false if the leaf was updated in the change log
     #[inline(always)]
     fn fast_forward_proof(
-        &mut self,
+        &self,
         leaf: &mut Node,
         proof: &mut [Node; MAX_DEPTH],
         leaf_index: u32,
@@ -323,8 +323,8 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
     }
 
     #[inline(always)]
-    fn check_valid_proof(
-        &mut self,
+    fn check_valid_leaf(
+        &self,
         current_root: Node,
         leaf: Node,
         proof: &mut [Node; MAX_DEPTH],
@@ -380,7 +380,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         solana_logging!("Buffer Size: {}", self.buffer_size);
         solana_logging!("Leaf Index: {}", leaf_index);
         let valid_root =
-            self.check_valid_proof(current_root, leaf, proof, leaf_index, allow_inferred_proof)?;
+            self.check_valid_leaf(current_root, leaf, proof, leaf_index, allow_inferred_proof)?;
         if !valid_root {
             return Err(CMTError::InvalidProof);
         }

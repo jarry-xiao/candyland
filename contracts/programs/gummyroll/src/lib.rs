@@ -109,26 +109,14 @@ fn update_canopy(
     max_depth: u32,
     change_log: Option<Box<ChangeLogEvent>>,
 ) -> Result<()> {
-    // 26 is hard coded as it is the current max depth that Gummyroll supports
-    let mut empty_node_cache = Box::new([EMPTY; 26]);
     check_canopy_bytes(canopy_bytes)?;
     let canopy = cast_slice_mut::<u8, Node>(canopy_bytes);
     let path_len = get_cached_path_length(canopy, max_depth)?;
-    match change_log {
-        Some(cl) => {
-            // Update the canopy from the newest change log
-            for path_node in cl.path.iter().rev().skip(1).take(path_len as usize) {
-                // node_idx - 2 maps to the canopy index
-                canopy[(path_node.index - 2) as usize] = path_node.node;
-            }
-        }
-        None => {
-            // Initialize the canopy with empty nodes
-            for (i, node) in canopy.iter_mut().enumerate() {
-                let node_idx = (i + 2) as u32;
-                let level = max_depth - (31 - node_idx.leading_zeros());
-                *node = empty_node_cached::<26>(level, &mut empty_node_cache);
-            }
+    if let Some(cl) = change_log {
+        // Update the canopy from the newest change log
+        for path_node in cl.path.iter().rev().skip(1).take(path_len as usize) {
+            // node_idx - 2 maps to the canopy index
+            canopy[(path_node.index - 2) as usize] = path_node.node;
         }
     }
     Ok(())
@@ -140,6 +128,8 @@ fn fill_in_proof_from_canopy(
     index: u32,
     proof: &mut Vec<Node>,
 ) -> Result<()> {
+    // 26 is hard coded as it is the current max depth that Gummyroll supports
+    let mut empty_node_cache = Box::new([EMPTY; 26]);
     check_canopy_bytes(canopy_bytes)?;
     let canopy = cast_slice_mut::<u8, Node>(canopy_bytes);
     let path_len = get_cached_path_length(canopy, max_depth)?;
@@ -150,10 +140,18 @@ fn fill_in_proof_from_canopy(
     while node_idx > 1 {
         // node_idx - 2 maps to the canopy index
         let shifted_index = node_idx as usize - 2;
-        if shifted_index % 2 == 0 {
-            inferred_nodes.push(canopy[shifted_index + 1])
+        let cached_idx = if shifted_index % 2 == 0 {
+            shifted_index + 1
         } else {
-            inferred_nodes.push(canopy[shifted_index - 1])
+            shifted_index - 1
+        };
+        if canopy[cached_idx] == EMPTY {
+            let level = max_depth - (31 - node_idx.leading_zeros());
+            let empty_node = empty_node_cached::<26>(level, &mut empty_node_cache);
+            canopy[cached_idx] = empty_node;
+            inferred_nodes.push(empty_node);
+        } else {
+            inferred_nodes.push(canopy[cached_idx]);
         }
         node_idx >>= 1;
     }
@@ -211,6 +209,9 @@ macro_rules! merkle_roll_get_size {
             (26, 512) => Ok(size_of::<MerkleRoll<26, 512>>()),
             (26, 1024) => Ok(size_of::<MerkleRoll<26, 1024>>()),
             (26, 2048) => Ok(size_of::<MerkleRoll<26, 2048>>()),
+            (30, 256) => Ok(size_of::<MerkleRoll<30, 256>>()),
+            (30, 512) => Ok(size_of::<MerkleRoll<30, 512>>()),
+            (30, 1024) => Ok(size_of::<MerkleRoll<30, 1024>>()),
             _ => {
                 msg!(
                     "Failed to get size of max depth {} and max buffer size {}",
@@ -250,6 +251,9 @@ macro_rules! merkle_roll_apply_fn {
             (26, 512) => merkle_roll_depth_size_apply_fn!(26, 512, $id, $bytes, $func, $($arg)*),
             (26, 1024) => merkle_roll_depth_size_apply_fn!(26, 1024, $id, $bytes, $func, $($arg)*),
             (26, 2048) => merkle_roll_depth_size_apply_fn!(26, 2048, $id, $bytes, $func, $($arg)*),
+            (30, 256) => merkle_roll_depth_size_apply_fn!(30, 256, $id, $bytes, $func, $($arg)*),
+            (30, 512) => merkle_roll_depth_size_apply_fn!(30, 512, $id, $bytes, $func, $($arg)*),
+            (30, 1024) => merkle_roll_depth_size_apply_fn!(30, 1024, $id, $bytes, $func, $($arg)*),
             _ => {
                 msg!("Failed to apply {} on merkle roll with max depth {} and max buffer size {}", stringify!($func), $header.max_depth, $header.max_buffer_size);
                 err!(GummyrollError::MerkleRollConstantsError)
