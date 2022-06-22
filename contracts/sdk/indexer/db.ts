@@ -609,6 +609,17 @@ export class NFTDatabaseConnection {
     return inferredProof;
   }
 
+  async getMinSeqForCompleteTree(treeId: string): Promise<number> {
+    /// Check if tree in the db
+    const seqNumbers = await this.connection.all(`
+      SELECT * from merkle
+      where treeId = ?
+      `,
+      treeId
+    )
+    return 0;
+  }
+
   generateRoot(proof: Proof) {
     let node = bs58.decode(proof.leaf);
     let index = proof.index;
@@ -627,6 +638,28 @@ export class NFTDatabaseConnection {
     const rehashed = new PublicKey(node).toString();
     const received = new PublicKey(proof.root).toString();
     return rehashed === received;
+  }
+
+  async getTxIdForSlot(treeId: string, slot: number): Promise<string | null> {
+    // CREATE TABLE IF NOT EXISTS merkle (
+    //   tree_id TEXT,
+    //   transaction_id TEXT,
+    //   slot INT,
+    //   node_idx INT,
+    const transactionId = await this.connection.all(
+      `
+      SELECT DISTINCT transaction_id
+      FROM merkle
+      WHERE
+        tree_id = ?
+      AND slot = ?
+      GROUP BY tree_id
+      `,
+      treeId,
+      slot
+    )
+    console.log(transactionId);
+    return transactionId.length ? transactionId[0].transaction_id as string : null;
   }
 
   async getAssetsForOwner(owner: string) {

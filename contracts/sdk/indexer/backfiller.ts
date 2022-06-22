@@ -1,4 +1,4 @@
-import { PublicKey } from "@solana/web3.js";
+import { PublicKey, SIGNATURE_LENGTH_IN_BYTES } from "@solana/web3.js";
 import { Connection } from "@solana/web3.js";
 import { decodeMerkleRoll } from "../gummyroll/index";
 import { ParserState, handleLogsAtomic } from "./indexer/utils";
@@ -111,6 +111,98 @@ async function plugGaps(
       endSeq
     );
   }
+}
+
+type TreeHistory = {
+  slot: number,
+  sig: string,
+}
+
+function onlyUnique(value, index, self) {
+  return self.indexOf(value) === index;
+}
+
+export async function getAllTreeSlots(
+  connection: Connection,
+  treeId: string,
+  afterSig?: string
+): Promise<number[]> {
+  const treeAddress = new PublicKey(treeId);
+  // todo: paginate
+  let lastAddress: string | null = null;
+  let done = false;
+  const history: TreeHistory[] = [];
+
+  const baseOpts = afterSig ? { until: afterSig } : {};
+  while (!done) {
+    let opts = lastAddress ? { before: lastAddress } : {};
+    const finalOpts = { ...baseOpts, ...opts };
+    console.log(finalOpts);
+    const sigs = await connection.getSignaturesForAddress(treeAddress, finalOpts);
+    console.log(sigs[sigs.length - 1]);
+    lastAddress = sigs[sigs.length - 1].signature;
+    sigs.map((sigInfo) => {
+      history.push({
+        sig: sigInfo.signature,
+        slot: sigInfo.slot
+      })
+    })
+
+    if (sigs.length < 1000) {
+      done = true;
+    }
+  }
+
+  return history.reverse().map((hist) => hist.slot).filter(onlyUnique);
+}
+
+/// Returns tree history in chronological order (oldest first)
+export async function backfillTreeHistory(
+  connection: Connection,
+  nftDb: NFTDatabaseConnection,
+  parserState: ParserState,
+  treeId: string,
+  startSeq: number,
+  fromSlot: number | null,
+): Promise<number> {
+  const treeAddress = new PublicKey(treeId);
+  const merkleRoll = decodeMerkleRoll(await (await connection.getAccountInfo(treeAddress)).data);
+  const maxSeq = merkleRoll.roll.sequenceNumber.toNumber();
+  // Sequence number on-chain is ready to setup the 
+  if (startSeq === maxSeq - 1) {
+    return startSeq;
+  }
+  const earliestTxId = await nftDb.getTxIdForSlot(treeId, fromSlot);
+  console.log("Tx id:", earliestTxId);
+  const treeHistory = await getAllTreeSlots(connection, treeId, earliestTxId);
+  console.log("Retrieved tree history!", treeHistory);
+
+  let numProcessed = 0;
+  let batchSize = 20;
+  while (numProcessed < treeHistory.length) {
+    const batchJobs = [];
+    for (let i = 0; i < batchSize; i++) {
+      const historyIndex = numProcessed + i;
+      if (historyIndex >= treeHistory.length) {
+        break;
+      }
+      batchJobs.push(
+        plugGapsFromSlot(
+          connection,
+          nftDb,
+          parserState,
+          treeAddress,
+          treeHistory[historyIndex],
+          0,
+          maxSeq,
+        )
+      )
+    }
+    await Promise.all(batchJobs);
+    numProcessed += batchJobs.length;
+    console.log("num processed: ", numProcessed);
+  }
+  return maxSeq;
 }
 
 export async function fetchAndPlugGaps(
