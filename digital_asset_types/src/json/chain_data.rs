@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::adapter::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct ChainDataV1 {
@@ -10,4 +10,3 @@ pub struct ChainDataV1 {
     pub token_standard: Option<TokenStandard>,
     pub uses: Option<Uses>,
 }
-

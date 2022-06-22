@@ -1,14 +1,12 @@
 use {
-    serde::{Serialize, Deserialize},
+    serde::{Deserialize, Serialize},
     std::collections::HashMap,
 };
 
-
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
-#[serde(default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct AssetProof {
     pub proof: Vec<String>,
-    pub node_index: u64,
+    pub node_index: i64,
     pub tree_id: String,
 }
 
@@ -25,11 +23,10 @@ pub enum Interface {
     #[serde(rename = "Identity")]
     Identity,
     #[serde(rename = "Executable")]
-    Executable
+    Executable,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
-#[serde(default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Quality {
     #[serde(rename = "$$schema", skip_serializing_if = "Option::is_none")]
     pub schema: Option<String>,
@@ -55,8 +52,7 @@ pub enum Context {
 
 pub type Contexts = Vec<Context>;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
-#[serde(default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct File {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub uri: Option<String>,
@@ -74,8 +70,7 @@ pub type Metadata = Vec<MetadataItem>;
 pub type ObjectHAgrRKSz = HashMap<String, serde_json::Value>;
 pub type Links = Vec<ObjectHAgrRKSz>;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
-#[serde(default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Content {
     #[serde(rename = "$schema")]
     pub schema: String,
@@ -92,8 +87,7 @@ pub type Authorities = Vec<Authority>;
 pub type Eligible = bool;
 pub type Compressed = bool;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
-#[serde(default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Compression {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub eligible: Option<Eligible>,
@@ -104,8 +98,7 @@ pub struct Compression {
 pub type GroupKey = String;
 pub type GroupValue = String;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
-#[serde(default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Group {
     #[serde(rename = "$$schema")]
     pub schema: String,
@@ -125,8 +118,7 @@ pub enum RoyaltyModel {
     Single,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
-#[serde(default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Royalty {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub royalty_model: Option<RoyaltyModel>,
@@ -142,8 +134,7 @@ pub type Address = String;
 pub type Share = String;
 pub type Verified = bool;
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
-#[serde(default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Creator {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub address: Option<String>,
@@ -161,8 +152,7 @@ pub enum OwnershipModel {
     Token,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
-#[serde(default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Ownership {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub frozen: Option<bool>,
@@ -176,8 +166,7 @@ pub struct Ownership {
     pub address: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
-#[serde(default)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Asset {
     pub interface: Interface,
     pub id: String,

@@ -59,6 +59,7 @@ create table asset
     compressible        bool                not null default false,
     tree_id             bytea,
     leaf                bytea,
+    node_idx            bigint,
     nonce               bigint              not null,
     -- royalty
     royalty_target_type royalty_target_type not null default 'creators',

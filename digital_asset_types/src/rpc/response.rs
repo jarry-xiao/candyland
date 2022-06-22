@@ -1,11 +1,8 @@
-use {
-    serde::{Deserialize,Serialize},
-    crate::rpc::{
-        AssetSale,
-        Asset
-    }
-};
 use crate::rpc::Offer;
+use {
+    crate::rpc::{Asset, AssetSale},
+    serde::{Deserialize, Serialize},
+};
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(default)]

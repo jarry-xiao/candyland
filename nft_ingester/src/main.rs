@@ -13,7 +13,7 @@ use {
     plerkle_serialization::account_info_generated::account_info::root_as_account_info,
     plerkle_serialization::transaction_info_generated::transaction_info::root_as_transaction_info,
     solana_sdk::pubkey::Pubkey,
-    sqlx::{self, Pool, Postgres, postgres::PgPoolOptions},
+    sqlx::{self, postgres::PgPoolOptions, Pool, Postgres},
 };
 
 async fn setup_manager<'a, 'b>(

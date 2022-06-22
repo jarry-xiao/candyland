@@ -962,6 +962,7 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
+ "solana-sdk",
  "sqlx",
  "thiserror",
  "tokio",
@@ -1039,7 +1040,8 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
- "solana-program",
+ "solana-sdk",
+ "thiserror",
 ]
 
 [[package]]

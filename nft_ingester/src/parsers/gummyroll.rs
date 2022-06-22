@@ -1,30 +1,20 @@
 use {
-    sea_orm::{
-        DbBackend,
-        sea_query::OnConflict,
-        entity::*,
-        query::*,
-        DatabaseConnection,
-        DatabaseTransaction,
-        SqlxPostgresConnector,
-        TransactionTrait,
+    crate::{
+        error::IngesterError, events::handle_event, utils::filter_events_from_logs,
+        InstructionBundle, ProgramHandler, ProgramHandlerConfig,
     },
-    gummyroll::state::ChangeLogEvent,
-    serde::Deserialize,
-    sqlx::{self, Pool, Postgres},
     async_trait::async_trait,
+    digital_asset_types::dao::cl_items,
+    gummyroll::state::ChangeLogEvent,
     lazy_static::lazy_static,
+    sea_orm::{
+        entity::*, query::*, sea_query::OnConflict, DatabaseConnection, DatabaseTransaction,
+        DbBackend, SqlxPostgresConnector, TransactionTrait,
+    },
+    serde::Deserialize,
     solana_sdk::pubkey::Pubkey,
     solana_sdk::pubkeys,
-    crate::{
-        ProgramHandler,
-        ProgramHandlerConfig,
-        error::IngesterError,
-        events::handle_event,
-        utils::{filter_events_from_logs},
-        InstructionBundle,
-    },
-    digital_asset_types::dao::cl_items
+    sqlx::{self, Pool, Postgres},
 };
 
 #[derive(Debug, Deserialize)]
@@ -62,11 +52,7 @@ impl ProgramHandler for GummyRollHandler {
     }
 
     async fn handle_instruction(&self, bundle: &InstructionBundle) -> Result<(), IngesterError> {
-        handle_gummyroll_instruction(
-            &bundle.instruction_logs,
-            &self.storage,
-        )
-            .await
+        handle_gummyroll_instruction(&bundle.instruction_logs, &self.storage).await
     }
 }
 
@@ -98,12 +84,14 @@ pub fn get_gummy_roll_events(logs: &Vec<&str>) -> Result<Vec<ChangeLogEvent>, In
     Ok(events)
 }
 
-pub async fn save_changelog_events(gummy_roll_events: Vec<ChangeLogEvent>, txn: &DatabaseTransaction) -> Result<(), IngesterError> {
+pub async fn save_changelog_events(
+    gummy_roll_events: Vec<ChangeLogEvent>,
+    txn: &DatabaseTransaction,
+) -> Result<(), IngesterError> {
     for change_log_event in gummy_roll_events {
-        gummyroll_change_log_event_to_database(
-            change_log_event,
-            txn,
-        ).await.map(|_| ())?
+        gummyroll_change_log_event_to_database(change_log_event, txn)
+            .await
+            .map(|_| ())?
     }
     Ok(())
 }
@@ -115,13 +103,10 @@ pub async fn handle_gummyroll_instruction(
     // map to owned vec to avoid static lifetime issues, instead of moving logs into Box
     let events = get_gummy_roll_events(logs)?;
     db.transaction::<_, _, IngesterError>(|txn| {
-        Box::pin(async move {
-            save_changelog_events(events, txn).await
-        })
-    }).await
-        .map_err(|db_err| {
-            IngesterError::StorageWriteError(db_err.to_string())
-        })
+        Box::pin(async move { save_changelog_events(events, txn).await })
+    })
+    .await
+    .map_err(|db_err| IngesterError::StorageWriteError(db_err.to_string()))
 }
 
 pub async fn gummyroll_change_log_event_to_database(
@@ -145,14 +130,13 @@ pub async fn gummyroll_change_log_event_to_database(
             .on_conflict(
                 OnConflict::columns([cl_items::Column::Tree, cl_items::Column::NodeIdx])
                     .update_columns([cl_items::Column::Hash, cl_items::Column::Seq])
-                    .to_owned()
+                    .to_owned(),
             )
             .build(DbBackend::Postgres);
         query.sql = format!("{} WHERE excluded.seq > cl_items.seq", query.sql);
-        txn.execute(query).await
-            .map_err(|db_err| {
-                IngesterError::StorageWriteError(db_err.to_string())
-            })?;
+        txn.execute(query)
+            .await
+            .map_err(|db_err| IngesterError::StorageWriteError(db_err.to_string()))?;
     }
     Ok(())
     //TODO -> set maximum size of path and break into multiple statements

@@ -2,13 +2,13 @@ use flatbuffers::{ForwardsUOffset, Vector};
 use plerkle_serialization::transaction_info_generated::transaction_info;
 use plerkle_serialization::transaction_info_generated::transaction_info::TransactionInfo;
 
-pub type IxPair<'a> = (transaction_info::Pubkey<'a>, transaction_info::CompiledInstruction<'a>);
+pub type IxPair<'a> = (
+    transaction_info::Pubkey<'a>,
+    transaction_info::CompiledInstruction<'a>,
+);
 pub fn order_instructions<'a>(
     transaction_info: &TransactionInfo<'a>,
-) -> Vec<(
-    IxPair<'a>,
-    Option<Vec<IxPair<'a>>>
-)> {
+) -> Vec<(IxPair<'a>, Option<Vec<IxPair<'a>>>)> {
     let mut ordered_ixs: Vec<(IxPair, Option<Vec<IxPair>>)> = vec![];
     // Get inner instructions.
     let inner_ix_list = transaction_info.inner_instructions();
@@ -36,7 +36,7 @@ pub fn order_instructions<'a>(
         let program_id = program_id;
         let outer: IxPair = (program_id, instruction);
 
-        let inner: Option<Vec<IxPair>> = get_inner_ixs(inner_ix_list, i).map(|inner_ixs|{
+        let inner: Option<Vec<IxPair>> = get_inner_ixs(inner_ix_list, i).map(|inner_ixs| {
             let mut inner_list: Vec<IxPair> = vec![];
             for inner_ix_instance in inner_ixs.instructions().unwrap() {
                 let inner_program_id = keys.get(inner_ix_instance.program_id_index() as usize);

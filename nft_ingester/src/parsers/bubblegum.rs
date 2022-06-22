@@ -1,45 +1,36 @@
 use anchor_client::anchor_lang::prelude::Pubkey;
-use lazy_static::lazy_static;
-use sea_orm::{DatabaseConnection};
 use digital_asset_types::json::ChainDataV1;
+use lazy_static::lazy_static;
 use num_traits::FromPrimitive;
+use sea_orm::DatabaseConnection;
 use solana_sdk::pubkeys;
-
 
 use {
     crate::{
+        error::IngesterError,
         events::handle_event,
         parsers::{InstructionBundle, ProgramHandler, ProgramHandlerConfig},
-        utils::{filter_events_from_logs},
-        error::IngesterError,
-    },
-    sea_orm::{
-        entity::*,
-        query::*,
-        JsonValue, SqlxPostgresConnector, TransactionTrait,
-    },
-    digital_asset_types::dao::{
-        asset,
-        asset_data,
-        asset_creators,
-        asset_authority,
-        asset_grouping,
-        sea_orm_active_enums::{ChainMutability, Mutability, OwnerType, RoyaltyTargetType},
+        utils::filter_events_from_logs,
     },
     anchor_client::anchor_lang::AnchorDeserialize,
+    async_trait::async_trait,
     bubblegum::state::leaf_schema::LeafSchemaEvent,
+    digital_asset_types::dao::{
+        asset, asset_authority, asset_creators, asset_data, asset_grouping,
+        sea_orm_active_enums::{ChainMutability, Mutability, OwnerType, RoyaltyTargetType},
+    },
     flatbuffers::{ForwardsUOffset, Vector},
     plerkle_serialization::transaction_info_generated::transaction_info::{self},
+    sea_orm::{entity::*, query::*, JsonValue, SqlxPostgresConnector, TransactionTrait},
     solana_sdk,
     sqlx::{self, Pool, Postgres},
-    async_trait::async_trait,
 };
 
-use bubblegum::state::leaf_schema::{LeafSchema};
-use serde_json;
-use digital_asset_types::adapter::{TokenStandard, UseMethod, Uses};
-use crate::{get_gummy_roll_events, save_changelog_events};
 use crate::utils::{bytes_from_fb_table, pubkey_from_fb_table};
+use crate::{get_gummy_roll_events, save_changelog_events};
+use bubblegum::state::leaf_schema::LeafSchema;
+use digital_asset_types::adapter::{TokenStandard, UseMethod, Uses};
+use serde_json;
 
 pubkeys!(
     BubblegumProgramID,
@@ -75,7 +66,7 @@ impl ProgramHandler for BubblegumHandler {
             bundle.message_id,
             &self.storage,
         )
-            .await
+        .await
     }
 }
 
@@ -123,10 +114,7 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                     save_changelog_events(gummy_roll_events, txn).await?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
-                            nonce,
-                            id,
-                            owner,
-                            ..
+                            nonce, id, owner, ..
                         } => {
                             let owner_bytes = owner.to_bytes().to_vec();
                             let id_bytes = id.to_bytes().to_vec();
@@ -145,13 +133,12 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                                     IngesterError::StorageWriteError(db_error.to_string())
                                 })
                         }
-                        _ => Err(IngesterError::NotImplemented)
+                        _ => Err(IngesterError::NotImplemented),
                     }
                 })
-            }).await
-                .map_err(|txn_err| {
-                    IngesterError::StorageWriteError(txn_err.to_string())
-                })?;
+            })
+            .await
+            .map_err(|txn_err| IngesterError::StorageWriteError(txn_err.to_string()))?;
         }
         bubblegum::InstructionName::MintV1 => {
             println!("BGUM: MINT");
@@ -170,11 +157,7 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                 Box::pin(async move {
                     save_changelog_events(gummy_roll_events, txn).await?;
                     match leaf_event.schema {
-                        LeafSchema::V1 {
-                            nonce,
-                            id,
-                            ..
-                        } => {
+                        LeafSchema::V1 { nonce, id, .. } => {
                             let metadata = ix.message;
                             // Printing metadata instruction arguments for debugging
                             println!(
@@ -189,23 +172,20 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                                 symbol: metadata.symbol,
                                 edition_nonce: metadata.edition_nonce,
                                 primary_sale_happened: metadata.primary_sale_happened,
-                                token_standard: metadata.token_standard.and_then(|ts| {
-                                    TokenStandard::from_u8(ts as u8)
-                                }),
-                                uses: metadata.uses.map(|u| {
-                                    Uses {
-                                        use_method: UseMethod::from_u8(u.use_method as u8).unwrap(),
-                                        remaining: u.remaining,
-                                        total: u.total,
-                                    }
+                                token_standard: metadata
+                                    .token_standard
+                                    .and_then(|ts| TokenStandard::from_u8(ts as u8)),
+                                uses: metadata.uses.map(|u| Uses {
+                                    use_method: UseMethod::from_u8(u.use_method as u8).unwrap(),
+                                    remaining: u.remaining,
+                                    total: u.total,
                                 }),
                             };
-                            let chain_data_json = serde_json::to_value(chain_data).map_err(|e| {
-                                IngesterError::DeserializationError(e.to_string())
-                            })?;
+                            let chain_data_json = serde_json::to_value(chain_data)
+                                .map_err(|e| IngesterError::DeserializationError(e.to_string()))?;
                             let chain_mutability = match metadata.is_mutable {
                                 true => ChainMutability::Mutable,
-                                false => ChainMutability::Immutable
+                                false => ChainMutability::Immutable,
                             };
 
                             let data = asset_data::ActiveModel {
@@ -216,10 +196,12 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                                 metadata: Set(JsonValue::String("processing".to_string())),
                                 metadata_mutability: Set(Mutability::Mutable),
                                 ..Default::default()
-                            }.insert(txn).await
-                                .map_err(|txn_err| {
-                                    IngesterError::StorageWriteError(txn_err.to_string())
-                                })?;
+                            }
+                            .insert(txn)
+                            .await
+                            .map_err(|txn_err| {
+                                IngesterError::StorageWriteError(txn_err.to_string())
+                            })?;
                             let delegate = if owner == delegate {
                                 None
                             } else {
@@ -244,11 +226,12 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                                 royalty_amount: Set(metadata.seller_fee_basis_points as i32), //basis points
                                 chain_data_id: Set(Some(data.id)),
                                 ..Default::default()
-                            }.insert(txn)
-                                .await
-                                .map_err(|txn_err| {
-                                    IngesterError::StorageWriteError(txn_err.to_string())
-                                })?;
+                            }
+                            .insert(txn)
+                            .await
+                            .map_err(|txn_err| {
+                                IngesterError::StorageWriteError(txn_err.to_string())
+                            })?;
                             if metadata.creators.len() > 0 {
                                 let mut creators = Vec::with_capacity(metadata.creators.len());
                                 for c in metadata.creators {
@@ -271,11 +254,12 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                                 asset_id: Set(id.to_bytes().to_vec()),
                                 authority: Set(update_authority),
                                 ..Default::default()
-                            }.insert(txn)
-                                .await
-                                .map_err(|txn_err| {
-                                    IngesterError::StorageWriteError(txn_err.to_string())
-                                })?;
+                            }
+                            .insert(txn)
+                            .await
+                            .map_err(|txn_err| {
+                                IngesterError::StorageWriteError(txn_err.to_string())
+                            })?;
                             if let Some(c) = metadata.collection {
                                 if c.verified {
                                     asset_grouping::ActiveModel {
@@ -283,24 +267,22 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                                         group_key: Set("collection".to_string()),
                                         group_value: Set(c.key.to_string()),
                                         ..Default::default()
-                                    }.insert(txn)
-                                        .await
-                                        .map_err(|txn_err| {
-                                            IngesterError::StorageWriteError(txn_err.to_string())
-                                        })?;
+                                    }
+                                    .insert(txn)
+                                    .await
+                                    .map_err(|txn_err| {
+                                        IngesterError::StorageWriteError(txn_err.to_string())
+                                    })?;
                                 }
                             }
                             Ok(())
                         }
-                        _ => {
-                            Err(IngesterError::NotImplemented)
-                        }
+                        _ => Err(IngesterError::NotImplemented),
                     }
                 })
-            }).await
-                .map_err(|txn_err| {
-                    IngesterError::StorageWriteError(txn_err.to_string())
-                })?;
+            })
+            .await
+            .map_err(|txn_err| IngesterError::StorageWriteError(txn_err.to_string()))?;
         }
         // We should probably ignore Redeem & Cancel Redeem
         // Since redeemed voucher is non-transferable, the owner
@@ -316,10 +298,9 @@ async fn handle_bubblegum_instruction<'a, 'b>(
                     save_changelog_events(gummy_roll_events, txn).await?;
                     Ok(())
                 })
-            }).await
-                .map_err(|txn_err| {
-                    IngesterError::StorageWriteError(txn_err.to_string())
-                })?;
+            })
+            .await
+            .map_err(|txn_err| IngesterError::StorageWriteError(txn_err.to_string()))?;
         }
 
         _ => println!("Bubblegum: Not Implemented Instruction"),

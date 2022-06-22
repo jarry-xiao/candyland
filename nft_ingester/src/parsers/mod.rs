@@ -11,10 +11,10 @@ use solana_sdk::pubkey::Pubkey;
 use std::collections::HashMap;
 
 use crate::error::IngesterError;
+use crate::utils::IxPair;
 use plerkle_serialization::transaction_info_generated::transaction_info::{
     self, CompiledInstruction,
 };
-use crate::utils::IxPair;
 
 pub struct ProgramHandlerManager<'a> {
     registered_parsers: HashMap<Pubkey, Box<dyn ProgramHandler + 'a>>,

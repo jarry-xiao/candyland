@@ -39,13 +39,10 @@ pub fn parse_logs<'a>(
             for log in logs {
                 let captures: Option<Captures> = PLRE.captures(log);
                 let cap: Option<(Pubkey, u8)> = captures.and_then(|c| {
-                    let program = c.get(1)
-                        .and_then(|prog| {
-                            bs58::decode(&prog.as_str()).into_vec().ok()
-                        })
-                        .map(|bytes| {
-                            Pubkey::new(&bytes)
-                        });
+                    let program = c
+                        .get(1)
+                        .and_then(|prog| bs58::decode(&prog.as_str()).into_vec().ok())
+                        .map(|bytes| Pubkey::new(&bytes));
                     let level: Option<u8> = c.get(2).and_then(|l| l.as_str().parse::<u8>().ok());
                     if program.is_some() && level.is_some() {
                         return Some((program.unwrap(), level.unwrap()));
@@ -54,7 +51,7 @@ pub fn parse_logs<'a>(
                 });
 
                 match cap {
-                    Some((key,level)) if level == 1 => {
+                    Some((key, level)) if level == 1 => {
                         program_logs.push((key, vec![], level));
                     }
                     _ => {

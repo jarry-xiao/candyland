@@ -25,8 +25,8 @@ use {
     },
     tokio::{
         self as tokio,
+        runtime::{Builder, Runtime},
         sync::mpsc::{self as mpsc, Sender},
-        runtime::{Runtime, Builder}
     },
 };
 

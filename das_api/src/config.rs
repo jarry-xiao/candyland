@@ -1,8 +1,8 @@
+use crate::error::DasApiError;
 use {
-    figment::{Figment, providers::{Env}},
+    figment::{providers::Env, Figment},
     serde::Deserialize,
 };
-use crate::error::DasApiError;
 
 #[derive(Deserialize)]
 pub struct Config {
@@ -15,7 +15,5 @@ pub fn load_config() -> Result<Config, DasApiError> {
     Figment::new()
         .join(Env::prefixed("APP_"))
         .extract()
-        .map_err(|config_error| {
-            DasApiError::ConfigurationError(config_error.to_string())
-        })
+        .map_err(|config_error| DasApiError::ConfigurationError(config_error.to_string()))
 }

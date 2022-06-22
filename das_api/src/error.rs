@@ -1,11 +1,23 @@
-use {
-    thiserror::Error
-};
+use {jsonrpsee::core::Error as RpcError, jsonrpsee::types::error::CallError, thiserror::Error};
 
 #[derive(Error, Debug)]
 pub enum DasApiError {
     #[error("Config Missing or Error {0}")]
     ConfigurationError(String),
     #[error("Server Failed to Start")]
-    ServerStartError(#[from] jsonrpsee_core::Error)
+    ServerStartError(#[from] RpcError),
+    #[error("Database Connection Failed")]
+    DatabaseConnectionError(#[from] sqlx::Error),
+    #[error("Pubkey Validation Err {0} is invalid")]
+    PubkeyValidationError(String),
+    #[error("Validation Error")]
+    ValidationError(String),
+    #[error("Database Error")]
+    DatabaseError(#[from] sea_orm::DbErr),
+}
+
+impl Into<RpcError> for DasApiError {
+    fn into(self) -> RpcError {
+        RpcError::Call(CallError::from_std_error(self))
+    }
 }
