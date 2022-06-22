@@ -641,11 +641,6 @@ export class NFTDatabaseConnection {
   }
 
   async getTxIdForSlot(treeId: string, slot: number): Promise<string | null> {
-    // CREATE TABLE IF NOT EXISTS merkle (
-    //   tree_id TEXT,
-    //   transaction_id TEXT,
-    //   slot INT,
-    //   node_idx INT,
     const transactionId = await this.connection.all(
       `
       SELECT DISTINCT transaction_id
@@ -662,9 +657,8 @@ export class NFTDatabaseConnection {
     return transactionId.length ? transactionId[0].transaction_id as string : null;
   }
 
-  async getAssetsForOwner(owner: string) {
-    let rawNftMetadata = await this.connection.all(
-      `
+  async getAssetsForOwner(owner: string, treeId?: string) {
+    const query = `
       SELECT
         ls.tree_id as treeId,
         ls.nonce as nonce,
@@ -695,9 +689,21 @@ export class NFTDatabaseConnection {
       JOIN nft n
       ON ls.asset_id = n.asset_id
       WHERE owner = ?
-      `,
-      owner
-    );
+      `;
+
+    let rawNftMetadata;
+    if (!treeId) {
+      rawNftMetadata = await this.connection.all(query,
+        owner
+      );
+    } else {
+      rawNftMetadata = await this.connection.all(
+        query + ` AND tree_id = ?`,
+        owner,
+        treeId,
+      );
+    }
+
     let assets = [];
     for (const metadata of rawNftMetadata) {
       let creators: Creator[] = [];
