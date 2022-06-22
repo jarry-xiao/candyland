@@ -113,11 +113,6 @@ async function plugGaps(
   }
 }
 
-type TreeHistory = {
-  slot: number,
-  sig: string,
-}
-
 function onlyUnique(value, index, self) {
   return self.indexOf(value) === index;
 }
@@ -131,7 +126,7 @@ export async function getAllTreeSlots(
   // todo: paginate
   let lastAddress: string | null = null;
   let done = false;
-  const history: TreeHistory[] = [];
+  const history: number[] = [];
 
   const baseOpts = afterSig ? { until: afterSig } : {};
   while (!done) {
@@ -142,10 +137,7 @@ export async function getAllTreeSlots(
     console.log(sigs[sigs.length - 1]);
     lastAddress = sigs[sigs.length - 1].signature;
     sigs.map((sigInfo) => {
-      history.push({
-        sig: sigInfo.signature,
-        slot: sigInfo.slot
-      })
+      history.push(sigInfo.slot);
     })
 
     if (sigs.length < 1000) {
@@ -153,7 +145,7 @@ export async function getAllTreeSlots(
     }
   }
 
-  return history.reverse().map((hist) => hist.slot).filter(onlyUnique);
+  return history.reverse().filter(onlyUnique);
 }
 
 /// Returns tree history in chronological order (oldest first)
