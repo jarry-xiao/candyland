@@ -18,7 +18,7 @@ pub mod utils;
 use crate::state::{GumballMachineHeader, EncodeMethod, ZeroCopy};
 use crate::utils::get_metadata_args;
 
-declare_id!("BRKyVDRGT7SPBtMhjHN4PVSPVYoc3Wa3QTyuRVM4iZkt");
+declare_id!("GBALLoMcmimUutWvtNdFFGH5oguS7ghUUV6toQPppuTW");
 
 #[derive(Accounts)]
 pub struct InitGumballMachine<'info> {
@@ -195,6 +195,8 @@ fn fisher_yates_shuffle_and_fetch_nft_metadata<'info>(
     let config_line =
         config_lines_data[random_config_index..random_config_index + line_size].to_vec();
 
+    let nft_index = (random_config_index / line_size) + 1;
+
     let message = get_metadata_args(
         gumball_header.url_base,
         gumball_header.name_base,
@@ -204,7 +206,7 @@ fn fisher_yates_shuffle_and_fetch_nft_metadata<'info>(
         gumball_header.collection_key,
         None,
         gumball_header.creator_address,
-        random_config_index,
+        nft_index,
         config_line,
         EncodeMethod::from(gumball_header.config_line_encode_method)
     );
