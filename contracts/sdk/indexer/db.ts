@@ -755,6 +755,7 @@ export class NFTDatabaseConnection {
         delegate: metadata.delegate,
         leafHash: metadata.leafHash,
         creators: creators,
+        txId: metadata.transaction_id,
       });
     }
     return assets;
