@@ -23,7 +23,7 @@ graph TD;
 | :-- | :-- | :--| :-- | :-- |
 | `gummyroll` | On-chain merkle tree that supports concurrent writes | tbd | tbd | `GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD` |
 | `bubblegum` | Token transfer and metadata functionality built on top of gummyroll | tbd | tbd | `BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY` |
-| `gumball-machine` | Candy machine built for bubblegum | tbd | tbd | `BRKyVDRGT7SPBtMhjHN4PVSPVYoc3Wa3QTyuRVM4iZkt` | 
+| `gumball-machine` | Candy machine built for bubblegum | tbd | tbd | `GBALLoMcmimUutWvtNdFFGH5oguS7ghUUV6toQPppuTW` | 
 | `gumdrop` | Forked version of mpl gumdrop, with support for bubblegum | tbd | tbd | `gdrpGjVffourzkdDRrQmySw4aTHr8a3xmQzzxSwFD1a` | 
 | (deprecated) `gummyroll-CRUD` | an example messaging (CRUD) program built on top of gummyroll | deprecated | deprecated | deprecated |
 
