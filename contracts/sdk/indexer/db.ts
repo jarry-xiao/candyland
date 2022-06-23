@@ -684,11 +684,10 @@ export class NFTDatabaseConnection {
         n.verified3 as verified3,
         n.creator4 as creator4,
         n.share4 as share4,
-        n.verified4 as verified4
-        m.transaction_id as transaction_id
+        n.verified4 as verified4,
+        ls.transaction_id as transaction_id
       FROM leaf_schema ls
       JOIN nft n   
-      JOIN merkle m
       ON ls.asset_id = n.asset_id
       WHERE owner = ?
       `;
