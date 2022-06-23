@@ -685,7 +685,8 @@ export class NFTDatabaseConnection {
         n.creator4 as creator4,
         n.share4 as share4,
         n.verified4 as verified4,
-        ls.transaction_id as transaction_id
+        ls.transaction_id as transaction_id,
+        ls.compressed as compressed
       FROM leaf_schema ls
       JOIN nft n   
       ON ls.asset_id = n.asset_id
@@ -756,6 +757,7 @@ export class NFTDatabaseConnection {
         leafHash: metadata.leafHash,
         creators: creators,
         txId: metadata.transaction_id,
+        isCompressed: metadata.compressed,
       });
     }
     return assets;
