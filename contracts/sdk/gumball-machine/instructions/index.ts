@@ -95,17 +95,15 @@ export async function createInitializeGumballMachineIxs(
 export async function createDispenseNFTForSolIx(
   args: DispenseNftSolInstructionArgs,
   payer: PublicKey,
+  numNFTs: BN,
   receiver: PublicKey,
   gumballMachinePubkey: PublicKey,
   merkleRollPubkey: PublicKey,
   gummyrollProgramId: PublicKey,
   bubblegumProgramId: PublicKey,
-  gumballMachine: Program<GumballMachine>
+  gumballMachine: Program<GumballMachine>,
 ): Promise<TransactionInstruction> {
-  const willyWonkaPDAKey = await getWillyWonkaPDAKey(
-    gumballMachinePubkey,
-    gumballMachine.programId
-  );
+  const willyWonkaPDAKey = await getWillyWonkaPDAKey(gumballMachinePubkey, gumballMachine.programId);
   const bubblegumAuthorityPDAKey = await getBubblegumAuthorityPDA(
     merkleRollPubkey,
   );
@@ -134,6 +132,7 @@ export async function createDispenseNFTForSolIx(
 export async function createDispenseNFTForTokensIx(
   args: DispenseNftTokenInstructionArgs,
   payer: PublicKey,
+  numNFTs: BN,
   payerTokens: PublicKey,
   receiver: PublicKey,
   gumballMachinePubkey: PublicKey,
