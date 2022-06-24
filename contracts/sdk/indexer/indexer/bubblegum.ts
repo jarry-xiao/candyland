@@ -227,4 +227,4 @@ export async function parseBubblegumDecompress(
   logs: (string | ParsedLog)[],
   parser: ParserState,
   optionalInfo: OptionalInfo
-) {}
+) { }

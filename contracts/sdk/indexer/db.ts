@@ -24,6 +24,18 @@ export type GapInfo = {
   prevSlot: number;
   currSlot: number;
 };
+
+export type AssetInfo = {
+  treeId: string,
+  assetId: string,
+  owner: string,
+  nonce: BN,
+  dataHash: string,
+  leafHash: string,
+  creatorHash: string,
+  compressed: number,
+}
+
 export class NFTDatabaseConnection {
   connection: Database<sqlite3.Database, sqlite3.Statement>;
   emptyNodeCache: Map<number, Buffer>;
@@ -83,6 +95,21 @@ export class NFTDatabaseConnection {
     }
   }
 
+  /// Can be used to kick of gapfill for all leafnodes in db
+  async findMostRecentNodes() {
+    return await this.connection.run(
+      `
+      SELECT * FROM merkle 
+      WHERE seq in 
+        (SELECT seq FROM 
+          (SELECT node_idx, MAX(seq) AS seq 
+          FROM merkle 
+          WHERE level = 0 group by node_idx
+        ));
+      `
+    );
+  }
+
   async updateLeafSchema(
     leafSchemaRecord: LeafSchemaEvent,
     leafHash: PublicKey,
@@ -122,6 +149,7 @@ export class NFTDatabaseConnection {
           creator_hash = excluded.creator_hash,
           leaf_hash = excluded.leaf_hash,
           compressed = excluded.compressed
+        WHERE seq <= excluded.seq
       `,
       leafSchema.id.toBase58(),
       (leafSchema.nonce.valueOf() as BN).toNumber(),
@@ -391,6 +419,7 @@ export class NFTDatabaseConnection {
     check: boolean = true
   ): Promise<Proof | null> {
     let latestSeq = await this.getMaxSeq(treeId);
+    console.log("latest seq:", latestSeq);
     if (!latestSeq) {
       return null;
     }
@@ -410,6 +439,7 @@ export class NFTDatabaseConnection {
       treeId,
       treeId
     );
+    console.log("Gap index:", gapIndex);
     if (gapIndex && gapIndex.seq < latestSeq) {
       return await this.inferProofWithKnownGap(
         hash,
@@ -488,6 +518,7 @@ export class NFTDatabaseConnection {
     check: boolean = true
   ): Promise<Proof | null> {
     let hashString = bs58.encode(hash);
+    console.log(hashString);
     let res = await this.connection.all(
       `
         SELECT 
@@ -505,6 +536,7 @@ export class NFTDatabaseConnection {
       hashString,
       treeId
     );
+    console.log("res:", res);
     if (res.length == 1) {
       let data = res[0];
       return this.generateProof(
@@ -545,6 +577,7 @@ export class NFTDatabaseConnection {
       }
       n >>= 1;
     }
+    console.log(nodes);
     nodes.push(1);
     let res;
     if (maxSequenceNumber) {
@@ -586,6 +619,7 @@ export class NFTDatabaseConnection {
     for (const node of res) {
       proof[node.level] = node.hash;
     }
+    console.log("starting to create empty proof:", root.level, proof.length, maxSequenceNumber);
     let leafIdx = nodeIdx - (1 << root.level);
     let inferredProof = {
       leaf: bs58.encode(hash),
@@ -655,6 +689,38 @@ export class NFTDatabaseConnection {
     )
     console.log(transactionId);
     return transactionId.length ? transactionId[0].transaction_id as string : null;
+  }
+
+  async getAssetInfo(assetId: string): Promise<AssetInfo> {
+    const query = `
+      SELECT 
+        tree_id,
+        asset_id,
+        nonce,
+        owner,
+        data_hash,
+        leaf_hash,
+        creator_hash,
+        compressed
+      FROM leaf_schema
+      WHERE asset_id = ?
+    `;
+    const rawAssetInfo = await this.connection.all(query, assetId);
+    if (rawAssetInfo.length) {
+      const rawAsset = rawAssetInfo[0];
+      return {
+        treeId: rawAsset.tree_id,
+        assetId: rawAsset.asset_id,
+        owner: rawAsset.owner,
+        nonce: new BN(rawAsset.nonce),
+        dataHash: rawAsset.data_hash,
+        creatorHash: rawAsset.creator_hash,
+        leafHash: rawAsset.leaf_hash,
+        compressed: rawAsset.compressed
+      }
+    } else {
+      return null
+    }
   }
 
   async getAssetsForOwner(owner: string, treeId?: string) {

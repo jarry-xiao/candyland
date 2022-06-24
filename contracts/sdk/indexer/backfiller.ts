@@ -48,6 +48,8 @@ export async function validateTree(
   return true;
 }
 
+/// Inserts data if its in [startSeq, endSeq)
+/// Austin 
 async function plugGapsFromSlot(
   connection: Connection,
   nftDb: NFTDatabaseConnection,
@@ -101,15 +103,19 @@ async function plugGaps(
 ) {
   const treeKey = new PublicKey(treeId);
   for (let slot = startSlot; slot <= endSlot; ++slot) {
-    await plugGapsFromSlot(
-      connection,
-      nftDb,
-      parserState,
-      treeKey,
-      slot,
-      startSeq,
-      endSeq
-    );
+    try {
+      await plugGapsFromSlot(
+        connection,
+        nftDb,
+        parserState,
+        treeKey,
+        slot,
+        startSeq,
+        endSeq
+      );
+    } catch (e) {
+      console.error(`Failed to plug gap from slot: ${slot}`, e);
+    }
   }
 }
 
@@ -149,6 +155,7 @@ export async function getAllTreeSlots(
 }
 
 /// Returns tree history in chronological order (oldest first)
+/// Backfill gaps, then checks for recent transactions since gapfill
 export async function backfillTreeHistory(
   connection: Connection,
   nftDb: NFTDatabaseConnection,
@@ -161,7 +168,7 @@ export async function backfillTreeHistory(
   const merkleRoll = decodeMerkleRoll(await (await connection.getAccountInfo(treeAddress)).data);
   const maxSeq = merkleRoll.roll.sequenceNumber.toNumber();
   // Sequence number on-chain is ready to setup the 
-  if (startSeq === maxSeq - 1) {
+  if (startSeq === maxSeq) {
     return startSeq;
   }
   const earliestTxId = await nftDb.getTxIdForSlot(treeId, fromSlot);
@@ -186,7 +193,7 @@ export async function backfillTreeHistory(
           treeAddress,
           treeHistory[historyIndex],
           0,
-          maxSeq,
+          maxSeq + 1,
         )
       )
     }
@@ -197,12 +204,49 @@ export async function backfillTreeHistory(
   return maxSeq;
 }
 
+async function plugGapsBatched(
+  batchSize: number,
+  missingData,
+  connection: Connection,
+  nftDb: NFTDatabaseConnection,
+  parserState: ParserState,
+  treeId: string,
+) {
+  let numProcessed = 0;
+  while (numProcessed < missingData.length) {
+    const batchJobs = [];
+    for (let i = 0; i < batchSize; i++) {
+      const index = numProcessed + i;
+      if (index >= missingData.length) {
+        break;
+      }
+      batchJobs.push(
+        plugGaps(
+          connection,
+          nftDb,
+          parserState,
+          treeId,
+          missingData[index].prevSlot,
+          missingData[index].currSlot,
+          missingData[index].prevSeq,
+          missingData[index].currSeq
+        )
+      )
+    }
+    numProcessed += batchJobs.length;
+    await Promise.all(batchJobs);
+  }
+
+  console.log("num processed: ", numProcessed);
+}
+
 export async function fetchAndPlugGaps(
   connection: Connection,
   nftDb: NFTDatabaseConnection,
   minSeq: number,
   treeId: string,
-  parserState: ParserState
+  parserState: ParserState,
+  batchSize?: number,
 ) {
   let [missingData, maxDbSeq, maxDbSlot] = await nftDb.getMissingData(
     minSeq,
@@ -231,19 +275,29 @@ export async function fetchAndPlugGaps(
     });
   }
 
-  for (const { prevSeq, currSeq, prevSlot, currSlot } of missingData) {
-    console.log(prevSeq, currSeq, prevSlot, currSlot);
-    await plugGaps(
-      connection,
-      nftDb,
-      parserState,
-      treeId,
-      prevSlot,
-      currSlot,
-      prevSeq,
-      currSeq
-    );
-  }
+  await plugGapsBatched(
+    batchSize ?? 1,
+    missingData,
+    connection,
+    nftDb,
+    parserState,
+    treeId,
+  );
+  // } else {
+  //   for (const { prevSeq, currSeq, prevSlot, currSlot } of missingData) {
+  //     console.log(prevSeq, currSeq, prevSlot, currSlot);
+  //     await plugGaps(
+  //       connection,
+  //       nftDb,
+  //       parserState,
+  //       treeId,
+  //       prevSlot,
+  //       currSlot,
+  //       prevSeq,
+  //       currSeq
+  //     );
+  //   }
+  // }
   console.log("Done");
   return maxDbSeq;
 }
