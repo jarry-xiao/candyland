@@ -18,6 +18,19 @@ export enum LeafSchema {
  * @category userTypes
  * @category generated
  */
-export const leafSchemaBeet = beet.fixedScalarEnum(
-  LeafSchema
-) as beet.FixedSizeBeet<LeafSchema, LeafSchema>
+export const leafSchemaBeet = beet.dataEnum<LeafSchemaRecord>([
+  [
+    'V1',
+    new beet.BeetArgsStruct<LeafSchemaRecord['V1']>(
+      [
+        ['id', beetSolana.publicKey],
+        ['owner', beetSolana.publicKey],
+        ['delegate', beetSolana.publicKey],
+        ['nonce', beet.u64],
+        ['dataHash', beet.uniformFixedSizeArray(beet.u8, 32)],
+        ['creatorHash', beet.uniformFixedSizeArray(beet.u8, 32)],
+      ],
+      'LeafSchemaRecord["V1"]'
+    ),
+  ],
+]) as beet.FixedSizeBeet<LeafSchema> | any

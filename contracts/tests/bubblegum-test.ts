@@ -1,9 +1,9 @@
 import * as anchor from "@project-serum/anchor";
-import {keccak_256} from "js-sha3";
-import {BN, Provider, Program} from "@project-serum/anchor";
-import {Bubblegum} from "../target/types/bubblegum";
-import {Gummyroll} from "../target/types/gummyroll";
-import {PROGRAM_ID} from "@metaplex-foundation/mpl-token-metadata";
+import { keccak_256 } from "js-sha3";
+import { BN, Provider, Program } from "@project-serum/anchor";
+import { Bubblegum } from "../target/types/bubblegum";
+import { Gummyroll } from "../target/types/gummyroll";
+import { PROGRAM_ID } from "@metaplex-foundation/mpl-token-metadata";
 import {
   PublicKey,
   Keypair,
@@ -12,7 +12,7 @@ import {
   Connection as web3Connection,
   SYSVAR_RENT_PUBKEY,
 } from "@solana/web3.js";
-import {assert} from "chai";
+import { assert } from "chai";
 import {
   createMintV1Instruction,
   createDecompressV1Instruction,
@@ -20,10 +20,10 @@ import {
   createDelegateInstruction,
   createRedeemInstruction,
   createCancelRedeemInstruction,
-  createCreateTreeInstruction
+  createCreateTreeInstruction,
 } from "../sdk/bubblegum/src/generated";
 
-import {buildTree, Tree} from "./merkle-tree";
+import { buildTree, Tree } from "./merkle-tree";
 import {
   decodeMerkleRoll,
   getMerkleRollAccountSize,
@@ -39,6 +39,7 @@ import {
 } from "@solana/spl-token";
 import { execute, logTx, bufferToArray } from "./utils";
 import { TokenProgramVersion, Version } from "../sdk/bubblegum/src/generated";
+import { CANDY_WRAPPER_PROGRAM_ID } from "../sdk/utils";
 
 // @ts-ignore
 let Bubblegum;
@@ -120,12 +121,13 @@ describe("bubblegum", () => {
         treeCreator: payer.publicKey,
         payer: payer.publicKey,
         authority: authority,
+        candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
         gummyrollProgram: GummyrollProgramId,
-        merkleSlab: merkleRollKeypair.publicKey
+        merkleSlab: merkleRollKeypair.publicKey,
       },
       {
         maxDepth: MAX_DEPTH,
-        maxBufferSize: MAX_SIZE
+        maxBufferSize: MAX_SIZE,
       }
     );
 
@@ -174,12 +176,13 @@ describe("bubblegum", () => {
         {
           mintAuthority: payer.publicKey,
           authority: treeAuthority,
+          candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
           gummyrollProgram: GummyrollProgramId,
           owner: payer.publicKey,
           delegate: payer.publicKey,
           merkleSlab: merkleRollKeypair.publicKey,
         },
-        {message: metadata}
+        { message: metadata }
       );
       console.log(" - Minting to tree");
       const mintTx = await Bubblegum.provider.send(
@@ -195,8 +198,8 @@ describe("bubblegum", () => {
       );
       const creatorHash = bufferToArray(Buffer.from(keccak_256.digest([])));
       let onChainRoot = await getRootOfOnChainMerkleRoot(connection, merkleRollKeypair.publicKey);
-      
-        console.log(" - Transferring Ownership");
+
+      console.log(" - Transferring Ownership");
       const nonceInfo = await (
         Bubblegum.provider.connection as web3Connection
       ).getAccountInfo(treeAuthority);
@@ -209,6 +212,7 @@ describe("bubblegum", () => {
           owner: payer.publicKey,
           delegate: payer.publicKey,
           newOwner: destination.publicKey,
+          candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
           gummyrollProgram: GummyrollProgramId,
           merkleSlab: merkleRollKeypair.publicKey,
         },
@@ -231,6 +235,7 @@ describe("bubblegum", () => {
           owner: destination.publicKey,
           previousDelegate: destination.publicKey,
           newDelegate: delegateKey.publicKey,
+          candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
           gummyrollProgram: GummyrollProgramId,
           merkleSlab: merkleRollKeypair.publicKey,
         },
@@ -253,6 +258,7 @@ describe("bubblegum", () => {
           owner: destination.publicKey,
           delegate: delegateKey.publicKey,
           newOwner: payer.publicKey,
+          candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
           gummyrollProgram: GummyrollProgramId,
           merkleSlab: merkleRollKeypair.publicKey,
         },
@@ -280,7 +286,7 @@ describe("bubblegum", () => {
         [
           Buffer.from("voucher", "utf8"),
           merkleRollKeypair.publicKey.toBuffer(),
-          new BN(0).toBuffer("le", 8)
+          new BN(0).toBuffer("le", 8),
         ],
         Bubblegum.programId
       );
@@ -291,6 +297,7 @@ describe("bubblegum", () => {
           authority: treeAuthority,
           owner: payer.publicKey,
           delegate: payer.publicKey,
+          candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
           gummyrollProgram: GummyrollProgramId,
           merkleSlab: merkleRollKeypair.publicKey,
           voucher: voucher,
@@ -317,6 +324,7 @@ describe("bubblegum", () => {
         {
           authority: treeAuthority,
           owner: payer.publicKey,
+          candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
           gummyrollProgram: GummyrollProgramId,
           merkleSlab: merkleRollKeypair.publicKey,
           voucher: voucher,
@@ -340,6 +348,7 @@ describe("bubblegum", () => {
           authority: treeAuthority,
           owner: payer.publicKey,
           delegate: payer.publicKey,
+          candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
           gummyrollProgram: GummyrollProgramId,
           merkleSlab: merkleRollKeypair.publicKey,
           voucher: voucher,
@@ -363,7 +372,11 @@ describe("bubblegum", () => {
       let voucherData = await Bubblegum.account.voucher.fetch(voucher);
 
       let [asset] = await PublicKey.findProgramAddress(
-        [Buffer.from("asset"), merkleRollKeypair.publicKey.toBuffer(), leafNonce.toBuffer("le", 8)],
+        [
+          Buffer.from("asset"),
+          merkleRollKeypair.publicKey.toBuffer(),
+          leafNonce.toBuffer("le", 8),
+        ],
         Bubblegum.programId
       );
 
