@@ -620,6 +620,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "candy-wrapper"
+version = "0.1.0"
+dependencies = [
+ "solana-program",
+]
+
+[[package]]
 name = "caps"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1538,6 +1545,7 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "bytemuck",
+ "candy-wrapper",
  "concurrent-merkle-tree",
 ]
 
