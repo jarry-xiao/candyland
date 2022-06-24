@@ -15,7 +15,7 @@ use spl_token::native_mint;
 pub mod state;
 pub mod utils;
 
-use crate::state::{GumballMachineHeader, EncodeMethod, ZeroCopy};
+use crate::state::{EncodeMethod, GumballMachineHeader, ZeroCopy};
 use crate::utils::get_metadata_args;
 
 declare_id!("GBALLoMcmimUutWvtNdFFGH5oguS7ghUUV6toQPppuTW");
@@ -187,15 +187,32 @@ fn fisher_yates_shuffle_and_fetch_nft_metadata<'info>(
     );
     let entropy = u64::from_le_bytes(buf);
     // Shuffle the list of indices using Fisher-Yates
-    let selected = entropy % gumball_header.remaining;
+    let selected = entropy as usize % gumball_header.remaining as usize;
     gumball_header.remaining -= 1;
-    indices.swap(selected as usize, gumball_header.remaining as usize);
-    // Pull out config line from the data
-    let random_config_index = indices[(gumball_header.remaining as usize)] as usize * line_size;
-    let config_line =
-        config_lines_data[random_config_index..random_config_index + line_size].to_vec();
-
-    let nft_index = (random_config_index / line_size) + 1;
+    indices.swap(selected, gumball_header.remaining as usize);
+    let (config_line, nft_index) = if config_lines_data.len() == 0 {
+        // Introduce special logic for sampling when no config data is specified
+        let remaining = gumball_header.remaining as usize;
+        if indices[selected] == 0 {
+            indices[selected] = remaining as u32 + 1;
+        }
+        if indices[remaining] == 0 {
+            indices[remaining] = selected as u32 + 1;
+        }
+        let random_config_index = indices[remaining];
+        // If no config data is specified, we will just use the index as the URL seed
+        (
+            random_config_index.to_le_bytes().to_vec(),
+            random_config_index as usize
+        )
+    } else {
+        // Pull out config line from the data
+        let random_config_index = indices[(gumball_header.remaining as usize)] as usize * line_size;
+        (
+            config_lines_data[random_config_index..random_config_index + line_size].to_vec(),
+            (random_config_index / line_size) + 1,
+        )
+    };
 
     let message = get_metadata_args(
         gumball_header.url_base,
@@ -208,7 +225,7 @@ fn fisher_yates_shuffle_and_fetch_nft_metadata<'info>(
         gumball_header.creator_address,
         nft_index,
         config_line,
-        EncodeMethod::from(gumball_header.config_line_encode_method)
+        EncodeMethod::from(gumball_header.config_line_encode_method),
     );
     return Ok(message);
 }
@@ -326,7 +343,7 @@ pub mod gumball_machine {
             retain_authority: retain_authority.into(),
             config_line_encode_method: match encode_method {
                 Some(e) => e.to_u8(),
-                None => EncodeMethod::UTF8.to_u8()
+                None => EncodeMethod::UTF8.to_u8(),
             },
             _padding: [0; 3],
             price,
@@ -339,19 +356,13 @@ pub mod gumball_machine {
             creator_address: ctx.accounts.creator.key(),
             extension_len: extension_len,
             max_mint_size: max_mint_size.max(1).min(max_items),
-            remaining: 0,
+            remaining: if extension_len > 0 { 0 } else { max_items },
             max_items,
             total_items_added: 0,
         };
         let index_array_size = std::mem::size_of::<u32>() * size;
         let config_size = extension_len as usize * size;
         assert!(config_data.len() == index_array_size + config_size);
-        let (indices_data, _) = config_data.split_at_mut(index_array_size);
-        let indices = cast_slice_mut::<u8, u32>(indices_data);
-        indices
-            .iter_mut()
-            .enumerate()
-            .for_each(|(i, idx)| *idx = i as u32);
         let seed = ctx.accounts.gumball_machine.key();
         let seeds = &[seed.as_ref(), &[*ctx.bumps.get("willy_wonka").unwrap()]];
         let authority_pda_signer = &[&seeds[..]];
@@ -379,6 +390,9 @@ pub mod gumball_machine {
         let (mut header_bytes, config_data) =
             gumball_machine_data.split_at_mut(std::mem::size_of::<GumballMachineHeader>());
         let mut gumball_header = GumballMachineHeader::load_mut_bytes(&mut header_bytes)?;
+        if gumball_header.extension_len == 0 {
+            return Ok(());
+        }
         let size = gumball_header.max_items as usize;
         let index_array_size = std::mem::size_of::<u32>() * size;
         let line_size = gumball_header.extension_len as usize;
@@ -387,8 +401,15 @@ pub mod gumball_machine {
         assert_eq!(gumball_header.authority, ctx.accounts.authority.key());
         assert_eq!(new_config_lines_data.len() % line_size, 0);
         assert!(start_index + num_lines <= gumball_header.max_items as usize);
-        let (_, config_lines_data) = config_data.split_at_mut(index_array_size);
-        config_lines_data[start_index..]
+        let (indices_data, config_lines_data) = config_data.split_at_mut(index_array_size);
+        let indices = cast_slice_mut::<u8, u32>(indices_data);
+        indices
+            .iter_mut()
+            .enumerate()
+            .skip(start_index)
+            .take(num_lines)
+            .for_each(|(i, idx)| *idx = i as u32);
+        config_lines_data[start_index * line_size..]
             .iter_mut()
             .take(new_config_lines_data.len())
             .enumerate()
@@ -408,6 +429,9 @@ pub mod gumball_machine {
         let (mut header_bytes, config_data) =
             gumball_machine_data.split_at_mut(std::mem::size_of::<GumballMachineHeader>());
         let gumball_header = GumballMachineHeader::load_mut_bytes(&mut header_bytes)?;
+        if gumball_header.extension_len == 0 {
+            return Ok(());
+        }
         let size = gumball_header.max_items as usize;
         let index_array_size = std::mem::size_of::<u32>() * size;
         let config_size = gumball_header.extension_len as usize * size;
@@ -418,7 +442,14 @@ pub mod gumball_machine {
         assert!(config_data.len() == index_array_size + config_size);
         assert_eq!(new_config_lines_data.len(), num_lines * line_size);
         assert!(starting_line as usize + num_lines <= gumball_header.total_items_added as usize);
-        let (_, config_lines_data) = config_data.split_at_mut(index_array_size);
+        let (indices_data, config_lines_data) = config_data.split_at_mut(index_array_size);
+        let indices = cast_slice_mut::<u8, u32>(indices_data);
+        indices
+            .iter_mut()
+            .enumerate()
+            .skip(starting_line as usize)
+            .take(num_lines)
+            .for_each(|(i, idx)| *idx = i as u32);
         config_lines_data[starting_line as usize * line_size..]
             .iter_mut()
             .take(new_config_lines_data.len())
@@ -461,7 +492,7 @@ pub mod gumball_machine {
         }
         match encode_method {
             Some(e) => gumball_machine.config_line_encode_method = e.to_u8(),
-            None => {} 
+            None => {}
         }
         match seller_fee_basis_points {
             Some(s) => gumball_machine.seller_fee_basis_points = s,

@@ -531,7 +531,7 @@ describe("gumball-machine", () => {
         merkleRollKeypair = Keypair.generate();
 
         [noncePDAKey] = await PublicKey.findProgramAddress(
-          [Buffer.from("bubblegum"), merkleRollKeypair.publicKey.toBuffer()],
+          [merkleRollKeypair.publicKey.toBuffer()],
           BubblegumProgramId
         );
         baseGumballMachineInitProps = {
@@ -808,7 +808,7 @@ describe("gumball-machine", () => {
         botWallet = Keypair.generate();
 
         [noncePDAKey] = await PublicKey.findProgramAddress(
-          [Buffer.from("bubblegum"), merkleRollKeypair.publicKey.toBuffer()],
+          [merkleRollKeypair.publicKey.toBuffer()],
           BubblegumProgramId
         );
         // Give creator enough funds to produce accounts for gumball-machine

@@ -49,7 +49,7 @@ function parseInstructionLog(
     logs: [],
   };
   let instructionComplete = false;
-  while (!instructionComplete) {
+  while (!instructionComplete && logs.length) {
     const logLine = logs[0];
     logs = logs.slice(1);
     let result = logLine.match(endRegEx);
@@ -70,6 +70,9 @@ function parseInstructionLog(
         parsedLog.logs.push(logLine);
       }
     }
+  }
+  if (!instructionComplete) {
+    console.log("Unable to complete context for:", programId.toString(), depth);
   }
   return { parsedLog, logs };
 }
