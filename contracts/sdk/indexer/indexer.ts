@@ -41,7 +41,7 @@ async function main() {
         await fetchAndPlugGaps(connection, db, 0, treeId, {
           Gummyroll,
           Bubblegum,
-        });
+        }, 5);
         console.log("Validation:");
         console.log(
           `    Off-chain tree ${treeId} is consistent: ${await validateTree(
