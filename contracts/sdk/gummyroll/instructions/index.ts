@@ -1,6 +1,7 @@
 import { Program } from '@project-serum/anchor';
 import { Gummyroll } from "../types";
 import { Keypair, PublicKey, TransactionInstruction } from '@solana/web3.js';
+import  { CANDY_WRAPPER_PROGRAM_ID } from '../../utils'
 
 export function createReplaceIx(
     gummyroll: Program<Gummyroll>,
@@ -28,6 +29,7 @@ export function createReplaceIx(
             accounts: {
                 merkleRoll,
                 authority: authority.publicKey,
+                candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
             },
             signers: [authority],
             remainingAccounts: nodeProof,
@@ -49,6 +51,7 @@ export function createAppendIx(
                 merkleRoll,
                 authority: authority.publicKey,
                 appendAuthority: appendAuthority.publicKey,
+                candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
             },
             signers: [authority, appendAuthority],
         }

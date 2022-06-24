@@ -30,6 +30,8 @@ import {
   assertOnChainMerkleRollProperties,
 } from "../sdk/gummyroll";
 import { execute, logTx } from "./utils";
+import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
+import { CANDY_WRAPPER_PROGRAM_ID } from "../sdk/utils";
 
 // @ts-ignore
 let Gummyroll;
@@ -108,6 +110,7 @@ describe("gummyroll", () => {
               merkleRoll: merkleRollKeypair.publicKey,
               authority: payer.publicKey,
               appendAuthority: payer.publicKey,
+              candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
             },
             signers: [payer],
             remainingAccounts: proof,
@@ -121,6 +124,7 @@ describe("gummyroll", () => {
             merkleRoll: merkleRollKeypair.publicKey,
             authority: payer.publicKey,
             appendAuthority: payer.publicKey,
+            candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
           },
           signers: [payer],
         })
@@ -260,7 +264,7 @@ describe("gummyroll", () => {
       try {
         await execute(Gummyroll.provider, [verifyLeafIx], [payer]);
         assert(false, "Proof should have failed to verify");
-      } catch {}
+      } catch { }
 
       // Replace instruction with same proof fails
       const replaceLeafIx = createReplaceIx(
@@ -276,7 +280,7 @@ describe("gummyroll", () => {
       try {
         await execute(Gummyroll.provider, [replaceLeafIx], [payer]);
         assert(false, "Replace should have failed to verify");
-      } catch {}
+      } catch { }
       const merkleRollAccount =
         await Gummyroll.provider.connection.getAccountInfo(
           merkleRollKeypair.publicKey
@@ -308,7 +312,7 @@ describe("gummyroll", () => {
         })
       );
       assert(
-        replaceLeafIx.keys.length == 2 + MAX_DEPTH,
+        replaceLeafIx.keys.length == 3 + MAX_DEPTH,
         `Failed to create proof for ${MAX_DEPTH}`
       );
 
@@ -348,7 +352,7 @@ describe("gummyroll", () => {
         })
       );
       assert(
-        replaceLeafIx.keys.length == 2 + 1,
+        replaceLeafIx.keys.length == 3 + 1,
         "Failed to minimize proof to expected size of 1"
       );
       await execute(Gummyroll.provider, [replaceLeafIx], [payer]);
@@ -403,7 +407,7 @@ describe("gummyroll", () => {
             false,
             "Transaction should have failed, since `randomSigner` is not append authority"
           );
-        } catch {}
+        } catch { }
       });
       it("But authority can transfer appendAuthority", async () => {
         const transferAppendAuthorityIx = createTransferAuthorityIx(
@@ -486,7 +490,7 @@ describe("gummyroll", () => {
             false,
             "Transaction should have failed since the append authority cannot act as the authority for replaces"
           );
-        } catch {}
+        } catch { }
       });
     });
     describe("Examples transferring authority", () => {
@@ -530,7 +534,7 @@ describe("gummyroll", () => {
             false,
             "Transaction should have failed since incorrect authority cannot execute replaces"
           );
-        } catch {}
+        } catch { }
       });
       it("Can transfer authority", async () => {
         const transferAppendAuthorityIx = createTransferAuthorityIx(
@@ -587,7 +591,7 @@ describe("gummyroll", () => {
             false,
             "Transaction should have failed since incorrect authority cannot execute replaces"
           );
-        } catch {}
+        } catch { }
       });
     });
   });
@@ -731,7 +735,7 @@ describe("gummyroll", () => {
           false,
           "Attacker was able to succesfully write fake existence of a leaf"
         );
-      } catch (e) {}
+      } catch (e) { }
 
       const merkleRoll = decodeMerkleRoll(
         (
@@ -772,7 +776,7 @@ describe("gummyroll", () => {
           false,
           "Attacker was able to succesfully write fake existence of a leaf"
         );
-      } catch (e) {}
+      } catch (e) { }
 
       const merkleRoll = decodeMerkleRoll(
         (
@@ -801,7 +805,7 @@ describe("gummyroll", () => {
 
       let leaves = [];
       let i = 0;
-      let stepSize = 8;
+      let stepSize = 4;
       while (i < 2 ** DEPTH) {
         let ixs = [];
         for (let j = 0; j < stepSize; ++j) {
