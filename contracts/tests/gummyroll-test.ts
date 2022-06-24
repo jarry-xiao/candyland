@@ -31,6 +31,7 @@ import {
 } from "../sdk/gummyroll";
 import { execute, logTx } from "./utils";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
+import { CANDY_WRAPPER_PROGRAM_ID } from "../sdk/utils";
 
 // @ts-ignore
 let Gummyroll;
@@ -109,6 +110,7 @@ describe("gummyroll", () => {
               merkleRoll: merkleRollKeypair.publicKey,
               authority: payer.publicKey,
               appendAuthority: payer.publicKey,
+              candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
             },
             signers: [payer],
             remainingAccounts: proof,
@@ -122,6 +124,7 @@ describe("gummyroll", () => {
             merkleRoll: merkleRollKeypair.publicKey,
             authority: payer.publicKey,
             appendAuthority: payer.publicKey,
+            candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
           },
           signers: [payer],
         })
@@ -309,7 +312,7 @@ describe("gummyroll", () => {
         })
       );
       assert(
-        replaceLeafIx.keys.length == 2 + MAX_DEPTH,
+        replaceLeafIx.keys.length == 3 + MAX_DEPTH,
         `Failed to create proof for ${MAX_DEPTH}`
       );
 
@@ -349,7 +352,7 @@ describe("gummyroll", () => {
         })
       );
       assert(
-        replaceLeafIx.keys.length == 2 + 1,
+        replaceLeafIx.keys.length == 3 + 1,
         "Failed to minimize proof to expected size of 1"
       );
       await execute(Gummyroll.provider, [replaceLeafIx], [payer]);
@@ -802,7 +805,7 @@ describe("gummyroll", () => {
 
       let leaves = [];
       let i = 0;
-      let stepSize = 8;
+      let stepSize = 4;
       while (i < 2 ** DEPTH) {
         let ixs = [];
         for (let j = 0; j < stepSize; ++j) {
