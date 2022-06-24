@@ -15,6 +15,8 @@ use {
     sea_orm::{DatabaseConnection, DbErr, SqlxPostgresConnector},
     sqlx::postgres::PgPoolOptions,
 };
+use digital_asset_types::dapi::asset::get_asset;
+use digital_asset_types::rpc::Asset;
 
 pub struct DasApi {
     db_connection: DatabaseConnection,
@@ -45,23 +47,20 @@ impl ApiContract for DasApi {
         let id_bytes = id.to_bytes().to_vec();
         get_proof_for_asset(&self.db_connection, id_bytes)
             .await
-            .and_then(|list| {
-                if list.len() == 0 {
+            .and_then(|p| {
+                if p.proof.len() == 0 {
                     return Err(not_found(&asset_id));
                 }
-                Ok(list)
+                Ok(p)
             })
-            .and_then(|list| {
-                let leaf = list.first().ok_or(not_found(&asset_id))?;
-                Ok(AssetProof {
-                    proof: list
-                        .iter()
-                        .map(|model| bs58::encode(&model.hash).into_string())
-                        .collect(),
-                    node_index: leaf.node_idx,
-                    tree_id: bs58::encode(&leaf.tree).into_string(),
-                })
-            })
+            .map_err(Into::into)
+    }
+
+    async fn get_asset(self: &DasApi, asset_id: String) -> Result<Asset, DasApiError> {
+        let id = validate_pubkey(asset_id.clone())?;
+        let id_bytes = id.to_bytes().to_vec();
+        get_asset(&self.db_connection, id_bytes)
+            .await
             .map_err(Into::into)
     }
 

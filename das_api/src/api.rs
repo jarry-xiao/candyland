@@ -2,11 +2,12 @@ use crate::{DasApiError, RpcModule};
 use async_trait::async_trait;
 use digital_asset_types::rpc::filter::{AssetSorting, OfferSorting};
 use digital_asset_types::rpc::response::{AssetList, ListingsList, OfferList};
-use digital_asset_types::rpc::AssetProof;
+use digital_asset_types::rpc::{Asset, AssetProof};
 
 #[async_trait]
 pub trait ApiContract: Send + Sync + 'static {
     async fn get_asset_proof(&self, asset_id: String) -> Result<AssetProof, DasApiError>;
+    async fn get_asset(&self, asset_id: String) -> Result<Asset, DasApiError>;
     async fn get_assets_by_owner(
         &mut self,
         owner_address: String,
@@ -64,7 +65,7 @@ pub trait ApiContract: Send + Sync + 'static {
 }
 
 pub struct RpcApiBuilder;
-3Tiz43WyPqoUXVjrtjSoHwzJbAPMAsgFB66rE8qJQXKAv
+
 impl<'a> RpcApiBuilder {
     pub fn build(
         contract: Box<dyn ApiContract>,
@@ -72,9 +73,17 @@ impl<'a> RpcApiBuilder {
         let mut module = RpcModule::new(contract);
         module.register_async_method("get_asset_proof", |rpc_params, rpc_context| async move {
             let asset_id = rpc_params.one::<String>()?;
-            println!("Asset Id", asset_id);
+            println!("Asset Id {}", asset_id);
             rpc_context
                 .get_asset_proof(asset_id)
+                .await
+                .map_err(Into::into)
+        })?;
+        module.register_async_method("get_asset", |rpc_params, rpc_context| async move {
+            let asset_id = rpc_params.one::<String>()?;
+            println!("Asset Id {}", asset_id);
+            rpc_context
+                .get_asset(asset_id)
                 .await
                 .map_err(Into::into)
         })?;

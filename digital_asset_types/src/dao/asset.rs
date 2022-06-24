@@ -16,6 +16,7 @@ impl EntityName for Entity {
 #[derive(Clone, Debug, PartialEq, DeriveModel, DeriveActiveModel)]
 pub struct Model {
     pub id: Vec<u8>,
+    pub specification_version: i32,
     pub owner: Vec<u8>,
     pub owner_type: OwnerType,
     pub delegate: Option<Vec<u8>>,
@@ -31,11 +32,14 @@ pub struct Model {
     pub royalty_target: Option<Vec<u8>>,
     pub royalty_amount: i32,
     pub chain_data_id: Option<i64>,
+    pub created_at: Option<DateTimeWithTimeZone>,
+    pub burnt: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveColumn)]
 pub enum Column {
     Id,
+    SpecificationVersion,
     Owner,
     OwnerType,
     Delegate,
@@ -51,6 +55,8 @@ pub enum Column {
     RoyaltyTarget,
     RoyaltyAmount,
     ChainDataId,
+    CreatedAt,
+    Burnt,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DerivePrimaryKey)]
@@ -78,6 +84,7 @@ impl ColumnTrait for Column {
     fn def(&self) -> ColumnDef {
         match self {
             Self::Id => ColumnType::Binary.def(),
+            Self::SpecificationVersion => ColumnType::Integer.def(),
             Self::Owner => ColumnType::Binary.def(),
             Self::OwnerType => OwnerType::db_type(),
             Self::Delegate => ColumnType::Binary.def().null(),
@@ -93,6 +100,8 @@ impl ColumnTrait for Column {
             Self::RoyaltyTarget => ColumnType::Binary.def().null(),
             Self::RoyaltyAmount => ColumnType::Integer.def(),
             Self::ChainDataId => ColumnType::BigInteger.def().null(),
+            Self::CreatedAt => ColumnType::TimestampWithTimeZone.def().null(),
+            Self::Burnt => ColumnType::Boolean.def(),
         }
     }
 }

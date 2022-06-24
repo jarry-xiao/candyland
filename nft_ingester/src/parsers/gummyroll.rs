@@ -89,7 +89,7 @@ pub async fn save_changelog_events(
     txn: &DatabaseTransaction,
 ) -> Result<(), IngesterError> {
     for change_log_event in gummy_roll_events {
-        gummyroll_change_log_event_to_database(change_log_event, txn)
+        gummyroll_change_log_event_to_database(change_log_event, txn, false)
             .await
             .map(|_| ())?
     }
@@ -112,6 +112,7 @@ pub async fn handle_gummyroll_instruction(
 pub async fn gummyroll_change_log_event_to_database(
     change_log_event: ChangeLogEvent,
     txn: &DatabaseTransaction,
+    filling: bool
 ) -> Result<(), IngesterError> {
     let mut i: i64 = 0;
     for p in change_log_event.path.into_iter() {
@@ -133,7 +134,9 @@ pub async fn gummyroll_change_log_event_to_database(
                     .to_owned(),
             )
             .build(DbBackend::Postgres);
-        query.sql = format!("{} WHERE excluded.seq > cl_items.seq", query.sql);
+        if !filling {
+            query.sql = format!("{} WHERE excluded.seq > cl_items.seq", query.sql);
+        }
         txn.execute(query)
             .await
             .map_err(|db_err| IngesterError::StorageWriteError(db_err.to_string()))?;

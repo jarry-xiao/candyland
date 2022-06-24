@@ -43,30 +43,33 @@ create table asset_data
 
 create table asset
 (
-    id                  bytea PRIMARY KEY,
-    owner               bytea               not null,
-    owner_type          owner_type          not null default 'single',
+    id                    bytea PRIMARY KEY,
+    specification_version int                 not null default 1,
+    owner                 bytea               not null,
+    owner_type            owner_type          not null default 'single',
     -- delegation
-    delegate            bytea,
+    delegate              bytea,
     -- freeze
-    frozen              bool                not null default false,
+    frozen                bool                not null default false,
     -- supply
-    supply              bigint              not null default 1,
-    supply_mint         bytea,
+    supply                bigint              not null default 1,
+    supply_mint           bytea,
     -- compression
-    compressed          bool                not null default false,
+    compressed            bool                not null default false,
     -- -- Can this asset be compressed
-    compressible        bool                not null default false,
-    tree_id             bytea,
-    leaf                bytea,
-    node_idx            bigint,
-    nonce               bigint              not null,
+    compressible          bool                not null default false,
+    tree_id               bytea,
+    leaf                  bytea,
+    nonce                 bigint              not null,
     -- royalty
-    royalty_target_type royalty_target_type not null default 'creators',
-    royalty_target      bytea,
-    royalty_amount      int                 not null default 0,
+    royalty_target_type   royalty_target_type not null default 'creators',
+    royalty_target        bytea,
+    royalty_amount        int                 not null default 0,
     -- data
-    chain_data_id       bigint references asset_data (id)
+    chain_data_id         bigint references asset_data (id),
+    -- visibility
+    created_at            timestamp with time zone     default (now() at time zone 'utc'),
+    burnt                 bool                not null default false
 );
 
 create index asset_tree on asset (tree_id);

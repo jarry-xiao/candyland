@@ -1034,6 +1034,9 @@ dependencies = [
  "borsh",
  "borsh-derive",
  "bs58 0.4.0",
+ "concurrent-merkle-tree",
+ "jsonpath_lib",
+ "mime_guess",
  "mpl-token-metadata",
  "num-derive",
  "num-traits",
@@ -1042,6 +1045,7 @@ dependencies = [
  "serde_json",
  "solana-sdk",
  "thiserror",
+ "url",
 ]
 
 [[package]]
@@ -1852,6 +1856,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "jsonpath_lib"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eaa63191d68230cccb81c5aa23abd53ed64d83337cacbb25a7b8c7979523774f"
+dependencies = [
+ "log",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "jsonrpc-core"
 version = "18.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2180,6 +2195,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a60c7ce501c71e03a9c9c0d35b861413ae925bd979cc7a4e30d060069aaac8d"
 
 [[package]]
+name = "mime_guess"
+version = "2.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4192263c238a5f0d0c6bfd21f336a313a4ce1c450542449ca191bb657b4642ef"
+dependencies = [
+ "mime",
+ "unicase",
+]
+
+[[package]]
 name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2310,6 +2335,7 @@ dependencies = [
  "base64 0.13.0",
  "bs58 0.4.0",
  "bubblegum",
+ "chrono",
  "csv",
  "digital_asset_types",
  "flatbuffers",
@@ -3157,9 +3183,9 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
-version = "0.11.10"
+version = "0.11.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46a1f7aa4f35e5e8b4160449f51afc758f0ce6454315a9fa7d0d113e958c41eb"
+checksum = "b75aa69a3f06bbcc66ede33af2af253c6f7a86b1ca0033f60c580a27074fbf92"
 dependencies = [
  "base64 0.13.0",
  "bytes",
@@ -3181,13 +3207,14 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "rustls 0.20.4",
- "rustls-pemfile 0.3.0",
+ "rustls-pemfile 1.0.0",
  "serde",
  "serde_json",
  "serde_urlencoded",
  "tokio",
  "tokio-native-tls",
  "tokio-rustls 0.23.3",
+ "tower-service",
  "url",
  "wasm-bindgen",
  "wasm-bindgen-futures",
@@ -3331,9 +3358,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-pemfile"
-version = "0.3.0"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ee86d63972a7c661d1536fefe8c3c8407321c3df668891286de28abcd087360"
+checksum = "e7522c9de787ff061458fe9a829dc790a3f5b22dc571694fc5883f448b94d9a9"
 dependencies = [
  "base64 0.13.0",
 ]
@@ -3572,6 +3599,7 @@ version = "1.0.81"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b7ce2b32a1aed03c558dc61a5cd328f15aff2dbc17daad8fb8af04d2100e15c"
 dependencies = [
+ "indexmap",
  "itoa 1.0.1",
  "ryu",
  "serde",

@@ -10,7 +10,7 @@ pub enum DasApiError {
     DatabaseConnectionError(#[from] sqlx::Error),
     #[error("Pubkey Validation Err {0} is invalid")]
     PubkeyValidationError(String),
-    #[error("Validation Error")]
+    #[error("Validation Error {0}")]
     ValidationError(String),
     #[error("Database Error")]
     DatabaseError(#[from] sea_orm::DbErr),
@@ -18,6 +18,7 @@ pub enum DasApiError {
 
 impl Into<RpcError> for DasApiError {
     fn into(self) -> RpcError {
+        println!("{}", self.to_string());
         RpcError::Call(CallError::from_std_error(self))
     }
 }

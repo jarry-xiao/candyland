@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use {
     serde::{Deserialize, Serialize},
     std::collections::HashMap,
@@ -5,6 +6,7 @@ use {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct AssetProof {
+    pub root: String,
     pub proof: Vec<String>,
     pub node_index: i64,
     pub tree_id: String,
@@ -66,9 +68,8 @@ pub struct File {
 
 pub type Files = Vec<File>;
 pub type MetadataItem = HashMap<String, serde_json::Value>;
-pub type Metadata = Vec<MetadataItem>;
-pub type ObjectHAgrRKSz = HashMap<String, serde_json::Value>;
-pub type Links = Vec<ObjectHAgrRKSz>;
+// TODO sub schema support
+pub type Links = HashMap<String, serde_json::Value>;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Content {
@@ -77,22 +78,41 @@ pub struct Content {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub files: Option<Files>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Metadata>,
+    pub metadata: Option<Vec<MetadataItem>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub links: Option<Links>,
 }
 
-pub type Authority = HashMap<String, serde_json::Value>;
-pub type Authorities = Vec<Authority>;
-pub type Eligible = bool;
-pub type Compressed = bool;
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum Scope {
+    Full,
+    Royalty,
+    Metadata,
+    Extension,
+}
+
+impl From<String> for Scope {
+    fn from(s: String) -> Self {
+        match &*s {
+            "royalty" => Scope::Royalty,
+            "metadata" => Scope::Metadata,
+            "extension" => Scope::Extension,
+            _ => Scope::Full
+        }
+    }
+}
+
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct Authority {
+    pub address: String,
+    pub scopes: Vec<Scope>,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Compression {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub eligible: Option<Eligible>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub compressed: Option<Compressed>,
+    pub eligible: bool,
+    pub compressed: bool,
 }
 
 pub type GroupKey = String;
@@ -173,7 +193,7 @@ pub struct Asset {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub content: Option<Content>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub authorities: Option<Authorities>,
+    pub authorities: Option<Vec<Authority>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compression: Option<Compression>,
     #[serde(skip_serializing_if = "Option::is_none")]

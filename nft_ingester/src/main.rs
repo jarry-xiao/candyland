@@ -2,6 +2,7 @@ pub mod error;
 pub mod events;
 pub mod parsers;
 pub mod utils;
+pub mod tasks;
 
 use {
     crate::{
@@ -14,14 +15,18 @@ use {
     plerkle_serialization::transaction_info_generated::transaction_info::root_as_transaction_info,
     solana_sdk::pubkey::Pubkey,
     sqlx::{self, postgres::PgPoolOptions, Pool, Postgres},
+    tokio::sync::mpsc::UnboundedSender
+
 };
+use crate::tasks::{BgTask, TaskManager};
 
 async fn setup_manager<'a, 'b>(
     mut manager: ProgramHandlerManager<'a>,
     pool: Pool<Postgres>,
+    task_manager: UnboundedSender<Box<dyn BgTask>>,
 ) -> ProgramHandlerManager<'a> {
-    // TODO setup figment gor db configuration
-    let bubblegum_parser = BubblegumHandler::new(pool.clone());
+    // Panic if thread cant be made for background tasks
+    let bubblegum_parser = BubblegumHandler::new(pool.clone(), task_manager);
     let gummyroll_parser = GummyRollHandler::new(pool.clone());
     manager.register_parser(Box::new(bubblegum_parser));
     manager.register_parser(Box::new(gummyroll_parser));
@@ -37,8 +42,9 @@ async fn main() {
         .connect("postgres://solana:solana@db/solana")
         .await
         .unwrap();
+    let background_task_manager = TaskManager::new("background-tasks".to_string(), pool.clone()).unwrap();
     // Service streams as separate concurrent processes.
-    tasks.push(service_transaction_stream::<RedisMessenger>(pool).await);
+    tasks.push(service_transaction_stream::<RedisMessenger>(pool, background_task_manager.get_sender()).await);
     // Wait for ctrl-c.
     match tokio::signal::ctrl_c().await {
         Ok(()) => {}
@@ -56,10 +62,12 @@ async fn main() {
 
 async fn service_transaction_stream<T: Messenger>(
     pool: Pool<Postgres>,
+    tasks: UnboundedSender<Box<dyn BgTask>>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut manager = ProgramHandlerManager::new();
-        manager = setup_manager(manager, pool).await;
+
+        manager = setup_manager(manager, pool, tasks).await;
         let mut messenger = T::new().await.unwrap();
         loop {
             // This call to messenger.recv() blocks with no timeout until
@@ -71,10 +79,14 @@ async fn service_transaction_stream<T: Messenger>(
     })
 }
 
-async fn service_account_stream<T: Messenger>(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
+async fn service_account_stream<T: Messenger>(
+    pool: Pool<Postgres>,
+    tasks: UnboundedSender<Box<dyn BgTask>>,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut manager = ProgramHandlerManager::new();
-        manager = setup_manager(manager, pool).await;
+        let task_manager = TaskManager::new("background-tasks".to_string(), pool.clone()).unwrap();
+        manager = setup_manager(manager, pool, tasks).await;
         let mut messenger = T::new().await.unwrap();
 
         loop {

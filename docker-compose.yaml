@@ -2,7 +2,6 @@ version: "3.9"
 services:
   ingester:
     depends_on:
-      - api
       - redis
     restart: always
     build:
