@@ -1,7 +1,26 @@
 import { Program } from '@project-serum/anchor';
 import { Gummyroll } from "../types";
 import { Keypair, PublicKey, TransactionInstruction } from '@solana/web3.js';
-import  { CANDY_WRAPPER_PROGRAM_ID } from '../../utils'
+import { CANDY_WRAPPER_PROGRAM_ID } from '../../utils'
+
+/**
+ * Modifies given instruction
+ */
+export function addProof(
+    instruction: TransactionInstruction,
+    nodeProof: Buffer[],
+): TransactionInstruction {
+    instruction.keys = instruction.keys.concat(
+        nodeProof.map((node) => {
+            return {
+                pubkey: new PublicKey(node),
+                isSigner: false,
+                isWritable: false,
+            };
+        })
+    )
+    return instruction;
+}
 
 export function createReplaceIx(
     gummyroll: Program<Gummyroll>,
@@ -13,14 +32,7 @@ export function createReplaceIx(
     index: number,
     proof: Buffer[]
 ): TransactionInstruction {
-    const nodeProof = proof.map((node) => {
-        return {
-            pubkey: new PublicKey(node),
-            isSigner: false,
-            isWritable: false,
-        };
-    });
-    return gummyroll.instruction.replaceLeaf(
+    return addProof(gummyroll.instruction.replaceLeaf(
         Array.from(treeRoot),
         Array.from(previousLeaf),
         Array.from(newLeaf),
@@ -32,9 +44,8 @@ export function createReplaceIx(
                 candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
             },
             signers: [authority],
-            remainingAccounts: nodeProof,
         }
-    );
+    ), proof);
 }
 
 export function createAppendIx(
@@ -86,14 +97,7 @@ export function createVerifyLeafIx(
     index: number,
     proof: Buffer[],
 ): TransactionInstruction {
-    const nodeProof = proof.map((node) => {
-        return {
-            pubkey: new PublicKey(node),
-            isSigner: false,
-            isWritable: false,
-        };
-    });
-    return gummyroll.instruction.verifyLeaf(
+    return addProof(gummyroll.instruction.verifyLeaf(
         Array.from(root),
         Array.from(leaf),
         index,
@@ -102,7 +106,6 @@ export function createVerifyLeafIx(
                 merkleRoll
             },
             signers: [],
-            remainingAccounts: nodeProof,
         }
-    );
+    ), proof);
 }
