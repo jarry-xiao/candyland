@@ -30,6 +30,7 @@ import {
   getRootOfOnChainMerkleRoot,
   assertOnChainMerkleRollProperties,
   createTransferAuthorityIx,
+  createAllocTreeIx,
 } from "../sdk/gummyroll";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 import {
@@ -40,6 +41,7 @@ import {
 import { execute, logTx, bufferToArray } from "./utils";
 import { TokenProgramVersion, Version } from "../sdk/bubblegum/src/generated";
 import { CANDY_WRAPPER_PROGRAM_ID } from "../sdk/utils";
+import { getBubblegumAuthorityPDA, getNonceCount, getVoucherPDA } from "../sdk/bubblegum/src/convenience";
 
 // @ts-ignore
 let Bubblegum;
@@ -96,26 +98,18 @@ describe("bubblegum", () => {
       ),
       "confirmed"
     );
-    const requiredSpace = getMerkleRollAccountSize(MAX_DEPTH, MAX_SIZE);
     const leaves = Array(2 ** MAX_DEPTH).fill(Buffer.alloc(32));
     const tree = buildTree(leaves);
 
-    const allocAccountIx = SystemProgram.createAccount({
-      fromPubkey: payer.publicKey,
-      newAccountPubkey: merkleRollKeypair.publicKey,
-      lamports:
-        await Bubblegum.provider.connection.getMinimumBalanceForRentExemption(
-          requiredSpace
-        ),
-      space: requiredSpace,
-      programId: GummyrollProgramId,
-    });
-
-    let [authority] = await PublicKey.findProgramAddress(
-      [merkleRollKeypair.publicKey.toBuffer()],
-      Bubblegum.programId
+    const allocAccountIx = await createAllocTreeIx(
+      connection,
+      MAX_SIZE,
+      MAX_DEPTH,
+      0,
+      payer.publicKey,
+      merkleRollKeypair.publicKey
     );
-
+    const authority = await getBubblegumAuthorityPDA(merkleRollKeypair.publicKey);
     const initGummyrollIx = createCreateTreeInstruction(
       {
         treeCreator: payer.publicKey,
@@ -200,12 +194,8 @@ describe("bubblegum", () => {
       let onChainRoot = await getRootOfOnChainMerkleRoot(connection, merkleRollKeypair.publicKey);
 
       console.log(" - Transferring Ownership");
-      const nonceInfo = await (
-        Bubblegum.provider.connection as web3Connection
-      ).getAccountInfo(treeAuthority);
-      const leafNonce = new BN(nonceInfo.data.slice(8, 16), "le").sub(
-        new BN(1)
-      );
+      const nonceCount = await getNonceCount(Bubblegum.provider.connection, merkleRollKeypair.publicKey);
+      const leafNonce = nonceCount.sub(new BN(1));
       let transferIx = createTransferInstruction(
         {
           authority: treeAuthority,
@@ -282,13 +272,10 @@ describe("bubblegum", () => {
 
       onChainRoot = await getRootOfOnChainMerkleRoot(connection, merkleRollKeypair.publicKey);
 
-      let [voucher] = await PublicKey.findProgramAddress(
-        [
-          Buffer.from("voucher", "utf8"),
-          merkleRollKeypair.publicKey.toBuffer(),
-          new BN(0).toBuffer("le", 8),
-        ],
-        Bubblegum.programId
+      let voucher = await getVoucherPDA(
+        Bubblegum.provider.connection,
+        merkleRollKeypair.publicKey,
+        0,
       );
 
       console.log(" - Redeeming Leaf", voucher.toBase58());
