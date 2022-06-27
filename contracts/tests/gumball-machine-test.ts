@@ -23,7 +23,7 @@ import {
   createDispenseNFTForSolIx,
   createDispenseNFTForTokensIx,
   createInitializeGumballMachineIxs,
-} from '../sdk/gumball-machine';
+} from "../sdk/gumball-machine";
 import {
   InitializeGumballMachineInstructionArgs,
   createAddConfigLinesInstruction,
