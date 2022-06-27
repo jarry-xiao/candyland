@@ -23,7 +23,6 @@ import {
   createDispenseNFTForSolIx,
   createDispenseNFTForTokensIx,
   createInitializeGumballMachineIxs,
-  getBubblegumAuthorityPDAKey,
 } from "../sdk/gumball-machine";
 import {
   InitializeGumballMachineInstructionArgs,
