@@ -90,43 +90,11 @@ export async function createInitializeGumballMachineIxs(
  * Wrapper on top of Solita's createDispenseNftSolInstruction. Automatically fetches necessary PDA keys for instruction
  * */
 export async function createDispenseNFTForSolIx(
-<<<<<<< HEAD
   numNFTs: BN,
   payer: Keypair,
   receiver: PublicKey,
   gumballMachineAcctKeypair: Keypair,
   merkleRollKeypair: Keypair,
-  gummyrollProgramId: PublicKey,
-  bubblegumProgramId: PublicKey,
-  gumballMachine: Program<GumballMachine>,
-): Promise<TransactionInstruction> {
-  const willyWonkaPDAKey = await getWillyWonkaPDAKey(gumballMachineAcctKeypair.publicKey, gumballMachine.programId);
-  const bubblegumAuthorityPDAKey = await getBubblegumAuthorityPDAKey(merkleRollKeypair.publicKey, bubblegumProgramId);
-  const dispenseInstr = createDispenseNftSolInstruction(
-    {
-      gumballMachine: gumballMachineAcctKeypair.publicKey,
-      payer: payer.publicKey,
-      receiver: receiver,
-      willyWonka: willyWonkaPDAKey,
-      recentBlockhashes: SYSVAR_SLOT_HASHES_PUBKEY,
-      instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
-      bubblegumAuthority: bubblegumAuthorityPDAKey,
-      gummyroll: gummyrollProgramId,
-      merkleSlab: merkleRollKeypair.publicKey,
-      bubblegum: bubblegumProgramId
-    },
-    {
-      numItems: numNFTs
-    }
-  );
-  return dispenseInstr;
-=======
-  numNFTs: BN,
-  payer: Keypair,
-  receiver: PublicKey,
-  gumballMachineAcctKeypair: Keypair,
-  merkleRollKeypair: Keypair,
-  noncePDAKey: PublicKey,
   gummyrollProgramId: PublicKey,
   bubblegumProgramId: PublicKey,
   gumballMachine: Program<GumballMachine>
@@ -157,14 +125,12 @@ export async function createDispenseNFTForSolIx(
     }
   );
   return dispenseInstr;
->>>>>>> 59d67df (Initial implementation of log truncation fix)
 }
 
 /**
  * Wrapper on top of Solita's createDispenseNftTokenInstruction. Automatically fetches necessary PDA keys for instruction
  * */
 export async function createDispenseNFTForTokensIx(
-<<<<<<< HEAD
   numNFTs: BN,
   payer: Keypair,
   payerTokens: PublicKey,
@@ -174,18 +140,6 @@ export async function createDispenseNFTForTokensIx(
   gummyrollProgramId: PublicKey,
   bubblegumProgramId: PublicKey,
   gumballMachine: Program<GumballMachine>,
-=======
-  numNFTs: BN,
-  payer: Keypair,
-  payerTokens: PublicKey,
-  receiver: PublicKey,
-  gumballMachineAcctKeypair: Keypair,
-  merkleRollKeypair: Keypair,
-  noncePDAKey: PublicKey,
-  gummyrollProgramId: PublicKey,
-  bubblegumProgramId: PublicKey,
-  gumballMachine: Program<GumballMachine>
->>>>>>> 59d67df (Initial implementation of log truncation fix)
 ): Promise<TransactionInstruction> {
   const willyWonkaPDAKey = await getWillyWonkaPDAKey(
     gumballMachineAcctKeypair.publicKey,
