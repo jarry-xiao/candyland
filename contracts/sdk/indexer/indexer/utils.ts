@@ -1,11 +1,12 @@
 import * as anchor from "@project-serum/anchor";
-import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "../../bubblegum/src/generated";
 import { Context, Logs, PublicKey } from "@solana/web3.js";
 import { readFileSync } from "fs";
 import { Bubblegum } from "../../../target/types/bubblegum";
 import { Gummyroll } from "../../../target/types/gummyroll";
 import { NFTDatabaseConnection } from "../db";
 import { parseBubblegum } from "./bubblegum";
+import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from "../../gummyroll";
+import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "../../bubblegum/src/generated";
 
 const startRegEx = /Program (\w*) invoke \[(\d)\]/;
 const endRegEx = /Program (\w*) success/;
@@ -217,4 +218,18 @@ export async function handleLogs(
       parsedLog
     );
   }
+}
+
+export function loadPrograms(provider: anchor.Provider) {
+  const Gummyroll = loadProgram(
+    provider,
+    GUMMYROLL_PROGRAM_ID,
+    "target/idl/gummyroll.json"
+  ) as anchor.Program<Gummyroll>;
+  const Bubblegum = loadProgram(
+    provider,
+    BUBBLEGUM_PROGRAM_ID,
+    "target/idl/bubblegum.json"
+  ) as anchor.Program<Bubblegum>;
+  return { Gummyroll, Bubblegum };
 }

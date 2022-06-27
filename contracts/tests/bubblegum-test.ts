@@ -101,36 +101,17 @@ describe("bubblegum", () => {
     const leaves = Array(2 ** MAX_DEPTH).fill(Buffer.alloc(32));
     const tree = buildTree(leaves);
 
-    const allocAccountIx = await createAllocTreeIx(
-      connection,
-      MAX_SIZE,
-      MAX_DEPTH,
-      0,
-      payer.publicKey,
-      merkleRollKeypair.publicKey
-    );
-    const authority = await getBubblegumAuthorityPDA(merkleRollKeypair.publicKey);
-    const initGummyrollIx = createCreateTreeInstruction(
-      {
-        treeCreator: payer.publicKey,
-        payer: payer.publicKey,
-        authority: authority,
-        candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
-        gummyrollProgram: GummyrollProgramId,
-        merkleSlab: merkleRollKeypair.publicKey,
-      },
-      {
-        maxDepth: MAX_DEPTH,
-        maxBufferSize: MAX_SIZE,
-      }
-    );
-
-    let tx = new Transaction().add(allocAccountIx).add(initGummyrollIx);
+    let tx = new Transaction();
+    const ixs = await getCreateTreeIxs(connection, MAX_DEPTH, MAX_SIZE, 0, payer.publicKey, merkleRollKeypair.publicKey, payer.publicKey);
+    ixs.map((ix) => {
+      tx.add(ix);
+    });
 
     await Bubblegum.provider.send(tx, [payer, merkleRollKeypair], {
       commitment: "confirmed",
     });
 
+    const authority = await getBubblegumAuthorityPDA(merkleRollKeypair.publicKey);
     await assertOnChainMerkleRollProperties(
       Bubblegum.provider.connection,
       MAX_DEPTH,

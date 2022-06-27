@@ -6,7 +6,7 @@ import * as anchor from "@project-serum/anchor";
 import { Bubblegum } from "../../target/types/bubblegum";
 import { Gummyroll } from "../../target/types/gummyroll";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
-import { loadProgram, handleLogs, handleLogsAtomic } from "./indexer/utils";
+import { loadProgram, handleLogs, handleLogsAtomic, loadPrograms } from "./indexer/utils";
 import { bootstrap } from "./db";
 import { fetchAndPlugGaps, validateTree } from "./backfiller";
 
@@ -24,16 +24,9 @@ async function main() {
   });
   let db = await bootstrap();
   console.log("Finished bootstrapping DB");
-  Gummyroll = loadProgram(
-    provider,
-    GUMMYROLL_PROGRAM_ID,
-    "target/idl/gummyroll.json"
-  ) as anchor.Program<Gummyroll>;
-  Bubblegum = loadProgram(
-    provider,
-    BUBBLEGUM_PROGRAM_ID,
-    "target/idl/bubblegum.json"
-  ) as anchor.Program<Bubblegum>;
+  const programs = loadPrograms(provider);
+  Gummyroll = programs.Gummyroll;
+  Bubblegum = programs.Bubblegum;
   console.log("loaded programs...");
   let subscriptionId = connection.onLogs(
     BUBBLEGUM_PROGRAM_ID,
