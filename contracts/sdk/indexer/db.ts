@@ -25,6 +25,11 @@ export type GapInfo = {
   currSlot: number;
 };
 
+export type GapTxInfo = GapInfo & {
+  prevTxId: string,
+  currTxId: string,
+}
+
 export type AssetInfo = {
   treeId: string,
   assetId: string,
@@ -100,6 +105,20 @@ export class NFTDatabaseConnection {
     return await this.connection.run(
       `
       SELECT * FROM merkle 
+      WHERE seq in 
+        (SELECT seq FROM 
+          (SELECT node_idx, MAX(seq) AS seq 
+          FROM merkle 
+          WHERE level = 0 group by node_idx
+        ));
+      `
+    );
+  }
+
+  async dropMostRecentNodes() {
+    return await this.connection.run(
+      `
+      DELETE FROM merkle
       WHERE seq in 
         (SELECT seq FROM 
           (SELECT node_idx, MAX(seq) AS seq 
@@ -305,6 +324,42 @@ export class NFTDatabaseConnection {
     }
     return res;
   }
+
+  async getMissingDataWithTx(minSeq: number, treeId: string) {
+    let gaps: Array<GapTxInfo> = [];
+    let res = await this.connection
+      .all(
+        `
+        SELECT DISTINCT seq, slot, transaction_id
+        FROM merkle
+        where tree_id = ? and seq >= ?
+        order by seq
+      `,
+        treeId,
+        minSeq
+      )
+      .catch((e) => {
+        console.log("Failed to make query", e);
+        return [gaps, null, null];
+      });
+    for (let i = 0; i < res.length - 1; ++i) {
+      let [prevSeq, prevSlot, prevTxId] = [res[i].seq, res[i].slot, res[i].transaction_id];
+      let [currSeq, currSlot, currTxId] = [res[i + 1].seq, res[i + 1].slot, res[i + 1].transaction_id];
+      if (currSeq === prevSeq) {
+        throw new Error(
+          `Error in DB, encountered identical sequence numbers with different slots: ${prevSlot} ${currSlot}`
+        );
+      }
+      if (currSeq - prevSeq > 1) {
+        gaps.push({ prevSeq, currSeq, prevSlot, currSlot, prevTxId, currTxId });
+      }
+    }
+    if (res.length > 0) {
+      return [gaps, res[res.length - 1].seq, res[res.length - 1].slot];
+    }
+    return [gaps, null, null];
+  }
+
 
   async getMissingData(minSeq: number, treeId: string) {
     let gaps: Array<GapInfo> = [];
