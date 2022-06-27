@@ -1,4 +1,4 @@
-import { Keypair } from "@solana/web3.js";
+import { Keypair, PublicKey } from "@solana/web3.js";
 import { Connection } from "@solana/web3.js";
 import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "../bubblegum/src/generated";
 import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from "../gummyroll/index";
@@ -8,7 +8,7 @@ import { Gummyroll } from "../../target/types/gummyroll";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 import { loadProgram, handleLogs, handleLogsAtomic } from "./indexer/utils";
 import { bootstrap, NFTDatabaseConnection } from "./db";
-import { backfillTreeHistory, fetchAndPlugGaps, validateTree } from "./backfiller";
+import { backfillTreeHistory, fillGapsTx, validateTree } from "./backfiller";
 
 const url = "http://api.internal.mainnet-beta.solana.com";
 // const url = "http://127.0.0.1:8899";
@@ -38,29 +38,14 @@ async function main() {
     console.log("loaded programs...");
     console.log("Filling in gaps for tree:", treeId);
 
-    // Get first gap
-    const trees = await db.getTrees();
-    const treeInfo = trees.filter((tree) => (tree[0] === treeId));
-    let startSeq = 0;
-    let startSlot: number | null = null;
-    if (treeInfo) {
-        let [missingData, maxDbSeq, maxDbSlot] = await db.getMissingData(
-            0,
-            treeId
-        );
-        console.log(missingData, maxDbSeq, maxDbSlot);
-        if (missingData.length) {
-            startSlot = missingData[0].prevSlot;
-            startSeq = missingData[0].prevSeq;
-        } else {
-            startSlot = maxDbSlot;
-            startSeq = maxDbSeq;
-        }
-    }
+    const parserState = { Gummyroll, Bubblegum };
 
-    // Backfill
-    console.log(`Starting from slot!: ${startSlot} `);
-    const maxSeq = await backfillTreeHistory(connection, db, { Gummyroll, Bubblegum }, treeId, startSeq, startSlot);
+    // Fill gaps
+    let { maxSeq, maxSeqSlot } = await fillGapsTx(connection, db, parserState, treeId);
+
+    // Backfill to on-chain state, now with a complete db
+    console.log(`Starting from slot!: ${maxSeqSlot} `);
+    maxSeq = await backfillTreeHistory(connection, db, parserState, treeId, maxSeq, maxSeqSlot);
 
     // Validate
     console.log("Max SEQUENCE: ", maxSeq);
