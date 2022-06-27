@@ -49,6 +49,7 @@ import {
 import { NATIVE_MINT } from "@solana/spl-token";
 import { logTx, num32ToBuffer, arrayEquals } from "./utils";
 import { EncodeMethod } from "../sdk/gumball-machine/src/generated/types/EncodeMethod";
+import { getBubblegumAuthorityPDA } from "../sdk/bubblegum/src/convenience";
 
 // @ts-ignore
 let GumballMachine;
@@ -195,7 +196,7 @@ describe("gumball-machine", () => {
     mint: PublicKey,
     nonce: PublicKey
   ) {
-    const bubblegumAuthorityPDAKey = await getBubblegumAuthorityPDAKey(
+    const bubblegumAuthorityPDAKey = await getBubblegumAuthorityPDA(
       merkleRollKeypair.publicKey,
       BubblegumProgramId
     );
@@ -490,7 +491,7 @@ describe("gumball-machine", () => {
       originalAuthorityAcctBalance + originalGumballMachineAcctBalance;
     assert(
       expectedAuthorityAcctBalance ===
-        (await connection.getBalance(authorityKeypair.publicKey)),
+      (await connection.getBalance(authorityKeypair.publicKey)),
       "Failed to transfer correct balance to authority"
     );
   }
@@ -646,7 +647,7 @@ describe("gumball-machine", () => {
                 false,
                 "Dispense should fail when part of transaction with multiple instructions, but it succeeded"
               );
-            } catch (e) {}
+            } catch (e) { }
           });
           it("Cannot dispense NFT for SOL with prior instructions in transaction", async () => {
             const tx = new Transaction()
@@ -664,7 +665,7 @@ describe("gumball-machine", () => {
                 false,
                 "Dispense should fail when part of transaction with multiple instructions, but it succeeded"
               );
-            } catch (e) {}
+            } catch (e) { }
           });
         });
         it("Can dispense single NFT paid in sol", async () => {
@@ -712,15 +713,15 @@ describe("gumball-machine", () => {
           // Assert on how the creator and buyer's balances changed
           assert(
             (await creatorBalanceAfterPurchase) ===
-              creatorBalanceBeforePurchase +
-                val(baseGumballMachineInitProps.price).toNumber(),
+            creatorBalanceBeforePurchase +
+            val(baseGumballMachineInitProps.price).toNumber(),
             "Creator balance did not update as expected after NFT purchase"
           );
 
           assert(
             (await nftBuyerBalanceAfterPurchase) ===
-              nftBuyerBalanceBeforePurchase -
-                val(baseGumballMachineInitProps.price).toNumber(),
+            nftBuyerBalanceBeforePurchase -
+            val(baseGumballMachineInitProps.price).toNumber(),
             "NFT purchaser balance did not decrease as expected after NFT purchase"
           );
         });
@@ -938,7 +939,7 @@ describe("gumball-machine", () => {
               false,
               "Dispense should fail when part of transaction with multiple instructions, but it succeeded"
             );
-          } catch (e) {}
+          } catch (e) { }
         });
         it("Cannot dispense NFT for SOL with prior instructions in transaction", async () => {
           const tx = new Transaction()
@@ -956,7 +957,7 @@ describe("gumball-machine", () => {
               false,
               "Dispense should fail when part of transaction with multiple instructions, but it succeeded"
             );
-          } catch (e) {}
+          } catch (e) { }
         });
       });
       it("Can dispense multiple NFTs paid in token", async () => {
@@ -985,15 +986,15 @@ describe("gumball-machine", () => {
 
         assert(
           Number(newCreatorTokenAccount.amount) ===
-            Number(creatorReceiverTokenAccount.amount) +
-              val(baseGumballMachineInitProps.price).toNumber(),
+          Number(creatorReceiverTokenAccount.amount) +
+          val(baseGumballMachineInitProps.price).toNumber(),
           "The creator did not receive their payment as expected"
         );
 
         assert(
           Number(newBuyerTokenAccount.amount) ===
-            Number(buyerTokenAccount.amount) -
-              val(baseGumballMachineInitProps.price).toNumber(),
+          Number(buyerTokenAccount.amount) -
+          val(baseGumballMachineInitProps.price).toNumber(),
           "The nft buyer did not pay for the nft as expected"
         );
 
@@ -1020,15 +1021,15 @@ describe("gumball-machine", () => {
 
         assert(
           Number(newCreatorTokenAccount.amount) ===
-            Number(creatorReceiverTokenAccount.amount) +
-              val(baseGumballMachineInitProps.price).toNumber(),
+          Number(creatorReceiverTokenAccount.amount) +
+          val(baseGumballMachineInitProps.price).toNumber(),
           "The creator did not receive their payment as expected"
         );
 
         assert(
           Number(newBuyerTokenAccount.amount) ===
-            Number(buyerTokenAccount.amount) -
-              val(baseGumballMachineInitProps.price).toNumber(),
+          Number(buyerTokenAccount.amount) -
+          val(baseGumballMachineInitProps.price).toNumber(),
           "The nft buyer did not pay for the nft as expected"
         );
       });
