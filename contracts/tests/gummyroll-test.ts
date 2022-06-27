@@ -28,6 +28,7 @@ import {
   getMerkleRollAccountSize,
   createVerifyLeafIx,
   assertOnChainMerkleRollProperties,
+  createAllocTreeIx,
 } from "../sdk/gummyroll";
 import { execute, logTx } from "./utils";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
@@ -62,27 +63,20 @@ describe("gummyroll", () => {
     }
     const merkleRollKeypair = Keypair.generate();
 
-    const requiredSpace = getMerkleRollAccountSize(
-      maxDepth,
-      maxSize,
-      canopyDepth
-    );
     const leaves = Array(2 ** maxDepth).fill(Buffer.alloc(32));
     for (let i = 0; i < numLeaves; i++) {
       leaves[i] = crypto.randomBytes(32);
     }
     const tree = buildTree(leaves);
 
-    const allocAccountIx = SystemProgram.createAccount({
-      fromPubkey: payer.publicKey,
-      newAccountPubkey: merkleRollKeypair.publicKey,
-      lamports:
-        await Gummyroll.provider.connection.getMinimumBalanceForRentExemption(
-          requiredSpace
-        ),
-      space: requiredSpace,
-      programId: Gummyroll.programId,
-    });
+    const allocAccountIx = await createAllocTreeIx(
+      Gummyroll.provider.connection,
+      maxSize,
+      maxDepth,
+      canopyDepth,
+      payer.publicKey,
+      merkleRollKeypair.publicKey,
+    );
 
     let tx = new Transaction().add(allocAccountIx);
     if (numLeaves > 0) {
