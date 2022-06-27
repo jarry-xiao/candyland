@@ -197,7 +197,6 @@ describe("gumball-machine", () => {
   ) {
     const bubblegumAuthorityPDAKey = await getBubblegumAuthorityPDA(
       merkleRollKeypair.publicKey,
-      BubblegumProgramId
     );
     const initializeGumballMachineInstrs =
       await createInitializeGumballMachineIxs(

@@ -28,6 +28,7 @@ import {
   getMerkleRollAccountSize,
   createVerifyLeafIx,
   assertOnChainMerkleRollProperties,
+  createAllocTreeIx,
 } from "../sdk/gummyroll";
 import { execute, logTx } from "./utils";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
@@ -62,27 +63,20 @@ describe("gummyroll", () => {
     }
     const merkleRollKeypair = Keypair.generate();
 
-    const requiredSpace = getMerkleRollAccountSize(
-      maxDepth,
-      maxSize,
-      canopyDepth
-    );
     const leaves = Array(2 ** maxDepth).fill(Buffer.alloc(32));
     for (let i = 0; i < numLeaves; i++) {
       leaves[i] = crypto.randomBytes(32);
     }
     const tree = buildTree(leaves);
 
-    const allocAccountIx = SystemProgram.createAccount({
-      fromPubkey: payer.publicKey,
-      newAccountPubkey: merkleRollKeypair.publicKey,
-      lamports:
-        await Gummyroll.provider.connection.getMinimumBalanceForRentExemption(
-          requiredSpace
-        ),
-      space: requiredSpace,
-      programId: Gummyroll.programId,
-    });
+    const allocAccountIx = await createAllocTreeIx(
+      Gummyroll.provider.connection,
+      maxSize,
+      maxDepth,
+      canopyDepth,
+      payer.publicKey,
+      merkleRollKeypair.publicKey,
+    );
 
     let tx = new Transaction().add(allocAccountIx);
     if (numLeaves > 0) {
@@ -264,7 +258,7 @@ describe("gummyroll", () => {
       try {
         await execute(Gummyroll.provider, [verifyLeafIx], [payer]);
         assert(false, "Proof should have failed to verify");
-      } catch {}
+      } catch { }
 
       // Replace instruction with same proof fails
       const replaceLeafIx = createReplaceIx(
@@ -280,7 +274,7 @@ describe("gummyroll", () => {
       try {
         await execute(Gummyroll.provider, [replaceLeafIx], [payer]);
         assert(false, "Replace should have failed to verify");
-      } catch {}
+      } catch { }
       const merkleRollAccount =
         await Gummyroll.provider.connection.getAccountInfo(
           merkleRollKeypair.publicKey
@@ -407,7 +401,7 @@ describe("gummyroll", () => {
             false,
             "Transaction should have failed, since `randomSigner` is not append authority"
           );
-        } catch {}
+        } catch { }
       });
       it("But authority can transfer appendAuthority", async () => {
         const transferAppendAuthorityIx = createTransferAuthorityIx(
@@ -490,7 +484,7 @@ describe("gummyroll", () => {
             false,
             "Transaction should have failed since the append authority cannot act as the authority for replaces"
           );
-        } catch {}
+        } catch { }
       });
     });
     describe("Examples transferring authority", () => {
@@ -534,7 +528,7 @@ describe("gummyroll", () => {
             false,
             "Transaction should have failed since incorrect authority cannot execute replaces"
           );
-        } catch {}
+        } catch { }
       });
       it("Can transfer authority", async () => {
         const transferAppendAuthorityIx = createTransferAuthorityIx(
@@ -591,7 +585,7 @@ describe("gummyroll", () => {
             false,
             "Transaction should have failed since incorrect authority cannot execute replaces"
           );
-        } catch {}
+        } catch { }
       });
     });
   });
@@ -735,7 +729,7 @@ describe("gummyroll", () => {
           false,
           "Attacker was able to succesfully write fake existence of a leaf"
         );
-      } catch (e) {}
+      } catch (e) { }
 
       const merkleRoll = decodeMerkleRoll(
         (
@@ -776,7 +770,7 @@ describe("gummyroll", () => {
           false,
           "Attacker was able to succesfully write fake existence of a leaf"
         );
-      } catch (e) {}
+      } catch (e) { }
 
       const merkleRoll = decodeMerkleRoll(
         (
