@@ -9,13 +9,14 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import { GumballMachine } from "../types";
+import { getBubblegumAuthorityPDA } from "../../bubblegum/src/convenience";
 import {
   InitializeGumballMachineInstructionArgs,
   createInitializeGumballMachineInstruction,
   createDispenseNftSolInstruction,
   createDispenseNftTokenInstruction,
 } from "../src/generated";
-import { getWillyWonkaPDAKey, getBubblegumAuthorityPDAKey } from "../utils";
+import { getWillyWonkaPDAKey } from "../utils";
 import { CANDY_WRAPPER_PROGRAM_ID } from "../../utils";
 
 /**
@@ -60,9 +61,8 @@ export async function createInitializeGumballMachineIxs(
     gumballMachineAcctKeypair.publicKey,
     gumballMachine.programId
   );
-  const bubblegumAuthorityPDAKey = await getBubblegumAuthorityPDAKey(
+  const bubblegumAuthorityPDAKey = await getBubblegumAuthorityPDA(
     merkleRollKeypair.publicKey,
-    bubblegumProgramId
   );
 
   const initGumballMachineInstr = createInitializeGumballMachineInstruction(
@@ -135,9 +135,8 @@ export async function createDispenseNFTForSolIx(
     gumballMachineAcctKeypair.publicKey,
     gumballMachine.programId
   );
-  const bubblegumAuthorityPDAKey = await getBubblegumAuthorityPDAKey(
+  const bubblegumAuthorityPDAKey = await getBubblegumAuthorityPDA(
     merkleRollKeypair.publicKey,
-    bubblegumProgramId
   );
   const dispenseInstr = createDispenseNftSolInstruction(
     {
@@ -192,9 +191,8 @@ export async function createDispenseNFTForTokensIx(
     gumballMachineAcctKeypair.publicKey,
     gumballMachine.programId
   );
-  const bubblegumAuthorityPDAKey = await getBubblegumAuthorityPDAKey(
+  const bubblegumAuthorityPDAKey = await getBubblegumAuthorityPDA(
     merkleRollKeypair.publicKey,
-    bubblegumProgramId
   );
   const dispenseInstr = createDispenseNftTokenInstruction(
     {
