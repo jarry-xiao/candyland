@@ -39,6 +39,7 @@ import {
   leafSchemaBeet
 } from "../sdk/bubblegum/src/generated/types";
 import {
+  createAllocTreeIx,
   getMerkleRollAccountSize,
   getRootOfOnChainMerkleRoot
 } from "../sdk/gummyroll";
@@ -284,20 +285,17 @@ describe("sugar-shack", () => {
 
         // Make use of CANOPY to enable larger project sizes and give more breathing room for additional accounts in marketplace instructions
         const MERKLE_ROLL_CANOPY_DEPTH = 5;
-        const MERKLE_ROLL_ACCT_SIZE = getMerkleRollAccountSize(MERKLE_ROLL_MAX_DEPTH, MERKLE_ROLL_MAX_BUFFER_SIZE, MERKLE_ROLL_CANOPY_DEPTH);
 
         // Create the compressed NFT tree
         // Instruction to alloc new merkle roll account
-        const allocMerkleRollAcctInstr = SystemProgram.createAccount({
-          fromPubkey: payer.publicKey,
-          newAccountPubkey: merkleRollKeypair.publicKey,
-          lamports:
-            await SugarShack.provider.connection.getMinimumBalanceForRentExemption(
-              MERKLE_ROLL_ACCT_SIZE
-            ),
-          space: MERKLE_ROLL_ACCT_SIZE,
-          programId: GummyrollProgramId,
-        });
+        const allocMerkleRollAcctInstr = await createAllocTreeIx(
+          SugarShack.provider.connection,
+          MERKLE_ROLL_MAX_BUFFER_SIZE,
+          MERKLE_ROLL_MAX_DEPTH,
+          MERKLE_ROLL_CANOPY_DEPTH,
+          payer.publicKey,
+          merkleRollKeypair.publicKey,
+        )
         bubblegumAuthority = await getBubblegumAuthorityPDAKey(merkleRollKeypair.publicKey, BubblegumProgramId);
 
         // Instruction to create merkle tree for compressed NFTs through Bubblegum
