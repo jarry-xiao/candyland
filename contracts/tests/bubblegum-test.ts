@@ -38,9 +38,9 @@ import {
   TOKEN_PROGRAM_ID,
   Token,
 } from "@solana/spl-token";
-import { bufferToArray } from "./utils";
+import { bufferToArray, execute } from "./utils";
 import { TokenProgramVersion, Version } from "../sdk/bubblegum/src/generated";
-import { CANDY_WRAPPER_PROGRAM_ID, execute, logTx } from "../sdk/utils";
+import { CANDY_WRAPPER_PROGRAM_ID } from "../sdk/utils";
 import { getBubblegumAuthorityPDA, getCreateTreeIxs, getNonceCount, getVoucherPDA } from "../sdk/bubblegum/src/convenience";
 
 // @ts-ignore
@@ -101,17 +101,36 @@ describe("bubblegum", () => {
     const leaves = Array(2 ** MAX_DEPTH).fill(Buffer.alloc(32));
     const tree = buildTree(leaves);
 
-    let tx = new Transaction();
-    const ixs = await getCreateTreeIxs(connection, MAX_DEPTH, MAX_SIZE, 0, payer.publicKey, merkleRollKeypair.publicKey, payer.publicKey);
-    ixs.map((ix) => {
-      tx.add(ix);
-    });
+    const allocAccountIx = await createAllocTreeIx(
+      connection,
+      MAX_SIZE,
+      MAX_DEPTH,
+      0,
+      payer.publicKey,
+      merkleRollKeypair.publicKey
+    );
+    const authority = await getBubblegumAuthorityPDA(merkleRollKeypair.publicKey);
+    const initGummyrollIx = createCreateTreeInstruction(
+      {
+        treeCreator: payer.publicKey,
+        payer: payer.publicKey,
+        authority: authority,
+        candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
+        gummyrollProgram: GummyrollProgramId,
+        merkleSlab: merkleRollKeypair.publicKey,
+      },
+      {
+        maxDepth: MAX_DEPTH,
+        maxBufferSize: MAX_SIZE,
+      }
+    );
+
+    let tx = new Transaction().add(allocAccountIx).add(initGummyrollIx);
 
     await Bubblegum.provider.send(tx, [payer, merkleRollKeypair], {
       commitment: "confirmed",
     });
 
-    const authority = await getBubblegumAuthorityPDA(merkleRollKeypair.publicKey);
     await assertOnChainMerkleRollProperties(
       Bubblegum.provider.connection,
       MAX_DEPTH,
