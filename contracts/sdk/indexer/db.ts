@@ -474,7 +474,6 @@ export class NFTDatabaseConnection {
     check: boolean = true
   ): Promise<Proof | null> {
     let latestSeq = await this.getMaxSeq(treeId);
-    console.log("latest seq:", latestSeq);
     if (!latestSeq) {
       return null;
     }
@@ -494,7 +493,6 @@ export class NFTDatabaseConnection {
       treeId,
       treeId
     );
-    console.log("Gap index:", gapIndex);
     if (gapIndex && gapIndex.seq < latestSeq) {
       return await this.inferProofWithKnownGap(
         hash,
@@ -573,7 +571,6 @@ export class NFTDatabaseConnection {
     check: boolean = true
   ): Promise<Proof | null> {
     let hashString = bs58.encode(hash);
-    console.log(hashString);
     let res = await this.connection.all(
       `
         SELECT 
@@ -591,7 +588,6 @@ export class NFTDatabaseConnection {
       hashString,
       treeId
     );
-    console.log("res:", res);
     if (res.length == 1) {
       let data = res[0];
       return this.generateProof(
@@ -632,7 +628,6 @@ export class NFTDatabaseConnection {
       }
       n >>= 1;
     }
-    console.log(nodes);
     nodes.push(1);
     let res;
     if (maxSequenceNumber) {
@@ -674,7 +669,6 @@ export class NFTDatabaseConnection {
     for (const node of res) {
       proof[node.level] = node.hash;
     }
-    console.log("starting to create empty proof:", root.level, proof.length, maxSequenceNumber);
     let leafIdx = nodeIdx - (1 << root.level);
     let inferredProof = {
       leaf: bs58.encode(hash),

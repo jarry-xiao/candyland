@@ -10,7 +10,7 @@ import { loadProgram, handleLogs, handleLogsAtomic } from "./indexer/utils";
 import { bootstrap, NFTDatabaseConnection } from "./db";
 import { backfillTreeHistory, fillGapsTx, validateTree } from "./backfiller";
 
-const url = "http://api.internal.mainnet-beta.solana.com";
+const url = "http://api.explorer.mainnet-beta.solana.com";
 // const url = "http://127.0.0.1:8899";
 let Bubblegum: anchor.Program<Bubblegum>;
 let Gummyroll: anchor.Program<Gummyroll>;
