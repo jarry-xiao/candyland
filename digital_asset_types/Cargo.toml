@@ -5,11 +5,13 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
+default=["json_types", "sql_types"]
 json_types = ["serde", "serde_json"]
 sql_types = ["sea-orm"]
 
 [dependencies]
-sea-orm = { optional = true, git = "https://github.com/liberwang1013/sea-orm", branch = "insert-on-conflict", features = ["macros", "runtime-tokio-rustls", "sqlx-postgres", "with-chrono"] }
+sea-orm = { optional = true, git = "https://github.com/liberwang1013/sea-orm", branch = "insert-on-conflict", features = [ "macros", "runtime-tokio-rustls", "sqlx-postgres", "with-chrono"] }
+sea-query = {version="0.25.0", features = ["postgres-array"]}
 serde = { version = "1.0.137", optional = true }
 serde_json = { version = "1.0.81", optional = true }
 bs58 = "0.4.0"

@@ -260,6 +260,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4361135be9122e0870de935d7c439aef945b9f9ddd4199a553b5270b49c82a27"
 
 [[package]]
+name = "array-init"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfb6d71005dc22a708c7496eee5c8dc0300ee47355de6256c3b35b12b5fef596"
+
+[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1041,6 +1047,7 @@ dependencies = [
  "num-derive",
  "num-traits",
  "sea-orm",
+ "sea-query 0.25.0",
  "serde",
  "serde_json",
  "solana-sdk",
@@ -2820,6 +2827,7 @@ version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04619f94ba0cc80999f4fc7073607cb825bc739a883cb6d20900fc5e009d6b0d"
 dependencies = [
+ "array-init",
  "bytes",
  "fallible-iterator",
  "postgres-protocol",
@@ -3436,7 +3444,7 @@ dependencies = [
  "ouroboros 0.15.0",
  "rust_decimal",
  "sea-orm-macros",
- "sea-query",
+ "sea-query 0.24.6",
  "sea-strum",
  "serde",
  "serde_json",
@@ -3472,6 +3480,17 @@ dependencies = [
  "serde_json",
  "time 0.2.27",
  "uuid 0.8.2",
+]
+
+[[package]]
+name = "sea-query"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cd9602135af3fd86ba50390d9b9ca8c13e3d034e184530069ee16931f3bc542"
+dependencies = [
+ "postgres-types",
+ "sea-query-derive",
+ "sea-query-driver",
 ]
 
 [[package]]

@@ -12,6 +12,7 @@ CREATE TABLE cl_items
     id       bigserial PRIMARY KEY,
     tree     BYTEA  NOT NULL,
     node_idx BIGINT NOT NULL,
+    leaf_idx BIGINT,
     seq      BIGINT NOT NULL,
     level    BIGINT NOT NULL,
     hash     BYTEA  NOT NULL
@@ -21,7 +22,7 @@ CREATE INDEX cl_items_tree_idx on cl_items (tree);
 CREATE INDEX cl_items_hash_idx on cl_items (hash);
 CREATE INDEX cl_items_level on cl_items (level);
 CREATE INDEX cl_items_node_idx on cl_items (node_idx);
-CREATE INDEX cl_items_uniq_operation_idx on cl_items (tree, level, seq);
+CREATE INDEX cl_items_leaf_idx on cl_items (leaf_idx);
 CREATE UNIQUE INDEX cl_items__tree_node on cl_items (tree, node_idx);
 
 -- START NFT METADATA

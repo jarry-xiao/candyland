@@ -3,12 +3,18 @@ use {
     serde::{Deserialize, Serialize},
     std::collections::HashMap,
 };
+#[cfg(feature = "sql_types")]
+use crate::dao::{
+    sea_orm_active_enums::{Mutability,ChainMutability,OwnerType,RoyaltyTargetType}
+};
+
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct AssetProof {
     pub root: String,
     pub proof: Vec<String>,
     pub node_index: i64,
+    pub leaf: String,
     pub tree_id: String,
 }
 
@@ -30,8 +36,8 @@ pub enum Interface {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Quality {
-    #[serde(rename = "$$schema", skip_serializing_if = "Option::is_none")]
-    pub schema: Option<String>,
+    #[serde(rename = "$$schema")]
+    pub schema: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -85,9 +91,13 @@ pub struct Content {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum Scope {
+    #[serde(rename = "full")]
     Full,
+    #[serde(rename = "royalty")]
     Royalty,
+    #[serde(rename = "metadata")]
     Metadata,
+    #[serde(rename = "extension")]
     Extension,
 }
 
@@ -120,12 +130,8 @@ pub type GroupValue = String;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Group {
-    #[serde(rename = "$$schema")]
-    pub schema: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub group_key: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub group_value: Option<String>,
+    pub group_key: String,
+    pub group_value: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
@@ -138,16 +144,37 @@ pub enum RoyaltyModel {
     Single,
 }
 
+impl From<String> for RoyaltyModel {
+    fn from(s: String) -> Self {
+        match &*s {
+            "creators" => RoyaltyModel::Creators,
+            "fanout" => RoyaltyModel::Fanout,
+            "single" => RoyaltyModel::Single,
+            _ => RoyaltyModel::Creators
+        }
+    }
+}
+
+#[cfg(feature = "sql_types")]
+impl From<RoyaltyTargetType> for RoyaltyModel {
+    fn from(s: RoyaltyTargetType) -> Self {
+        match s {
+            RoyaltyTargetType::Creators => RoyaltyModel::Creators,
+            RoyaltyTargetType::Fanout => RoyaltyModel::Fanout,
+            RoyaltyTargetType::Single => RoyaltyModel::Single,
+            _ => RoyaltyModel::Creators
+        }
+    }
+}
+
+
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Royalty {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub royalty_model: Option<RoyaltyModel>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    pub royalty_model: RoyaltyModel,
     pub target: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub percent: Option<f32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub locked: Option<bool>,
+    pub percent: f64,
+    pub locked: bool,
 }
 
 pub type Address = String;
@@ -156,34 +183,48 @@ pub type Verified = bool;
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Creator {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub address: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub share: Option<u8>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub verified: Option<bool>,
+    pub address: String,
+    pub share: i32,
+    pub verified: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 pub enum OwnershipModel {
-    #[serde(rename = "Single")]
+    #[serde(rename = "single")]
     Single,
-    #[serde(rename = "Token")]
+    #[serde(rename = "token")]
     Token,
+}
+
+
+impl From<String> for OwnershipModel {
+    fn from(s: String) -> Self {
+        match &*s {
+            "single" => OwnershipModel::Single,
+            "token" => OwnershipModel::Token,
+            _ => OwnershipModel::Single
+        }
+    }
+}
+
+#[cfg(feature = "sql_types")]
+impl From<OwnerType> for OwnershipModel {
+    fn from(s: OwnerType) -> Self {
+        match s {
+            OwnerType::Token => OwnershipModel::Token,
+            OwnerType::Single => OwnershipModel::Single,
+            _ => OwnershipModel::Single
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct Ownership {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub frozen: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub delegated: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frozen: bool,
+    pub delegated: bool,
     pub delegate: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ownership_model: Option<OwnershipModel>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub address: Option<String>,
+    pub ownership_model: OwnershipModel,
+    pub owner: String,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -202,6 +243,5 @@ pub struct Asset {
     pub royalty: Option<Royalty>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub creators: Option<Vec<Creator>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ownership: Option<Ownership>,
+    pub ownership: Ownership,
 }

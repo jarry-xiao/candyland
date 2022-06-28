@@ -91,7 +91,7 @@ impl BgTask for DownloadMetadata {
             .filter(asset_data::Column::Id.eq(self.asset_data_id))
             .exec(db)
             .await
-            .map(|_|())
+            .map(|_| ())
             .map_err(|db| {
                 IngesterError::TaskManagerError(format!("Database error with {}, error: {}", self, db))
             })
@@ -432,11 +432,52 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
         }
         bubblegum::InstructionName::Redeem => {
             println!("Bubblegum: Redeem");
-            tree_change_only(db, logs).await?;
+            let gummy_roll_events = get_gummy_roll_events(logs)?;
+            let leaf_event = get_leaf_event(logs)?;
+            db.transaction::<_, _, IngesterError>(|txn| {
+                Box::pin(async move {
+                    save_changelog_events(gummy_roll_events, txn).await?;
+                    match leaf_event.schema {
+                        LeafSchema::V1 {
+                            id,
+                            ..
+                        } => {
+                            let id_bytes = id.to_bytes().to_vec();
+                            let asset_to_update = asset::ActiveModel {
+                                id: Unchanged(id_bytes.clone()),
+                                leaf: Set(Some(vec![0; 32])),
+                                ..Default::default()
+                            };
+                            update_asset(txn, id_bytes, asset_to_update).await
+                        }
+                        _ => Err(IngesterError::NotImplemented)
+                    }
+                })
+            }).await?;
         }
         bubblegum::InstructionName::CancelRedeem => {
-            println!("Bubblegum: Cancel Redeem");
-            tree_change_only(db, logs).await?;
+            let gummy_roll_events = get_gummy_roll_events(logs)?;
+            let leaf_event = get_leaf_event(logs)?;
+            db.transaction::<_, _, IngesterError>(|txn| {
+                Box::pin(async move {
+                    save_changelog_events(gummy_roll_events, txn).await?;
+                    match leaf_event.schema {
+                        LeafSchema::V1 {
+                            id,
+                            ..
+                        } => {
+                            let id_bytes = id.to_bytes().to_vec();
+                            let asset_to_update = asset::ActiveModel {
+                                id: Unchanged(id_bytes.clone()),
+                                leaf: Set(Some(leaf_event.schema.to_node().to_vec())),
+                                ..Default::default()
+                            };
+                            update_asset(txn, id_bytes, asset_to_update).await
+                        }
+                        _ => Err(IngesterError::NotImplemented)
+                    }
+                })
+            }).await?;
         }
         bubblegum::InstructionName::DecompressV1 => {
             println!("BGUM: Decompress");

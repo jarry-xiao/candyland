@@ -82,7 +82,7 @@ docker compose up --build --force-recreate
 ```
 cd candyland/contracts/
 yarn
-yarn run ts-mocha -t 1000000 tests/bubblegum-test.ts
+yarn run ts-mocha -t 1000000 tests/bubblegum-test-rpc.ts  //<--- this test actually hits the RPC node for proofs
 yarn run ts-mocha -t 1000000 tests/continuous_gummyroll-test.ts
 ```
 

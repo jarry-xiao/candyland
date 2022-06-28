@@ -66,72 +66,72 @@ impl ApiContract for DasApi {
 
     async fn get_assets_by_owner(
         &mut self,
-        owner_address: String,
-        sort_by: AssetSorting,
-        limit: u32,
-        page: u32,
-        before: String,
-        after: String,
+        _owner_address: String,
+        _sort_by: AssetSorting,
+        _limit: u32,
+        _page: u32,
+        _before: String,
+        _after: String,
     ) -> Result<AssetList, DasApiError> {
         todo!()
     }
 
     async fn get_listed_assets_by_owner(
         &mut self,
-        owner_address: String,
-        sort_by: AssetSorting,
-        limit: u32,
-        page: u32,
-        before: String,
-        after: String,
+        _owner_address: String,
+        _sort_by: AssetSorting,
+        _limit: u32,
+        _page: u32,
+        _before: String,
+        _after: String,
     ) -> Result<ListingsList, DasApiError> {
         todo!()
     }
 
     async fn get_offers_by_owner(
         &mut self,
-        owner_address: String,
-        sort_by: OfferSorting,
-        limit: u32,
-        page: u32,
-        before: String,
-        after: String,
+        _owner_address: String,
+        _sort_by: OfferSorting,
+        _limit: u32,
+        _page: u32,
+        _before: String,
+        _after: String,
     ) -> Result<OfferList, DasApiError> {
         todo!()
     }
 
     async fn get_assets_by_group(
         &mut self,
-        group_expression: String,
-        sort_by: AssetSorting,
-        limit: u32,
-        page: u32,
-        before: String,
-        after: String,
+        _group_expression: String,
+        _sort_by: AssetSorting,
+        _limit: u32,
+        _page: u32,
+        _before: String,
+        _after: String,
     ) -> Result<AssetList, DasApiError> {
         todo!()
     }
 
     async fn get_assets_by_creator(
         &mut self,
-        creator_expression: String,
-        sort_by: AssetSorting,
-        limit: u32,
-        page: u32,
-        before: String,
-        after: String,
+        _creator_expression: String,
+        _sort_by: AssetSorting,
+        _limit: u32,
+        _page: u32,
+        _before: String,
+        _after: String,
     ) -> Result<AssetList, DasApiError> {
         todo!()
     }
 
     async fn search_assets(
         &mut self,
-        search_expression: String,
-        sort_by: AssetSorting,
-        limit: u32,
-        page: u32,
-        before: String,
-        after: String,
+        _search_expression: String,
+        _sort_by: AssetSorting,
+        _limit: u32,
+        _page: u32,
+        _before: String,
+        _after: String,
     ) -> Result<AssetList, DasApiError> {
         todo!()
     }
