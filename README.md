@@ -23,7 +23,8 @@ graph TD;
 | :-- | :-- | :--| :-- | :-- |
 | `gummyroll` | On-chain merkle tree that supports concurrent writes | tbd | tbd | `GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD` |
 | `bubblegum` | Token transfer and metadata functionality built on top of gummyroll | tbd | tbd | `BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY` |
-| `gumball-machine` | Candy machine built for bubblegum | tbd | tbd | `BRKyVDRGT7SPBtMhjHN4PVSPVYoc3Wa3QTyuRVM4iZkt` | 
+| `gumball-machine` | Candy machine built for bubblegum | tbd | tbd | `GBALLoMcmimUutWvtNdFFGH5oguS7ghUUV6toQPppuTW` |
+| `sugar-shack` | Example Marketplace Implementation for Compressed NFTs | tbd | tbd | `9T5Xv2cJRydUBqvdK7rLGuNGqhkA8sU8Yq1rGN7hExNK` |
 | `gumdrop` | Forked version of mpl gumdrop, with support for bubblegum | tbd | tbd | `gdrpGjVffourzkdDRrQmySw4aTHr8a3xmQzzxSwFD1a` | 
 | (deprecated) `gummyroll-CRUD` | an example messaging (CRUD) program built on top of gummyroll | deprecated | deprecated | deprecated |
 
@@ -47,6 +48,9 @@ without relying on RPC nodes to serve your NFT data from an off-chain database.
 
 ### Gumball machine - Candy machine for NFT drops
 For more information on candy machine: `https://docs.metaplex.com/candy-machine-v2/introduction`
+
+### Sugar Shack - Example Marketplace Implementation for Compressed NFTs
+Sugar Shack is a mock implementation for how a Marketplace could faciliatate listings of compressed NFTs for purchase. Docs TBD.
 
 ### Gumdrop - Airdrop compressed NFTs
 Copied from here: `https://github.com/metaplex-foundation/metaplex-program-library/tree/master/gumdrop`
