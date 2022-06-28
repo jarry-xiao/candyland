@@ -59,11 +59,12 @@ async function truncateViaBubblegum(
     const authority = await getBubblegumAuthorityPDA(bgumTree.publicKey);
 
     const acctInfo = await connection.getAccountInfo(bgumTree.publicKey, "confirmed");
+    let createIxs = [];
     if (!acctInfo || acctInfo.lamports === 0) {
         console.log("Creating tree:", bgumTree.publicKey.toBase58());
         console.log("Requesting airdrop:", await connection.requestAirdrop(payer.publicKey, 5e10));
-        const ixs = await getCreateTreeIxs(connection, MAX_DEPTH, MAX_BUFFER_SIZE, CANOPY_DEPTH, payer.publicKey, bgumTree.publicKey, payer.publicKey);
-        console.log("Created bubblegum tree with txId:", await execute(provider, ixs, [payer, bgumTree], true));
+        createIxs = await getCreateTreeIxs(connection, MAX_DEPTH, MAX_BUFFER_SIZE, CANOPY_DEPTH, payer.publicKey, bgumTree.publicKey, payer.publicKey);
+        console.log("<Creating tree in the truncation tx>");
     } else {
         console.log("Bubblegum tree already exists:", bgumTree.publicKey.toBase58());
     }
@@ -99,7 +100,8 @@ async function truncateViaBubblegum(
         ));
     }
     console.log("Sending multiple mint ixs in a transaction");
-    const txId = await execute(provider, mintIxs, [payer], true);
+    const ixs = createIxs.concat(mintIxs);
+    const txId = await execute(provider, ixs, [payer, bgumTree], true);
     console.log(`Executed multiple mint ixs here: ${txId}`);
     const tx = await connection.getTransaction(txId, { commitment: 'confirmed' });
     return { txId, tx };

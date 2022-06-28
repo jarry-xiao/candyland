@@ -87,18 +87,18 @@ function zipInstructions(
   instructions: CompiledInstruction[],
   innerInstructions: CompiledInnerInstruction[],
 ): ZippedInstruction[] {
-  const zippedIxs = [];
+  const zippedIxs: ZippedInstruction[] = [];
   let innerIxIndex = 0;
   for (let instructionIndex = 0; instructionIndex < instructions.length; instructionIndex++) {
     const innerIxs = [];
-    while (innerInstructions[innerIxIndex].index < instructionIndex) {
+    while (innerIxIndex < innerInstructions.length && innerInstructions[innerIxIndex].index <= instructionIndex) {
       innerIxs.push(innerInstructions[innerIxIndex]);
       innerIxIndex += 1;
     }
     zippedIxs.push({
       instructionIndex,
       instruction: instructions[instructionIndex],
-      innerIxs
+      innerInstructions: innerIxs
     })
   }
   return zippedIxs;
@@ -118,6 +118,7 @@ export function handleInstructionsAtomic(
   endSeq: number | null = null
 ) {
   const { accountKeys, instructions, innerInstructions } = instructionInfo;
+  console.log(innerInstructions);
 
   const zippedInstructions = zipInstructions(instructions, innerInstructions);
   for (let i = 0; i < zippedInstructions.length; i++) {
