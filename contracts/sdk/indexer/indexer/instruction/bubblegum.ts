@@ -180,7 +180,7 @@ function getTokenStandard(object: Object): TokenStandard {
     }
 }
 
-function hashMetadata(message: MetadataArgs) {
+export function hashMetadata(message: MetadataArgs) {
     // Todo: fix Solita - This is an issue with beet serializing complex enums
     message.tokenStandard = getTokenStandard(message.tokenStandard);
     message.tokenProgramVersion = getTokenProgramVersion(message.tokenProgramVersion);
@@ -206,7 +206,7 @@ export const unverifiedCreatorBeet = new beet.BeetArgsStruct<UnverifiedCreator>(
     'UnverifiedCreator'
 )
 
-function hashCreators(creators: Creator[]) {
+export function hashCreators(creators: Creator[]) {
     const bytes = [];
     for (const creator of creators) {
         const unverifiedCreator = {
@@ -252,9 +252,6 @@ async function parseBubblegumMint(
     let newLeafData: NewLeafEvent;
     let changeLogEvent: ChangeLogEvent;
     for (const innerInstruction of innerInstructions) {
-        // for (const ix of innerInstruction.instructions) {
-        //     console.log(`\t\t${accountKeys[ix.programIdIndex].toString()}`);
-        // }
         const wrapIxs = findWrapInstructions(accountKeys, innerInstruction.instructions);
         if (wrapIxs.length != 2) {
             console.error("Found too many or too little wrap inner instructions for bubblegum mint instruction")

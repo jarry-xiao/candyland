@@ -51,14 +51,14 @@ export async function validateTree(
 }
 
 /// Inserts data if its in [startSeq, endSeq)
-async function plugGapsFromSlot(
+export async function plugGapsFromSlot(
   connection: Connection,
   nftDb: NFTDatabaseConnection,
   parserState: ParserState,
-  treeKey: PublicKey,
   slot: number,
   startSeq: number,
-  endSeq: number
+  endSeq: number,
+  treeKey?: PublicKey,
 ) {
   const blockData = await connection.getBlock(slot, {
     commitment: "confirmed",
@@ -71,7 +71,7 @@ async function plugGapsFromSlot(
     ) {
       continue;
     }
-    if (tx.transaction.message.accountKeys.every((pk) => !pk.equals(treeKey))) {
+    if (treeKey && tx.transaction.message.accountKeys.every((pk) => !pk.equals(treeKey))) {
       continue;
     }
     if (tx.meta.err) {
@@ -136,10 +136,10 @@ async function plugGapsFromSlotBatched(
           connection,
           nftDb,
           parserState,
-          treeKey,
           request.slot,
           request.startSeq,
-          request.endSeq
+          request.endSeq,
+          treeKey,
         )
           .catch((e) => {
             console.error(`Failed to plug gap from slot: ${request.slot}`, e);
@@ -168,10 +168,10 @@ async function plugGaps(
         connection,
         nftDb,
         parserState,
-        treeKey,
         slot,
         startSeq,
-        endSeq
+        endSeq,
+        treeKey,
       );
     } catch (e) {
       console.error(`Failed to plug gap from slot: ${slot}`, e);
@@ -255,10 +255,10 @@ export async function backfillTreeHistory(
           connection,
           nftDb,
           parserState,
-          treeAddress,
           treeHistory[historyIndex],
           0,
           maxSeq + 1,
+          treeAddress,
         )
       )
     }
