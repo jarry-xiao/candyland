@@ -13,14 +13,11 @@ export type ParserState = {
   Bubblegum: anchor.Program<Bubblegum>;
 };
 
-
 export type OptionalInfo = {
   txId: string;
-
   startSeq: number | null;
   endSeq: number | null;
 };
-
 
 /**
  * Example:

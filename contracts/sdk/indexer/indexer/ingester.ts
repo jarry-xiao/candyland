@@ -3,17 +3,15 @@ import {
   OptionalInfo,
   decodeEvent,
 } from "./utils";
-import { ParsedLog, dataRegEx } from "./log/bubblegum";
-import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from "../../gummyroll";
-import { ChangeLogEvent, parseEventGummyroll } from "./gummyroll";
+import { ParsedLog } from "./log/utils";
+import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID, PathNode } from "../../gummyroll";
 import {
   TokenProgramVersion,
   MetadataArgs,
 } from "../../bubblegum/src/generated/types";
-import { BN, Event, } from "@project-serum/anchor";
+import { BN, } from "@project-serum/anchor";
 import { NFTDatabaseConnection } from "../db";
 import { PublicKey } from "@solana/web3.js";
-
 
 function skipTx(sequenceNumber, startSeq, endSeq): boolean {
   let left = startSeq !== null ? sequenceNumber <= startSeq : false;
@@ -30,6 +28,13 @@ export type BubblegumIx =
   | "Burn"
   | "CancelRedeem"
   | "Delegate";
+
+export type ChangeLogEvent = {
+  id: PublicKey,
+  path: PathNode[],
+  seq: number,
+  index: number,
+};
 
 export type NewLeafEvent = {
   version: TokenProgramVersion;
@@ -50,53 +55,15 @@ export type LeafSchemaEvent = {
   };
 };
 
-function findGummyrollEvent(
-  logs: (string | ParsedLog)[],
-  parser: ParserState
-): ChangeLogEvent | null {
-  let changeLog: ChangeLogEvent | null;
-  for (const log of logs) {
-    if (typeof log !== "string" && log.programId.equals(GUMMYROLL_PROGRAM_ID)) {
-      changeLog = parseEventGummyroll(log, parser.Gummyroll);
-    }
-  }
-  if (!changeLog) {
-    console.log("Failed to find gummyroll changelog");
-  }
-  return changeLog;
-}
-
-function findBubblegumEvents(
-  logs: (string | ParsedLog)[],
-  parser: ParserState
-): Array<Event> {
-  let events = [];
-  for (const log of logs) {
-    if (typeof log !== "string") {
-      continue;
-    }
-    let data = log.match(dataRegEx);
-    if (data && data.length > 1) {
-      events.push(decodeEvent(data[1], parser.Bubblegum.idl));
-    }
-  }
-  return events;
-}
 
 export async function ingestBubblegumMint(
   db: NFTDatabaseConnection,
-  logs: (string | ParsedLog)[],
   slot: number,
-  parser: ParserState,
-  optionalInfo: OptionalInfo
+  optionalInfo: OptionalInfo,
+  changeLog: ChangeLogEvent,
+  newLeafData: NewLeafEvent,
+  leafSchema: LeafSchemaEvent,
 ) {
-  const changeLog = findGummyrollEvent(logs, parser);
-  const events = findBubblegumEvents(logs, parser);
-  if (events.length !== 2) {
-    return;
-  }
-  const newLeafData = events[0].data as NewLeafEvent;
-  const leafSchema = events[1].data as LeafSchemaEvent;
   let treeId = changeLog.id.toBase58();
   let sequenceNumber = changeLog.seq;
   let { startSeq, endSeq, txId } = optionalInfo;
@@ -116,20 +83,14 @@ export async function ingestBubblegumMint(
   await db.updateChangeLogs(changeLog, optionalInfo.txId, slot, treeId);
 }
 
-export async function ingestReplaceLeaf(
+export async function ingestBubblegumReplaceLeaf(
   db: NFTDatabaseConnection,
-  logs: (string | ParsedLog)[],
   slot: number,
-  parser: ParserState,
   optionalInfo: OptionalInfo,
+  changeLog: ChangeLogEvent,
+  leafSchema: LeafSchemaEvent,
   compressed: boolean = true
 ) {
-  const changeLog = findGummyrollEvent(logs, parser);
-  const events = findBubblegumEvents(logs, parser);
-  if (events.length !== 1) {
-    return;
-  }
-  const leafSchema = events[0].data as LeafSchemaEvent;
   let treeId = changeLog.id.toBase58();
   let sequenceNumber = changeLog.seq;
   let { startSeq, endSeq, txId } = optionalInfo;
@@ -151,12 +112,10 @@ export async function ingestReplaceLeaf(
 
 export async function ingestBubblegumCreateTree(
   db: NFTDatabaseConnection,
-  logs: (string | ParsedLog)[],
   slot: number,
-  parser: ParserState,
-  optionalInfo: OptionalInfo
+  optionalInfo: OptionalInfo,
+  changeLog: ChangeLogEvent
 ) {
-  const changeLog = findGummyrollEvent(logs, parser);
   const sequenceNumber = changeLog.seq;
   let { startSeq, endSeq, txId } = optionalInfo;
   if (skipTx(sequenceNumber, startSeq, endSeq)) {

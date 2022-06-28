@@ -1,14 +1,11 @@
 import sqlite3 from "sqlite3";
 import { open, Database, Statement } from "sqlite";
-import { PathNode } from "../gummyroll";
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 import { keccak_256 } from "js-sha3";
 import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
-import { LeafSchemaEvent, NewLeafEvent } from "./indexer/bubblegum";
 import { BN } from "@project-serum/anchor";
-import { bignum } from "@metaplex-foundation/beet";
 import { Creator } from "../bubblegum/src/generated";
-import { ChangeLogEvent } from "./indexer/gummyroll";
+import { LeafSchemaEvent, NewLeafEvent, ChangeLogEvent } from "./indexer/ingester";
 let fs = require("fs");
 
 /**
