@@ -25,6 +25,38 @@ CREATE INDEX cl_items_node_idx on cl_items (node_idx);
 CREATE INDEX cl_items_leaf_idx on cl_items (leaf_idx);
 CREATE UNIQUE INDEX cl_items__tree_node on cl_items (tree, node_idx);
 
+CREATE TABLE backfill_items
+(
+    id          bigserial PRIMARY KEY,
+    tree        BYTEA  NOT NULL,
+    seq         BIGINT NOT NULL,
+    slot        BIGINT NOT NULL,
+    force_chk   bool
+);
+
+CREATE INDEX backfill_items_tree_idx on backfill_items (tree);
+CREATE INDEX backfill_items_seq_idx on backfill_items (seq);
+
+CREATE or REPLACE FUNCTION notify_new_backfill_item()
+    RETURNS trigger
+     LANGUAGE 'plpgsql'
+as $BODY$
+declare
+begin
+    if (tg_op = 'INSERT') then
+        perform pg_notify('new_item_added', 'hello');
+    end if;
+
+    return null;
+end
+$BODY$;
+
+CREATE TRIGGER after_insert_item
+    AFTER INSERT
+    ON backfill_items
+    FOR EACH ROW
+    EXECUTE PROCEDURE notify_new_backfill_item();
+
 -- START NFT METADATA
 CREATE TYPE owner_type AS ENUM ('unknown', 'token', 'single');
 CREATE TYPE royalty_target_type AS ENUM ('unknown', 'creators', 'fanout', 'single');
