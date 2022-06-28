@@ -1,9 +1,11 @@
 import { PublicKey, SIGNATURE_LENGTH_IN_BYTES } from "@solana/web3.js";
 import { Connection } from "@solana/web3.js";
 import { decodeMerkleRoll } from "../gummyroll/index";
-import { ParserState, handleLogsAtomic } from "./indexer/utils";
+import { ParserState, handleInstructionsAtomic } from "./indexer/utils";
+import { handleLogsAtomic } from "./indexer/log/bubblegum";
 import { GapInfo, hash, NFTDatabaseConnection } from "./db";
 import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
+import { ParseResult } from "./indexer/utils";
 
 export async function validateTree(
   nftDb: NFTDatabaseConnection,
@@ -75,7 +77,8 @@ async function plugGapsFromSlot(
     if (tx.meta.err) {
       continue;
     }
-    handleLogsAtomic(
+
+    const parseResult = handleLogsAtomic(
       nftDb,
       {
         err: null,
@@ -87,6 +90,22 @@ async function plugGapsFromSlot(
       startSeq,
       endSeq
     );
+    if (parseResult === ParseResult.LogTruncated) {
+      const instructionInfo = {
+        accountKeys: tx.transaction.message.accountKeys,
+        instructions: tx.transaction.message.instructions,
+        innerInstructions: tx.meta.innerInstructions,
+      }
+      handleInstructionsAtomic(
+        nftDb,
+        instructionInfo,
+        tx.transaction.signatures[0],
+        { slot: slot },
+        parserState,
+        startSeq,
+        endSeq
+      );
+    }
   }
 }
 

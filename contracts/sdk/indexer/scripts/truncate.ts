@@ -1,11 +1,9 @@
-import { PublicKey, Keypair, Connection, Transaction } from "@solana/web3.js";
+import { Keypair, Connection, } from "@solana/web3.js";
 import * as anchor from '@project-serum/anchor';
-import { ParserState, handleLogsAtomic, loadProgram, loadPrograms } from "../indexer/utils";
-import { createMintV1Instruction, createCreateTreeInstruction } from '../../bubblegum/src/generated/instructions';
-import { createAllocTreeIx } from "../../gummyroll";
+import { createMintV1Instruction } from '../../bubblegum/src/generated/instructions';
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 import { CANDY_WRAPPER_PROGRAM_ID } from "../../utils";
-import { Key, TokenStandard } from "@metaplex-foundation/mpl-token-metadata";
+import { TokenStandard } from "@metaplex-foundation/mpl-token-metadata";
 import { getBubblegumAuthorityPDA } from "../../bubblegum/src/convenience";
 import { execute } from "../../../tests/utils";
 import { getCreateTreeIxs } from "../../bubblegum/src/convenience";
@@ -38,12 +36,12 @@ async function main() {
         commitment: "confirmed",
     });
 
-    const { txId, tx } = await pureAppend(connection, provider, payer);
+    // TODO: add gumball-machine version of truncate (test cpi indexing using instruction data)
+    const { txId, tx } = await truncateViaBubblegum(connection, provider, payer);
 
     if (tx.meta.logMessages) {
         let logsTruncated = false;
         for (const log of tx.meta.logMessages) {
-            // console.log(log);
             if (log.startsWith('Log truncated')) {
                 logsTruncated = true;
             }
@@ -52,7 +50,7 @@ async function main() {
     }
 }
 
-async function pureAppend(
+async function truncateViaBubblegum(
     connection: Connection,
     provider: anchor.Provider,
     payer: Keypair,
@@ -100,19 +98,11 @@ async function pureAppend(
             }
         ));
     }
-    console.log("Sending barrel roll of transactions");
-    // now do a barrel roll
+    console.log("Sending multiple mint ixs in a transaction");
     const txId = await execute(provider, mintIxs, [payer], true);
-    console.log(`Barrel roll of mint transactions here: ${txId}`);
+    console.log(`Executed multiple mint ixs here: ${txId}`);
     const tx = await connection.getTransaction(txId, { commitment: 'confirmed' });
     return { txId, tx };
 }
-
-// Two things here:
-// - create tree
-// - pure appends stuck in a tx
-// Or
-// - create gumball machine
-// - dispense as many as possible
 
 main();

@@ -1,29 +1,18 @@
 import * as anchor from "@project-serum/anchor";
-import { Context, Logs, PublicKey } from "@solana/web3.js";
+import { CompiledInnerInstruction, CompiledInstruction, Context, Logs, PublicKey } from "@solana/web3.js";
 import { readFileSync } from "fs";
 import { Bubblegum } from "../../../target/types/bubblegum";
 import { Gummyroll } from "../../../target/types/gummyroll";
 import { NFTDatabaseConnection } from "../db";
-import { parseBubblegum } from "./bubblegum";
+import { parseBubblegumInstruction } from "./instruction/bubblegum";
 import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from "../../gummyroll";
 import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "../../bubblegum/src/generated";
-
-const startRegEx = /Program (\w*) invoke \[(\d)\]/;
-const endRegEx = /Program (\w*) success/;
-export const dataRegEx =
-  /Program data: ((?:[A-Za-z\d+/]{4})*(?:[A-Za-z\d+/]{3}=|[A-Za-z\d+/]{2}==)?$)/;
-export const ixRegEx = /Program log: Instruction: (\w+)/;
 
 export type ParserState = {
   Gummyroll: anchor.Program<Gummyroll>;
   Bubblegum: anchor.Program<Bubblegum>;
 };
 
-export type ParsedLog = {
-  programId: PublicKey;
-  logs: (string | ParsedLog)[];
-  depth: number;
-};
 
 export type OptionalInfo = {
   txId: string;
@@ -32,75 +21,6 @@ export type OptionalInfo = {
   endSeq: number | null;
 };
 
-/**
- * Recursively parses the logs of a program instruction execution
- * @param programId
- * @param depth
- * @param logs
- * @returns
- */
-function parseInstructionLog(
-  programId: PublicKey,
-  depth: number,
-  logs: string[]
-) {
-  const parsedLog: ParsedLog = {
-    programId,
-    depth,
-    logs: [],
-  };
-  let instructionComplete = false;
-  while (!instructionComplete) {
-    const logLine = logs[0];
-    logs = logs.slice(1);
-    let result = logLine.match(endRegEx);
-    if (result) {
-      if (result[1] != programId.toString()) {
-        throw Error(`Unexpected program id finished: ${result[1]}`);
-      }
-      instructionComplete = true;
-    } else {
-      result = logLine.match(startRegEx);
-      if (result) {
-        const programId = new PublicKey(result[1]);
-        const depth = Number(result[2]) - 1;
-        const parsedInfo = parseInstructionLog(programId, depth, logs);
-        parsedLog.logs.push(parsedInfo.parsedLog);
-        logs = parsedInfo.logs;
-      } else {
-        parsedLog.logs.push(logLine);
-      }
-    }
-  }
-  return { parsedLog, logs };
-}
-
-/**
- * Parses logs so that emitted event data can be tied to its execution context
- * @param logs
- * @returns
- */
-export function parseLogs(logs: string[]): ParsedLog[] {
-  let parsedLogs: ParsedLog[] = [];
-  while (logs && logs.length) {
-    const logLine = logs[0];
-    logs = logs.slice(1);
-    const result = logLine.match(startRegEx);
-    const programId = new PublicKey(result[1]);
-    const depth = Number(result[2]) - 1;
-    const parsedInfo = parseInstructionLog(programId, depth, logs);
-    parsedLogs.push(parsedInfo.parsedLog);
-    logs = parsedInfo.logs;
-  }
-  return parsedLogs;
-}
-
-export function parseEventFromLog(
-  log: string,
-  idl: anchor.Idl
-): anchor.Event | null {
-  return decodeEvent(log.match(dataRegEx)[1], idl);
-}
 
 /**
  * Example:
@@ -125,98 +45,93 @@ export function loadProgram(
   return new anchor.Program(IDL, programId, provider);
 }
 
-/**
- * Performs a depth-first traversal of the ParsedLog data structure
- * @param db
- * @param optionalInfo
- * @param slot
- * @param parsedState
- * @param parsedLog
- * @returns
- */
-async function indexParsedLog(
+export enum ParseResult {
+  Success,
+  LogTruncated,
+  TransactionError
+};
+
+function indexZippedInstruction(
   db: NFTDatabaseConnection,
-  optionalInfo: OptionalInfo,
+  context: { txId: string, startSeq: number, endSeq: number },
   slot: number,
   parserState: ParserState,
-  parsedLog: ParsedLog | string
+  accountKeys: PublicKey[],
+  zippedInstruction: ZippedInstruction,
 ) {
-  if (typeof parsedLog === "string") {
-    return;
-  }
-  if (parsedLog.programId.equals(BUBBLEGUM_PROGRAM_ID)) {
-    return await parseBubblegum(db, parsedLog, slot, parserState, optionalInfo);
-  } else {
-    for (const log of parsedLog.logs) {
-      await indexParsedLog(db, optionalInfo, slot, parserState, log);
-    }
-  }
-}
-
-export function handleLogsAtomic(
-  db: NFTDatabaseConnection,
-  logs: Logs,
-  context: Context,
-  parsedState: ParserState,
-  startSeq: number | null = null,
-  endSeq: number | null = null
-) {
-  if (logs.err) {
-    return;
-  }
-  const parsedLogs = parseLogs(logs.logs);
-  if (parsedLogs.length == 0) {
-    return;
-  }
-  db.connection.db.serialize(() => {
-    db.beginTransaction();
-    for (const parsedLog of parsedLogs) {
-      indexParsedLog(
-        db,
-        { txId: logs.signature, startSeq, endSeq },
-        context.slot,
-        parsedState,
-        parsedLog
-      );
-    }
-    db.commit();
-  });
-}
-
-/**
- * Processes the logs from a new transaction and searches for the programs
- * specified in the ParserState
- * @param db
- * @param logs
- * @param context
- * @param parsedState
- * @param startSeq
- * @param endSeq
- * @returns
- */
-export async function handleLogs(
-  db: NFTDatabaseConnection,
-  logs: Logs,
-  context: Context,
-  parsedState: ParserState,
-  startSeq: number | null = null,
-  endSeq: number | null = null
-) {
-  if (logs.err) {
-    return;
-  }
-  const parsedLogs = parseLogs(logs.logs);
-  if (parsedLogs.length == 0) {
-    return;
-  }
-  for (const parsedLog of parsedLogs) {
-    await indexParsedLog(
+  const { instruction, innerInstructions } = zippedInstruction;
+  const programId = accountKeys[instruction.programIdIndex];
+  if (programId.equals(BUBBLEGUM_PROGRAM_ID)) {
+    console.log("Found bubblegum");
+    parseBubblegumInstruction(
       db,
-      { txId: logs.signature, startSeq, endSeq },
+      slot,
+      parserState,
+      context,
+      accountKeys,
+      instruction,
+      innerInstructions
+    );
+  } else {
+    /// TODO: test with gumball-machine truncate mode
+    /// TODO: write inner instruction parser
+    console.log("[no outer bgum ix found] Ignoring for now");
+  }
+}
+
+type ZippedInstruction = {
+  instructionIndex: number,
+  instruction: CompiledInstruction,
+  innerInstructions: CompiledInnerInstruction[],
+}
+
+/// Similar to `order_instructions` in `/nft_ingester/src/utils/instructions.rs`
+function zipInstructions(
+  instructions: CompiledInstruction[],
+  innerInstructions: CompiledInnerInstruction[],
+): ZippedInstruction[] {
+  const zippedIxs = [];
+  let innerIxIndex = 0;
+  for (let instructionIndex = 0; instructionIndex < instructions.length; instructionIndex++) {
+    const innerIxs = [];
+    while (innerInstructions[innerIxIndex].index < instructionIndex) {
+      innerIxs.push(innerInstructions[innerIxIndex]);
+      innerIxIndex += 1;
+    }
+    zippedIxs.push({
+      instructionIndex,
+      instruction: instructions[instructionIndex],
+      innerIxs
+    })
+  }
+  return zippedIxs;
+}
+
+export function handleInstructionsAtomic(
+  db: NFTDatabaseConnection,
+  instructionInfo: {
+    accountKeys: PublicKey[],
+    instructions: CompiledInstruction[],
+    innerInstructions: CompiledInnerInstruction[],
+  },
+  txId: string,
+  context: Context,
+  parsedState: ParserState,
+  startSeq: number | null = null,
+  endSeq: number | null = null
+) {
+  const { accountKeys, instructions, innerInstructions } = instructionInfo;
+
+  const zippedInstructions = zipInstructions(instructions, innerInstructions);
+  for (let i = 0; i < zippedInstructions.length; i++) {
+    indexZippedInstruction(
+      db,
+      { txId, startSeq, endSeq },
       context.slot,
       parsedState,
-      parsedLog
-    );
+      accountKeys,
+      zippedInstructions[i],
+    )
   }
 }
 

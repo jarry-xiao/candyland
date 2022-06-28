@@ -1,27 +1,19 @@
 import {
-  ParsedLog,
   ParserState,
-  ixRegEx,
-  parseEventFromLog,
   OptionalInfo,
-  dataRegEx,
   decodeEvent,
 } from "./utils";
+import { ParsedLog, dataRegEx } from "./log/bubblegum";
 import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from "../../gummyroll";
-import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "../../bubblegum/src/generated";
 import { ChangeLogEvent, parseEventGummyroll } from "./gummyroll";
 import {
   TokenProgramVersion,
   MetadataArgs,
 } from "../../bubblegum/src/generated/types";
-import { BN, Event } from "@project-serum/anchor";
+import { BN, Event, } from "@project-serum/anchor";
 import { NFTDatabaseConnection } from "../db";
 import { PublicKey } from "@solana/web3.js";
-import { IdlEvent } from "@project-serum/anchor/dist/cjs/idl";
 
-function parseIxName(logLine: string): BubblegumIx | null {
-  return logLine.match(ixRegEx)[1] as BubblegumIx;
-}
 
 function skipTx(sequenceNumber, startSeq, endSeq): boolean {
   let left = startSeq !== null ? sequenceNumber <= startSeq : false;
@@ -58,53 +50,6 @@ export type LeafSchemaEvent = {
   };
 };
 
-export async function parseBubblegum(
-  db: NFTDatabaseConnection,
-  parsedLog: ParsedLog,
-  slot: number,
-  parser: ParserState,
-  optionalInfo: OptionalInfo
-) {
-  const ixName = parseIxName(parsedLog.logs[0] as string);
-  console.log("Bubblegum:", ixName);
-  switch (ixName) {
-    case "CreateTree":
-      await parseBubblegumCreateTree(
-        db,
-        parsedLog.logs,
-        slot,
-        parser,
-        optionalInfo
-      );
-      break;
-    case "MintV1":
-      await parseBubblegumMint(db, parsedLog.logs, slot, parser, optionalInfo);
-      break;
-    case "Redeem":
-      await parseReplaceLeaf(
-        db,
-        parsedLog.logs,
-        slot,
-        parser,
-        optionalInfo,
-        false
-      );
-      break;
-    case "CancelRedeem":
-      await parseReplaceLeaf(db, parsedLog.logs, slot, parser, optionalInfo);
-      break;
-    case "Burn":
-      await parseReplaceLeaf(db, parsedLog.logs, slot, parser, optionalInfo);
-      break;
-    case "Transfer":
-      await parseReplaceLeaf(db, parsedLog.logs, slot, parser, optionalInfo);
-      break;
-    case "Delegate":
-      await parseReplaceLeaf(db, parsedLog.logs, slot, parser, optionalInfo);
-      break;
-  }
-}
-
 function findGummyrollEvent(
   logs: (string | ParsedLog)[],
   parser: ParserState
@@ -138,7 +83,7 @@ function findBubblegumEvents(
   return events;
 }
 
-export async function parseBubblegumMint(
+export async function ingestBubblegumMint(
   db: NFTDatabaseConnection,
   logs: (string | ParsedLog)[],
   slot: number,
@@ -171,9 +116,7 @@ export async function parseBubblegumMint(
   await db.updateChangeLogs(changeLog, optionalInfo.txId, slot, treeId);
 }
 
-
-
-export async function parseReplaceLeaf(
+export async function ingestReplaceLeaf(
   db: NFTDatabaseConnection,
   logs: (string | ParsedLog)[],
   slot: number,
@@ -206,7 +149,7 @@ export async function parseReplaceLeaf(
   await db.updateChangeLogs(changeLog, optionalInfo.txId, slot, treeId);
 }
 
-export async function parseBubblegumCreateTree(
+export async function ingestBubblegumCreateTree(
   db: NFTDatabaseConnection,
   logs: (string | ParsedLog)[],
   slot: number,
@@ -224,7 +167,7 @@ export async function parseBubblegumCreateTree(
   await db.updateChangeLogs(changeLog, optionalInfo.txId, slot, treeId);
 }
 
-export async function parseBubblegumDecompress(
+export async function ingestBubblegumDecompress(
   db: NFTDatabaseConnection,
   logs: (string | ParsedLog)[],
   parser: ParserState,

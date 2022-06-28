@@ -6,7 +6,8 @@ import * as anchor from "@project-serum/anchor";
 import { Bubblegum } from "../../target/types/bubblegum";
 import { Gummyroll } from "../../target/types/gummyroll";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
-import { loadProgram, handleLogs, handleLogsAtomic, loadPrograms } from "./indexer/utils";
+import { handleLogsAtomic } from "./indexer/log/bubblegum";
+import { loadPrograms } from "./indexer/utils";
 import { bootstrap } from "./db";
 import { fetchAndPlugGaps, validateTree } from "./backfiller";
 
