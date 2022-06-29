@@ -3,7 +3,7 @@ import * as anchor from '@project-serum/anchor';
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 import { CANDY_WRAPPER_PROGRAM_ID } from "../../utils";
 import { getBubblegumAuthorityPDA, getCreateTreeIxs, getLeafAssetId } from "../../bubblegum/src/convenience";
-import { addProof, decodeMerkleRoll, PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from '../../gummyroll';
+import { addProof, PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from '../../gummyroll';
 import {
     TokenStandard,
     MetadataArgs,
@@ -15,14 +15,11 @@ import {
 } from "../../bubblegum/src/generated";
 import { execute } from "../../../tests/utils";
 import { hashCreators, hashMetadata } from "../indexer/instruction/bubblegum";
-import { emptyNode, getProofOfLeafFromServer } from "../../../tests/merkle-tree";
 import { BN } from "@project-serum/anchor";
 import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
 import fetch from "node-fetch";
 import { keccak_256 } from 'js-sha3';
-import { ConfirmedTransactionAssertablePromise } from "@metaplex-foundation/amman-client";
 import { BinaryWriter } from 'borsh';
-import * as beet from '@metaplex-foundation/beet';
 
 // const url = "http://api.explorer.mainnet-beta.solana.com";
 const url = "http://127.0.0.1:8899";
@@ -50,12 +47,16 @@ async function main() {
         commitment: "confirmed",
     });
 
-    // TODO: add gumball - machine version of truncate(test cpi indexing using instruction data)
+    // TODO: add gumball-machine version of truncate(test cpi indexing using instruction data)
     let { txId, tx } = await truncateViaBubblegum(connection, provider, payer);
     checkTxTruncated(tx);
 
-    let results = await truncateWithBubblegumTransfers(connection, provider, payer);
-    checkTxTruncated(results.tx);
+    // TOOD: add this after gumball-machine mints
+    let results = await testWithBubblegumTransfers(connection, provider, payer);
+
+    results.txs.map((tx) => {
+        checkTxTruncated(tx);
+    })
 }
 
 function checkTxTruncated(tx: TransactionResponse) {
@@ -137,24 +138,26 @@ type ProofResult = {
     creatorHash: number[],
     root: number[],
     proofNodes: Buffer[],
+    nonce: number,
+    index: number,
 }
 
 async function getTransferInfoFromServer(leafHash: Buffer, treeId: PublicKey): Promise<ProofResult> {
     const proofServerUrl = "http://127.0.0.1:4000/proof";
     const hash = bs58.encode(leafHash);
     const url = `${proofServerUrl}?leafHash=${hash}&treeId=${treeId.toString()}`;
-    console.log(url);
     const response = await fetch(
         url,
         { method: "GET" }
     );
     const proof = await response.json();
-    console.log(proof);
     return {
         dataHash: [...bs58.decode(proof.dataHash as string)],
         creatorHash: [...bs58.decode(proof.creatorHash as string)],
         root: [...bs58.decode(proof.root as string)],
-        proofNodes: (proof.proofNodes as string[]).map((node) => bs58.decode(node))
+        proofNodes: (proof.proofNodes as string[]).map((node) => bs58.decode(node)),
+        nonce: proof.nonce,
+        index: proof.index,
     };
 }
 
@@ -171,7 +174,7 @@ function hashLeafSchema(leafSchema: LeafSchema, dataHash: Buffer, creatorHash: B
     // result.write(buffer, 0, leafSchema);
 
     const writer = new BinaryWriter();
-    // For non-v1, we definitely want to use better spec
+    // When we have versions other than V1, we definitely want to use solita
     writer.writeU8(1);
     writer.writeFixedArray(leafSchema.id.toBuffer());
     writer.writeFixedArray(leafSchema.owner.toBuffer());
@@ -183,7 +186,7 @@ function hashLeafSchema(leafSchema: LeafSchema, dataHash: Buffer, creatorHash: B
     return digest(buf);
 }
 
-async function truncateWithBubblegumTransfers(
+async function testWithBubblegumTransfers(
     connection: Connection,
     provider: anchor.Provider,
     payer: Keypair,
@@ -195,7 +198,8 @@ async function truncateWithBubblegumTransfers(
     // const merkleRoll = decodeMerkleRoll(acctInfo.data);
     // const root = Array.from(merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBytes());
 
-    const transferIxs = [];
+    const txIds = [];
+    const txs = [];
     const finalDestination = keypairFromString("bubblegum-final-destination");
     for (let i = 0; i < 6; i++) {
         const metadata = getMetadata(i);
@@ -219,8 +223,8 @@ async function truncateWithBubblegumTransfers(
             delegate: leafSchema.owner.toString(),
             nonce: new BN(i),
         });
-        const { root, dataHash, creatorHash, proofNodes } = await getTransferInfoFromServer(leafHash, bgumTree.publicKey);
-        transferIxs.push(addProof(createTransferInstruction({
+        const { root, dataHash, creatorHash, proofNodes, nonce, index } = await getTransferInfoFromServer(leafHash, bgumTree.publicKey);
+        const transferIx = addProof(createTransferInstruction({
             authority,
             candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
             gummyrollProgram: GUMMYROLL_PROGRAM_ID,
@@ -231,16 +235,16 @@ async function truncateWithBubblegumTransfers(
         }, {
             dataHash,
             creatorHash,
-            nonce: new BN(i),
+            nonce,
             root,
-            index: i,
-        }), proofNodes));
+            index,
+        }), proofNodes.slice(0, MAX_DEPTH - CANOPY_DEPTH));
+        txIds.push(await execute(provider, [transferIx], [payer], true));
+        txs.push(await connection.getTransaction(txIds[txIds.length - 1], { commitment: 'confirmed' }));
     }
-
-    const txId = await execute(provider, transferIxs, [payer], true);
-    console.log(`Executed multiple mint ixs here: ${txId}`);
-    const tx = await connection.getTransaction(txId, { commitment: 'confirmed' });
-    return { txId, tx };
+    console.log(`Transferred all NFTs to ${finalDestination.publicKey.toString()}`);
+    console.log(`Executed multiple transfer ixs here: ${txIds}`);
+    return { txIds, txs };
 }
 
 main();

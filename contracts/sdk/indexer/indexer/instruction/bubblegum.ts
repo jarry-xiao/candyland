@@ -1,19 +1,28 @@
 import { hash, NFTDatabaseConnection } from "../../db"
 import { ParserState, OptionalInfo } from "../utils"
 import { PublicKey, CompiledInstruction, CompiledInnerInstruction } from "@solana/web3.js"
-import { BorshEventCoder, BorshInstructionCoder } from "@project-serum/anchor";
+import { BorshEventCoder, BorshInstructionCoder, Instruction } from "@project-serum/anchor";
 import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
-import { ChangeLogEvent, ingestBubblegumCreateTree, ingestBubblegumMint, LeafSchemaEvent, NewLeafEvent } from "../ingester";
+import { ChangeLogEvent, ingestBubblegumCreateTree, ingestBubblegumMint, ingestBubblegumReplaceLeaf, LeafSchemaEvent, NewLeafEvent } from "../ingester";
 import { decodeEvent } from "../utils";
 import { CANDY_WRAPPER_PROGRAM_ID } from "../../../utils";
 import { Idl, IdlTypeDef } from '@project-serum/anchor/dist/cjs/idl';
 import { IdlCoder } from '@project-serum/anchor/dist/cjs/coder/borsh/idl';
 import { Layout } from "buffer-layout";
-import { Creator, LeafSchema, MetadataArgs, metadataArgsBeet, TokenProgramVersion, TokenStandard } from "../../../bubblegum/src/generated";
+import {
+    Creator,
+    LeafSchema,
+    MetadataArgs,
+    metadataArgsBeet,
+    TokenProgramVersion,
+    TokenStandard,
+    TransferInstructionArgs,
+} from "../../../bubblegum/src/generated";
 import { keccak_256 } from "js-sha3";
 import { getLeafAssetId } from "../../../bubblegum/src/convenience";
 import * as beetSolana from '@metaplex-foundation/beet-solana'
 import * as beet from '@metaplex-foundation/beet'
+import { BN } from "@project-serum/anchor";
 
 /// Copied from https://github.com/solana-labs/solana/blob/d07b0798504f757340868d15c199aba9bd00ba5d/explorer/src/utils/anchor.tsx#L57
 export async function parseBubblegumInstruction(
@@ -42,7 +51,7 @@ export async function parseBubblegumInstruction(
                 )
                 break;
             case "MintV1":
-                parseBubblegumMint(
+                await parseBubblegumMint(
                     db,
                     slot,
                     optionalInfo,
@@ -69,6 +78,16 @@ export async function parseBubblegumInstruction(
                 // await parseReplaceLeaf(db, parsedLog.logs, slot, parser, optionalInfo);
                 break;
             case "Transfer":
+                await parseBubblegumTransfer(
+                    db,
+                    slot,
+                    optionalInfo,
+                    parser,
+                    accountKeys,
+                    instruction,
+                    innerInstructions,
+                    decodedIx
+                )
                 // await parseReplaceLeaf(db, parsedLog.logs, slot, parser, optionalInfo);
                 break;
             case "Delegate":
@@ -83,10 +102,12 @@ export async function parseBubblegumInstruction(
 function findWrapInstructions(accountKeys: PublicKey[], instructions: CompiledInstruction[]): CompiledInstruction[] {
     const wrapIxs = [];
     for (const ix of instructions) {
+        console.log(`\t${accountKeys[ix.programIdIndex].toString()}`)
         if (accountKeys[ix.programIdIndex].equals(CANDY_WRAPPER_PROGRAM_ID)) {
             wrapIxs.push(ix);
         }
     }
+    console.log("\n");
     return wrapIxs;
 }
 
@@ -274,5 +295,61 @@ async function parseBubblegumMint(
         changeLogEvent,
         newLeafData,
         leafSchema,
+    )
+}
+
+async function getLeafSchemaFromTransferIx(
+    accountKeys: PublicKey[],
+    instruction: CompiledInstruction,
+    decodedIx: Instruction,
+): Promise<LeafSchemaEvent> {
+    const accounts = {
+        delegate: accountKeys[instruction.accounts[2]],
+        newOwner: accountKeys[instruction.accounts[3]],
+        treeId: accountKeys[instruction.accounts[6]],
+    };
+    const data: TransferInstructionArgs = decodedIx.data as TransferInstructionArgs;
+    const leafSchema: LeafSchemaEvent = {
+        schema: {
+            v1: {
+                id: await getLeafAssetId(accounts.treeId, new BN(data.index)),
+                nonce: new BN(data.nonce),
+                dataHash: data.dataHash,
+                creatorHash: data.creatorHash,
+                owner: accounts.newOwner,
+                delegate: accounts.delegate,
+            }
+        }
+    }
+    return leafSchema;
+}
+
+async function parseBubblegumTransfer(
+    db: NFTDatabaseConnection,
+    slot: number,
+    optionalInfo: OptionalInfo,
+    parser: ParserState,
+    accountKeys: PublicKey[],
+    instruction: CompiledInstruction,
+    innerInstructions: CompiledInnerInstruction[],
+    decodedIx: Instruction,
+) {
+    const leafSchema = await getLeafSchemaFromTransferIx(accountKeys, instruction, decodedIx);
+    let changeLogEvent: ChangeLogEvent;
+    for (const innerInstruction of innerInstructions) {
+        const wrapIxs = findWrapInstructions(accountKeys, innerInstruction.instructions);
+        if (wrapIxs.length != 1) {
+            console.error("Found too many or too little wrap inner instructions for bubblegum mint instruction")
+        }
+        changeLogEvent = decodeEventInstructionData(parser.Gummyroll.idl, "ChangeLogEvent", wrapIxs[0].data).data as ChangeLogEvent;
+    }
+
+    await ingestBubblegumReplaceLeaf(
+        db,
+        slot,
+        optionalInfo,
+        changeLogEvent,
+        leafSchema,
+        true
     )
 }
