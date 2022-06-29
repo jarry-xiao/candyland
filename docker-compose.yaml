@@ -2,7 +2,6 @@ version: "3.9"
 services:
   ingester:
     depends_on:
-      - api
       - redis
     restart: always
     build:
@@ -10,11 +9,15 @@ services:
       dockerfile: Ingest.Dockerfile
   api:
     restart: always
+    environment:
+      APP_DATABASE_URL: postgres://solana:solana@db/solana
+      APP_SERVER_PORT: 9090
+      APP_METRICS_PORT: 9091
     build:
       context: .
       dockerfile: Api.Dockerfile
     ports:
-      - "9090:9090"
+      - 9090:9090
   redis:
     image: "redis:alpine"
     ports:

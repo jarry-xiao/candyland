@@ -1,11 +1,8 @@
-use solana_program::pubkey::Pubkey;
 use num_derive::FromPrimitive;
+use solana_sdk::pubkey::Pubkey;
 
 #[cfg(feature = "json_types")]
-use {
-  serde::{Deserialize,Serialize}
-};
-
+use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "json_types", derive(Deserialize, Serialize))]
 #[derive(PartialEq, Copy, Clone, Debug, FromPrimitive)]
@@ -32,7 +29,6 @@ pub enum TokenStandard {
     NonFungibleEdition, // This is a limited edition
 }
 
-
 #[cfg_attr(feature = "json_types", derive(Deserialize, Serialize))]
 #[derive(PartialEq, Copy, Clone, Debug, FromPrimitive)]
 pub enum UseMethod {
@@ -40,7 +36,6 @@ pub enum UseMethod {
     Multiple,
     Single,
 }
-
 
 #[cfg_attr(feature = "json_types", derive(Deserialize, Serialize))]
 #[derive(PartialEq, Copy, Clone, Debug)]

@@ -30,7 +30,12 @@ pub fn string_from_fb_table(
 }
 
 pub fn bytes_from_fb_table<'a>(
-    keys: &Vector<'a, ForwardsUOffset<plerkle_serialization::transaction_info_generated::transaction_info::Pubkey<'a>>>,
+    keys: &Vector<
+        'a,
+        ForwardsUOffset<
+            plerkle_serialization::transaction_info_generated::transaction_info::Pubkey<'a>,
+        >,
+    >,
     index: usize,
 ) -> Vec<u8> {
     let pubkey = keys.get(index);

@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "plerkle",
-    "nft_api",
+    "das_api",
     "nft_ingester",
     "messenger",
     "digital_asset_types"

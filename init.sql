@@ -12,6 +12,7 @@ CREATE TABLE cl_items
     id       bigserial PRIMARY KEY,
     tree     BYTEA  NOT NULL,
     node_idx BIGINT NOT NULL,
+    leaf_idx BIGINT,
     seq      BIGINT NOT NULL,
     level    BIGINT NOT NULL,
     hash     BYTEA  NOT NULL
@@ -21,7 +22,7 @@ CREATE INDEX cl_items_tree_idx on cl_items (tree);
 CREATE INDEX cl_items_hash_idx on cl_items (hash);
 CREATE INDEX cl_items_level on cl_items (level);
 CREATE INDEX cl_items_node_idx on cl_items (node_idx);
-CREATE INDEX cl_items_uniq_operation_idx on cl_items (tree, level, seq);
+CREATE INDEX cl_items_leaf_idx on cl_items (leaf_idx);
 CREATE UNIQUE INDEX cl_items__tree_node on cl_items (tree, node_idx);
 
 -- START NFT METADATA
@@ -43,32 +44,33 @@ create table asset_data
 
 create table asset
 (
-    id                  bytea PRIMARY KEY,
-    owner               bytea               not null,
-    owner_type          owner_type          not null default 'single',
+    id                    bytea PRIMARY KEY,
+    specification_version int                 not null default 1,
+    owner                 bytea               not null,
+    owner_type            owner_type          not null default 'single',
     -- delegation
-    delegate            bytea,
+    delegate              bytea,
     -- freeze
-    frozen              bool                not null default false,
+    frozen                bool                not null default false,
     -- supply
-    supply              bigint              not null default 1,
-    supply_mint         bytea,
+    supply                bigint              not null default 1,
+    supply_mint           bytea,
     -- compression
-    compressed          bool                not null default false,
+    compressed            bool                not null default false,
     -- -- Can this asset be compressed
-    compressible        bool                not null default false,
-    tree_id             bytea,
-    leaf                bytea,
-    nonce               bigint              not null,
+    compressible          bool                not null default false,
+    tree_id               bytea,
+    leaf                  bytea,
+    nonce                 bigint              not null,
     -- royalty
-    royalty_target_type royalty_target_type not null default 'creators',
-    royalty_target      bytea,
-    royalty_amount      int                 not null default 0,
+    royalty_target_type   royalty_target_type not null default 'creators',
+    royalty_target        bytea,
+    royalty_amount        int                 not null default 0,
     -- data
-    chain_data_id       bigint references asset_data (id),
+    chain_data_id         bigint references asset_data (id),
     -- visibility
-    created_at          timestamp with time zone default (now() at time zone 'utc'),
-    burnt_at            timestamp with time zone
+    created_at            timestamp with time zone     default (now() at time zone 'utc'),
+    burnt                 bool                not null default false
 );
 
 create index asset_tree on asset (tree_id);

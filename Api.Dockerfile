@@ -1,25 +1,29 @@
-FROM rust:1.60-bullseye as builder
-ARG MODE=debug
+FROM rust:1.60-bullseye AS chef
+RUN cargo install cargo-chef
+FROM chef AS planner
+COPY das_api /rust/das_api/
+WORKDIR /rust/das_api
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder
 RUN apt-get update -y && \
     apt-get install -y build-essential make git
-WORKDIR /rust
-RUN USER=root cargo new --lib nft_api
-COPY contracts /rust/contracts
 COPY lib /rust/lib
-COPY deps /rust/deps
+COPY contracts /rust/contracts
 COPY plerkle /rust/plerkle
+COPY deps /rust/deps
 COPY plerkle_serialization /rust/plerkle_serialization
 COPY digital_asset_types /rust/digital_asset_types
 COPY messenger /rust/messenger
-WORKDIR /rust/nft_api
-COPY ./nft_api/Cargo.toml ./Cargo.toml
-
-RUN cargo build
-
-COPY ./nft_api .
-RUN cargo build
-RUN cp -r /rust/nft_api/target/$MODE /rust/bin
-RUN rm -rf /rust/nft_api/target/
+RUN mkdir -p /rust/das_api
+WORKDIR /rust/das_api
+COPY --from=planner /rust/das_api/recipe.json recipe.json
+# Build dependencies - this is the caching Docker layer!
+COPY das_api/Cargo.toml .
+RUN cargo chef cook --release --recipe-path recipe.json
+COPY das_api .
+# Build application
+RUN cargo build --release
 
 FROM rust:1.61-slim-bullseye
 ARG APP=/usr/src/app
@@ -31,8 +35,8 @@ ENV TZ=Etc/UTC \
 RUN groupadd $APP_USER \
     && useradd -g $APP_USER $APP_USER \
     && mkdir -p ${APP}
-COPY --from=builder /rust/bin/nft_api ${APP}
+COPY --from=builder /rust/das_api/target/release/das_api ${APP}
 RUN chown -R $APP_USER:$APP_USER ${APP}
 USER $APP_USER
 WORKDIR ${APP}
-CMD /usr/src/app/nft_api
+CMD /usr/src/app/das_api

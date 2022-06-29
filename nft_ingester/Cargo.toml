@@ -21,7 +21,7 @@ chrono = "0.4.19"
 tokio-postgres = "0.7.5"
 serde = "1.0.136"
 bs58 = "0.4.0"
-reqwest = "0.11.10"
+reqwest = "0.11.11"
 csv = "1.1.6"
 messenger = { path = "../messenger" }
 flatbuffers = "2.1.2"
