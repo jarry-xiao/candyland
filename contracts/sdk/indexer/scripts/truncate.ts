@@ -1,14 +1,28 @@
-import { Keypair, Connection, } from "@solana/web3.js";
+import { Keypair, Connection, TransactionResponse, PublicKey } from "@solana/web3.js";
 import * as anchor from '@project-serum/anchor';
-import { createMintV1Instruction } from '../../bubblegum/src/generated/instructions';
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 import { CANDY_WRAPPER_PROGRAM_ID } from "../../utils";
-import { TokenStandard } from "@metaplex-foundation/mpl-token-metadata";
-import { getBubblegumAuthorityPDA } from "../../bubblegum/src/convenience";
+import { getBubblegumAuthorityPDA, getCreateTreeIxs, getLeafAssetId } from "../../bubblegum/src/convenience";
+import { addProof, decodeMerkleRoll, PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from '../../gummyroll';
+import {
+    TokenStandard,
+    MetadataArgs,
+    TokenProgramVersion,
+    createTransferInstruction,
+    createMintV1Instruction,
+    LeafSchema,
+    leafSchemaBeet,
+} from "../../bubblegum/src/generated";
 import { execute } from "../../../tests/utils";
-import { getCreateTreeIxs } from "../../bubblegum/src/convenience";
-import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from '../../gummyroll';
-import { TokenProgramVersion } from "../../bubblegum/src/generated";
+import { hashCreators, hashMetadata } from "../indexer/instruction/bubblegum";
+import { emptyNode, getProofOfLeafFromServer } from "../../../tests/merkle-tree";
+import { BN } from "@project-serum/anchor";
+import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
+import fetch from "node-fetch";
+import { keccak_256 } from 'js-sha3';
+import { ConfirmedTransactionAssertablePromise } from "@metaplex-foundation/amman-client";
+import { BinaryWriter } from 'borsh';
+import * as beet from '@metaplex-foundation/beet';
 
 // const url = "http://api.explorer.mainnet-beta.solana.com";
 const url = "http://127.0.0.1:8899";
@@ -36,9 +50,15 @@ async function main() {
         commitment: "confirmed",
     });
 
-    // TODO: add gumball-machine version of truncate (test cpi indexing using instruction data)
-    const { txId, tx } = await truncateViaBubblegum(connection, provider, payer);
+    // TODO: add gumball - machine version of truncate(test cpi indexing using instruction data)
+    let { txId, tx } = await truncateViaBubblegum(connection, provider, payer);
+    checkTxTruncated(tx);
 
+    let results = await truncateWithBubblegumTransfers(connection, provider, payer);
+    checkTxTruncated(results.tx);
+}
+
+function checkTxTruncated(tx: TransactionResponse) {
     if (tx.meta.logMessages) {
         let logsTruncated = false;
         for (const log of tx.meta.logMessages) {
@@ -47,6 +67,25 @@ async function main() {
             }
         }
         console.log(`Logs truncated: ${logsTruncated}`);
+    } else {
+        console.error("NO LOG MESSAGES FOUND AT ALL...error!!!")
+    }
+}
+
+function getMetadata(num: number): MetadataArgs {
+    return {
+        name: `${num}`,
+        symbol: `MILADY`,
+        uri: "http://remilia.org",
+        sellerFeeBasisPoints: 0,
+        primarySaleHappened: false,
+        isMutable: false,
+        uses: null,
+        collection: null,
+        creators: [],
+        tokenProgramVersion: TokenProgramVersion.Original,
+        tokenStandard: TokenStandard.NonFungible,
+        editionNonce: 0,
     }
 }
 
@@ -71,6 +110,7 @@ async function truncateViaBubblegum(
 
     const mintIxs = [];
     for (let i = 0; i < 6; i++) {
+        const metadata = getMetadata(i);
         mintIxs.push(createMintV1Instruction(
             {
                 owner: payer.publicKey,
@@ -81,27 +121,123 @@ async function truncateViaBubblegum(
                 mintAuthority: payer.publicKey,
                 merkleSlab: bgumTree.publicKey,
             },
-            {
-                message: {
-                    name: `${i}`,
-                    symbol: `MILADY`,
-                    uri: "www.remilia.org",
-                    sellerFeeBasisPoints: 0,
-                    primarySaleHappened: false,
-                    isMutable: false,
-                    uses: null,
-                    collection: null,
-                    creators: [],
-                    tokenProgramVersion: TokenProgramVersion.Original,
-                    tokenStandard: TokenStandard.NonFungible,
-                    editionNonce: 0,
-                }
-            }
+            { message: metadata }
         ));
     }
     console.log("Sending multiple mint ixs in a transaction");
     const ixs = createIxs.concat(mintIxs);
     const txId = await execute(provider, ixs, [payer, bgumTree], true);
+    console.log(`Executed multiple mint ixs here: ${txId}`);
+    const tx = await connection.getTransaction(txId, { commitment: 'confirmed' });
+    return { txId, tx };
+}
+
+type ProofResult = {
+    dataHash: number[],
+    creatorHash: number[],
+    root: number[],
+    proofNodes: Buffer[],
+}
+
+async function getTransferInfoFromServer(leafHash: Buffer, treeId: PublicKey): Promise<ProofResult> {
+    const proofServerUrl = "http://127.0.0.1:4000/proof";
+    const hash = bs58.encode(leafHash);
+    const url = `${proofServerUrl}?leafHash=${hash}&treeId=${treeId.toString()}`;
+    console.log(url);
+    const response = await fetch(
+        url,
+        { method: "GET" }
+    );
+    const proof = await response.json();
+    console.log(proof);
+    return {
+        dataHash: [...bs58.decode(proof.dataHash as string)],
+        creatorHash: [...bs58.decode(proof.creatorHash as string)],
+        root: [...bs58.decode(proof.root as string)],
+        proofNodes: (proof.proofNodes as string[]).map((node) => bs58.decode(node))
+    };
+}
+
+// todo: expose somewhere in utils
+function digest(input: Buffer): Buffer {
+    return Buffer.from(keccak_256.digest(input))
+}
+
+/// Typescript impl of LeafSchema::to_node()
+function hashLeafSchema(leafSchema: LeafSchema, dataHash: Buffer, creatorHash: Buffer): Buffer {
+    // Fix issue with solita, the following code should work, but doesn't seem to
+    // const result = leafSchemaBeet.toFixedFromValue(leafSchema);
+    // const buffer = Buffer.alloc(result.byteSize);
+    // result.write(buffer, 0, leafSchema);
+
+    const writer = new BinaryWriter();
+    // For non-v1, we definitely want to use better spec
+    writer.writeU8(1);
+    writer.writeFixedArray(leafSchema.id.toBuffer());
+    writer.writeFixedArray(leafSchema.owner.toBuffer());
+    writer.writeFixedArray(leafSchema.delegate.toBuffer());
+    writer.writeFixedArray(new BN(leafSchema.nonce).toBuffer('le', 8));
+    writer.writeFixedArray(dataHash);
+    writer.writeFixedArray(creatorHash);
+    const buf = Buffer.from(writer.toArray());
+    return digest(buf);
+}
+
+async function truncateWithBubblegumTransfers(
+    connection: Connection,
+    provider: anchor.Provider,
+    payer: Keypair,
+) {
+    const bgumTree = keypairFromString("bubblegum-mini-tree");
+    const authority = await getBubblegumAuthorityPDA(bgumTree.publicKey);
+
+    // const acctInfo = await connection.getAccountInfo(bgumTree.publicKey, "confirmed");
+    // const merkleRoll = decodeMerkleRoll(acctInfo.data);
+    // const root = Array.from(merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBytes());
+
+    const transferIxs = [];
+    const finalDestination = keypairFromString("bubblegum-final-destination");
+    for (let i = 0; i < 6; i++) {
+        const metadata = getMetadata(i);
+        const computedDataHash = hashMetadata(metadata);
+        const computedCreatorHash = hashCreators(metadata.creators);
+        const leafSchema: LeafSchema = {
+            __kind: "V1",
+            id: await getLeafAssetId(bgumTree.publicKey, new BN(i)),
+            owner: payer.publicKey,
+            delegate: payer.publicKey,
+            nonce: new BN(i),
+            dataHash: [...computedDataHash],
+            creatorHash: [...computedCreatorHash],
+        };
+        const leafHash = hashLeafSchema(leafSchema, computedDataHash, computedCreatorHash);
+        console.log("Data hash:", bs58.encode(computedDataHash));
+        console.log("Creator hash:", bs58.encode(computedCreatorHash));
+        console.log("schema:", {
+            id: leafSchema.id.toString(),
+            owner: leafSchema.owner.toString(),
+            delegate: leafSchema.owner.toString(),
+            nonce: new BN(i),
+        });
+        const { root, dataHash, creatorHash, proofNodes } = await getTransferInfoFromServer(leafHash, bgumTree.publicKey);
+        transferIxs.push(addProof(createTransferInstruction({
+            authority,
+            candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
+            gummyrollProgram: GUMMYROLL_PROGRAM_ID,
+            owner: payer.publicKey,
+            delegate: payer.publicKey,
+            newOwner: finalDestination.publicKey,
+            merkleSlab: bgumTree.publicKey,
+        }, {
+            dataHash,
+            creatorHash,
+            nonce: new BN(i),
+            root,
+            index: i,
+        }), proofNodes));
+    }
+
+    const txId = await execute(provider, transferIxs, [payer], true);
     console.log(`Executed multiple mint ixs here: ${txId}`);
     const tx = await connection.getTransaction(txId, { commitment: 'confirmed' });
     return { txId, tx };

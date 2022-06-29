@@ -34,7 +34,7 @@ export class Voucher implements VoucherArgs {
     readonly leafSchema: LeafSchema,
     readonly index: number,
     readonly merkleSlab: web3.PublicKey
-  ) {}
+  ) { }
 
   /**
    * Creates a {@link Voucher} instance from the provided args.
@@ -147,6 +147,7 @@ export const voucherBeet = new beet.BeetStruct<
 >(
   [
     ['accountDiscriminator', beet.uniformFixedSizeArray(beet.u8, 8)],
+    // @ts-ignore
     ['leafSchema', leafSchemaBeet],
     ['index', beet.u32],
     ['merkleSlab', beetSolana.publicKey],

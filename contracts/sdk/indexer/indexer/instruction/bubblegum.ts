@@ -108,7 +108,7 @@ function decodeEventInstructionData(
         return [event.name, IdlCoder.typeDefLayout(eventTypeDef, idl.types)];
     });
     const layouts = new Map(rawLayouts);
-    console.log(layouts);
+    // console.log(layouts);
     const buffer = bs58.decode(base58String);
     const layout = layouts.get(eventName);
     if (!layout) {
@@ -162,8 +162,10 @@ function destructureMintAccounts(
 function getTokenProgramVersion(object: Object): TokenProgramVersion {
     if (Object.keys(object).includes("original")) {
         return TokenProgramVersion.Original
-    } else {
+    } else if (Object.keys(object).includes("token2022")) {
         return TokenProgramVersion.Token2022
+    } else {
+        return object as TokenProgramVersion;
     }
 }
 
@@ -175,8 +177,10 @@ function getTokenStandard(object: Object): TokenStandard {
         return TokenStandard.Fungible
     } else if (keys.includes("fungibleAsset")) {
         return TokenStandard.FungibleAsset
-    } else {
+    } else if (keys.includes("nonFungibleEdition")) {
         return TokenStandard.NonFungibleEdition
+    } else {
+        return object as TokenStandard;
     }
 }
 
@@ -232,8 +236,8 @@ async function leafSchemaFromLeafData(
                 id,
                 owner,
                 delegate,
-                dataHash: Array.from(Uint8Array.from(hashMetadata(newLeafData.metadata))),
-                creatorHash: Array.from(Uint8Array.from(hashCreators(newLeafData.metadata.creators))),
+                dataHash: [...hashMetadata(newLeafData.metadata)],
+                creatorHash: [...hashCreators(newLeafData.metadata.creators)],
                 nonce: newLeafData.nonce,
             }
         }

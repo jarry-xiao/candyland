@@ -12,6 +12,7 @@ import {
 import { BN, } from "@project-serum/anchor";
 import { NFTDatabaseConnection } from "../db";
 import { PublicKey } from "@solana/web3.js";
+import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
 
 function skipTx(sequenceNumber, startSeq, endSeq): boolean {
   let left = startSeq !== null ? sequenceNumber <= startSeq : false;
@@ -71,6 +72,18 @@ export async function ingestBubblegumMint(
     return;
   }
   console.log(`Sequence Number: ${sequenceNumber}`);
+  const schema = leafSchema.schema.v1;
+  console.log("Leaf Schema:", {
+    schema: {
+      id: schema.id.toString(),
+      owner: schema.owner.toString(),
+      delegate: schema.delegate.toString(),
+      nonce: schema.nonce.toNumber(),
+    },
+    leafHash: new PublicKey(changeLog.path[0].node).toString(),
+    dataHash: bs58.encode(leafSchema.schema.v1.dataHash),
+    creatorHash: bs58.encode(leafSchema.schema.v1.creatorHash),
+  });
   await db.updateNFTMetadata(newLeafData, leafSchema.schema.v1.id.toBase58());
   await db.updateLeafSchema(
     leafSchema,
