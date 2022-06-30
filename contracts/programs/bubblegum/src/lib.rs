@@ -1,30 +1,15 @@
 use {
+    crate::error::BubblegumError,
     crate::state::metaplex_anchor::MplTokenMetadata,
     crate::state::{
-        NONCE_SIZE,
-        VOUCHER_PREFIX,
-        VOUCHER_SIZE,
-        ASSET_PREFIX,
         leaf_schema::{LeafSchema, Version},
-        metaplex_anchor::{MasterEdition, TokenMetadata},
-        Nonce, Voucher,
         metaplex_adapter::{MetadataArgs, TokenProgramVersion},
-        NewNFTEvent,
-        NFTDecompressionEvent,
+        metaplex_anchor::{MasterEdition, TokenMetadata},
+        NFTDecompressionEvent, NewNFTEvent, Nonce, Voucher, ASSET_PREFIX, NONCE_SIZE,
+        VOUCHER_PREFIX, VOUCHER_SIZE,
     },
-    gummyroll::{
-        program::Gummyroll,
-        Node,
-        state::CandyWrapper,
-        utils::wrap_event,
-    },
-    crate::error::BubblegumError,
-    crate::utils::{append_leaf,
-                   replace_leaf,
-                   get_asset_id,
-                   cmp_bytes,
-                   cmp_pubkeys,
-                   assert_pubkey_equal,
+    crate::utils::{
+        append_leaf, assert_pubkey_equal, cmp_bytes, cmp_pubkeys, get_asset_id, replace_leaf,
     },
     anchor_lang::{
         prelude::*,
@@ -36,13 +21,13 @@ use {
             system_instruction,
         },
     },
+    gummyroll::{program::Gummyroll, state::CandyWrapper, utils::wrap_event, Node},
     spl_token::state::Mint as SplMint,
 };
 
-
+pub mod error;
 pub mod state;
 pub mod utils;
-pub mod error;
 
 declare_id!("BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY");
 
@@ -238,9 +223,8 @@ pub struct DecompressV1<'info> {
     #[account(
     mut,
     seeds = [
-    ASSET_PREFIX.as_ref(),
-    voucher.merkle_slab.as_ref(),
-    voucher.leaf_schema.nonce().to_le_bytes().as_ref()
+    voucher.leaf_schema.id().as_ref(),
+    token_program.key().as_ref()
     ],
     bump
     )]
@@ -397,7 +381,7 @@ pub mod bubblegum {
         let new_nft = NewNFTEvent {
             version: Version::V1,
             metadata: message,
-            nonce: nonce.count
+            nonce: nonce.count,
         };
         emit!(new_nft);
         wrap_event(new_nft.try_to_vec()?, &ctx.accounts.candy_wrapper)?;
@@ -485,8 +469,14 @@ pub mod bubblegum {
             data_hash,
             creator_hash,
         );
-        let new_leaf =
-            LeafSchema::new_v0(asset_id, owner, new_delegate, nonce, data_hash, creator_hash);
+        let new_leaf = LeafSchema::new_v0(
+            asset_id,
+            owner,
+            new_delegate,
+            nonce,
+            data_hash,
+            creator_hash,
+        );
         emit!(new_leaf.to_event());
         replace_leaf(
             &merkle_slab.key(),
@@ -583,11 +573,11 @@ pub mod bubblegum {
     ) -> Result<()> {
         let voucher = &ctx.accounts.voucher;
         match ctx.accounts.voucher.leaf_schema {
-            LeafSchema::V1 { owner, .. } =>
-                assert_pubkey_equal(&ctx.accounts.owner.key(),
-                                    &owner,
-                                    Some(BubblegumError::AssetOwnerMismatch.into()),
-                ),
+            LeafSchema::V1 { owner, .. } => assert_pubkey_equal(
+                &ctx.accounts.owner.key(),
+                &owner,
+                Some(BubblegumError::AssetOwnerMismatch.into()),
+            ),
         }?;
         let merkle_slab = ctx.accounts.merkle_slab.to_account_info();
         emit!(voucher.leaf_schema.to_event());
@@ -600,7 +590,7 @@ pub mod bubblegum {
             &ctx.accounts.candy_wrapper.to_account_info(),
             ctx.remaining_accounts,
             root,
-            [0; 32], 
+            [0; 32],
             voucher.leaf_schema.to_node(),
             voucher.index,
         )
@@ -629,7 +619,7 @@ pub mod bubblegum {
                     nonce: nonce,
                 })
             }
-            _ => Err(BubblegumError::UnsupportedSchemaVersion)
+            _ => Err(BubblegumError::UnsupportedSchemaVersion),
         }?;
         let voucher = &ctx.accounts.voucher;
         match metadata.token_program_version {
@@ -649,9 +639,8 @@ pub mod bubblegum {
                             ctx.accounts.system_program.to_account_info(),
                         ],
                         &[&[
-                            ASSET_PREFIX.as_bytes(),
-                            voucher.merkle_slab.key().as_ref(),
-                            voucher.leaf_schema.nonce().to_le_bytes().as_ref(),
+                            voucher.leaf_schema.id().as_ref(),
+                            spl_token::id().as_ref(),
                             &[*ctx.bumps.get("mint").unwrap()],
                         ]],
                     )?;
