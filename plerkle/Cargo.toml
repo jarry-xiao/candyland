@@ -37,6 +37,7 @@ messenger={path= "../messenger"}
 flatbuffers = "2.1.2"
 plerkle-serialization={path= "../plerkle_serialization"}
 tokio = { version = "1.17.0", features = ["full"] }
+figment = { version = "0.10.6", features = ["env"] }
 
 [dependencies.num-integer]
 version = "0.1.44"

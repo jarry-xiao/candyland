@@ -120,10 +120,10 @@ pub async fn gummyroll_change_log_event_to_database(
     filling: bool
 ) -> Result<(), IngesterError> {
     let mut i: i64 = 0;
-    let depth = change_log_event.path.len() -1;
+    let depth = change_log_event.path.len() - 1;
     for p in change_log_event.path.into_iter() {
-        println!("index {} level {}, node {:?}", p.index , i, bs58::encode(p.node).into_string());
         let node_idx = p.index as i64;
+        println!("index {} level {}, node {:?}", p.index , i, bs58::encode(p.node).into_string());
         let tree_id = change_log_event.id.as_ref();
         let leaf_idx = if i == 0 {
             Some(node_idx_to_leaf_idx(node_idx ,depth as u32))

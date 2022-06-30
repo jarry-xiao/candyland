@@ -12,7 +12,7 @@ pub enum DasApiError {
     PubkeyValidationError(String),
     #[error("Validation Error {0}")]
     ValidationError(String),
-    #[error("Database Error")]
+    #[error("Database Error {0}")]
     DatabaseError(#[from] sea_orm::DbErr),
 }
 

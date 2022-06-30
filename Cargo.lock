@@ -620,6 +620,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "candy-wrapper"
+version = "0.1.0"
+dependencies = [
+ "solana-program",
+]
+
+[[package]]
 name = "caps"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1538,6 +1545,7 @@ version = "0.1.0"
 dependencies = [
  "anchor-lang",
  "bytemuck",
+ "candy-wrapper",
  "concurrent-merkle-tree",
 ]
 
@@ -2167,9 +2175,11 @@ name = "messenger"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "figment",
  "log",
  "plerkle-serialization",
  "redis",
+ "serde",
  "solana-geyser-plugin-interface",
  "thiserror",
 ]
@@ -2345,6 +2355,7 @@ dependencies = [
  "chrono",
  "csv",
  "digital_asset_types",
+ "figment",
  "flatbuffers",
  "futures-util",
  "gummyroll",
@@ -2762,6 +2773,7 @@ dependencies = [
  "base64 0.13.0",
  "bs58 0.4.0",
  "bytemuck",
+ "figment",
  "flatbuffers",
  "hex",
  "lazy_static",

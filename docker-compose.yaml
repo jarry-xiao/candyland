@@ -4,6 +4,9 @@ services:
     depends_on:
       - redis
     restart: always
+    environment:
+      INGESTER_MESSENGER_CONFIG: '{redis_connection_str="redis://redis"}'
+      INGESTER_DATABASE_URL: 'postgres://solana:solana@db/solana'
     build:
       context: .
       dockerfile: Ingest.Dockerfile
@@ -41,6 +44,7 @@ services:
     - ./ledger:/config:rw
     environment:
       RUST_LOG: warn
+      PLUGIN_MESSENGER_CONFIG: '{redis_connection_str="redis://redis"}'
     ports:
       - "8900:8900"
       - "8001:8001"

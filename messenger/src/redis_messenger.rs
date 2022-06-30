@@ -1,7 +1,8 @@
 #![cfg(feature = "redis")]
 
+use std::fmt::format;
 use {
-    crate::{error::MessengerError, Messenger},
+    crate::{error::MessengerError, Messenger, MessengerConfig},
     async_trait::async_trait,
     log::*,
     redis::{
@@ -9,7 +10,7 @@ use {
         streams::{StreamId, StreamKey, StreamMaxlen, StreamReadOptions, StreamReadReply},
         AsyncCommands, RedisResult, Value,
     },
-    solana_geyser_plugin_interface::geyser_plugin_interface::{GeyserPluginError, Result},
+    solana_geyser_plugin_interface::geyser_plugin_interface::{GeyserPluginError},
     std::{
         collections::HashMap,
         fmt::{Debug, Formatter},
@@ -33,19 +34,24 @@ pub struct RedisMessengerStream {
     buffer_size: Option<StreamMaxlen>,
 }
 
+const REDIS_CON_STR: &str = "redis_connection_str";
+
 #[async_trait]
 impl Messenger for RedisMessenger {
     //pub async fn new(stream_key: &'static str) -> Result<Self> {
-    async fn new() -> Result<Self> {
+    async fn new(config: MessengerConfig) -> Result<Self, MessengerError> {
+        let uri = config.get(&*REDIS_CON_STR)
+            .and_then(|u| u.clone().into_string())
+            .ok_or(MessengerError::ConfigurationError { msg: format!("Connection String Missing: {}", REDIS_CON_STR) })?;
         // Setup Redis client.
-        let client = redis::Client::open("redis://redis/").unwrap();
+        let client = redis::Client::open(uri).unwrap();
 
         // Get connection.
         let connection = client.get_tokio_connection().await.map_err(|e| {
             error!("{}", e.to_string());
-            GeyserPluginError::Custom(Box::new(MessengerError::ConnectionError {
+            MessengerError::ConnectionError {
                 msg: e.to_string(),
-            }))
+            }
         })?;
 
         Ok(Self {
@@ -84,7 +90,7 @@ impl Messenger for RedisMessenger {
     }
 
     //impl Future<Output = Result<()>> + 'a {
-    async fn send(&mut self, stream_key: &'static str, bytes: &[u8]) -> Result<()> {
+    async fn send(&mut self, stream_key: &'static str, bytes: &[u8]) -> Result<(), MessengerError> {
         // Check if stream is configured.
         let stream = if let Some(stream) = self.streams.get(stream_key) {
             stream
@@ -111,9 +117,9 @@ impl Messenger for RedisMessenger {
 
         if let Err(e) = result {
             error!("Redis send error: {e}");
-            return Err(GeyserPluginError::Custom(Box::new(
-                MessengerError::SendError { msg: e.to_string() },
-            )));
+            return Err(
+                MessengerError::SendError { msg: e.to_string() }
+            );
         } else {
             info!("Data Sent");
         }
@@ -121,7 +127,7 @@ impl Messenger for RedisMessenger {
         Ok(())
     }
 
-    async fn recv(&mut self, stream_key: &'static str) -> Result<Vec<(i64, &[u8])>> {
+    async fn recv(&mut self, stream_key: &'static str) -> Result<Vec<(i64, &[u8])>, MessengerError> {
         let opts = StreamReadOptions::default()
             .block(0) // Block forever.
             .count(1) // Get one item.
@@ -138,9 +144,9 @@ impl Messenger for RedisMessenger {
             Ok(reply) => reply,
             Err(e) => {
                 error!("Redis receive error: {e}");
-                return Err(GeyserPluginError::Custom(Box::new(
-                    MessengerError::ReceiveError { msg: e.to_string() },
-                )));
+                return Err(
+                    MessengerError::ReceiveError { msg: e.to_string() }
+                );
             }
         };
 
