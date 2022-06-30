@@ -118,7 +118,6 @@ export function handleInstructionsAtomic(
   endSeq: number | null = null
 ) {
   const { accountKeys, instructions, innerInstructions } = instructionInfo;
-  console.log(innerInstructions);
 
   const zippedInstructions = zipInstructions(instructions, innerInstructions);
   for (let i = 0; i < zippedInstructions.length; i++) {

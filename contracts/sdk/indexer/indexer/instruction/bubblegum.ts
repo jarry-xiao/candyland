@@ -102,12 +102,10 @@ export async function parseBubblegumInstruction(
 function findWrapInstructions(accountKeys: PublicKey[], instructions: CompiledInstruction[]): CompiledInstruction[] {
     const wrapIxs = [];
     for (const ix of instructions) {
-        console.log(`\t${accountKeys[ix.programIdIndex].toString()}`)
         if (accountKeys[ix.programIdIndex].equals(CANDY_WRAPPER_PROGRAM_ID)) {
             wrapIxs.push(ix);
         }
     }
-    console.log("\n");
     return wrapIxs;
 }
 
@@ -191,6 +189,7 @@ function getTokenProgramVersion(object: Object): TokenProgramVersion {
 }
 
 function getTokenStandard(object: Object): TokenStandard {
+    if (!object) { return null };
     const keys = Object.keys(object);
     if (keys.includes("nonFungible")) {
         return TokenStandard.NonFungible
