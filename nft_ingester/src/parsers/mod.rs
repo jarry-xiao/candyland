@@ -51,6 +51,7 @@ pub struct InstructionBundle<'a, 'b> {
     pub inner_ix: Option<Vec<IxPair<'a>>>,
     pub keys: Vector<'b, ForwardsUOffset<transaction_info::Pubkey<'b>>>,
     pub instruction_logs: Vec<&'b str>,
+    pub slot: u64,
 }
 
 /// A abtraction over handling program updates, account
