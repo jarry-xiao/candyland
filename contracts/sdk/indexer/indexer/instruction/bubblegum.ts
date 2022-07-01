@@ -62,37 +62,21 @@ export async function parseBubblegumInstruction(
                 )
                 break;
             case "Redeem":
-                // await parseReplaceLeaf(
-                //   db,
-                //   parsedLog.logs,
-                //   slot,
-                //   parser,
-                //   optionalInfo,
-                //   false
-                // );
-                break;
-            case "CancelRedeem":
-                // await parseReplaceLeaf(db, parsedLog.logs, slot, parser, optionalInfo);
-                break;
             case "Burn":
-                // await parseReplaceLeaf(db, parsedLog.logs, slot, parser, optionalInfo);
-                break;
+            case "CancelRedeem":
+            case "Delegate":
             case "Transfer":
-                await parseBubblegumTransfer(
+                await parseBubblegumReplaceLeafInstruction(
                     db,
                     slot,
                     optionalInfo,
                     parser,
                     accountKeys,
-                    instruction,
                     innerInstructions,
-                    decodedIx
                 )
-                // await parseReplaceLeaf(db, parsedLog.logs, slot, parser, optionalInfo);
                 break;
-            case "Delegate":
-                // await parseReplaceLeaf(db, parsedLog.logs, slot, parser, optionalInfo);
-                break;
+            default:
+                break
         }
     } else {
         console.error("Could not decode Bubblegum found in slot:", slot);
@@ -323,24 +307,24 @@ async function getLeafSchemaFromTransferIx(
     return leafSchema;
 }
 
-async function parseBubblegumTransfer(
+async function parseBubblegumReplaceLeafInstruction(
     db: NFTDatabaseConnection,
     slot: number,
     optionalInfo: OptionalInfo,
     parser: ParserState,
     accountKeys: PublicKey[],
-    instruction: CompiledInstruction,
     innerInstructions: CompiledInnerInstruction[],
-    decodedIx: Instruction,
 ) {
-    const leafSchema = await getLeafSchemaFromTransferIx(accountKeys, instruction, decodedIx);
+    // const leafSchema = await getLeafSchemaFromTransferIx(accountKeys, instruction, decodedIx);
+    let leafSchema: LeafSchemaEvent;
     let changeLogEvent: ChangeLogEvent;
     for (const innerInstruction of innerInstructions) {
         const wrapIxs = findWrapInstructions(accountKeys, innerInstruction.instructions);
-        if (wrapIxs.length != 1) {
+        if (wrapIxs.length != 2) {
             console.error("Found too many or too little wrap inner instructions for bubblegum mint instruction")
         }
-        changeLogEvent = decodeEventInstructionData(parser.Gummyroll.idl, "ChangeLogEvent", wrapIxs[0].data).data as ChangeLogEvent;
+        leafSchema = decodeEventInstructionData(parser.Bubblegum.idl, "LeafSchemaEvent", wrapIxs[0].data).data as LeafSchemaEvent;
+        changeLogEvent = decodeEventInstructionData(parser.Gummyroll.idl, "ChangeLogEvent", wrapIxs[1].data).data as ChangeLogEvent;
     }
 
     await ingestBubblegumReplaceLeaf(

@@ -475,6 +475,7 @@ pub mod bubblegum {
             data_hash,
             creator_hash,
         );
+        wrap_event(new_leaf.try_to_vec()?, &ctx.accounts.candy_wrapper)?;
         emit!(new_leaf.to_event());
         replace_leaf(
             &merkle_slab.key(),
@@ -514,6 +515,7 @@ pub mod bubblegum {
         );
         emit!(previous_leaf.to_event());
         let new_leaf = Node::default();
+        wrap_event(new_leaf.try_to_vec()?, &ctx.accounts.candy_wrapper)?;
         replace_leaf(
             &merkle_slab.key(),
             *ctx.bumps.get("authority").unwrap(),
@@ -545,6 +547,7 @@ pub mod bubblegum {
             LeafSchema::new_v0(asset_id, owner, delegate, nonce, data_hash, creator_hash);
         emit!(previous_leaf.to_event());
         let new_leaf = Node::default();
+        wrap_event(new_leaf.try_to_vec()?, &ctx.accounts.candy_wrapper)?;
         replace_leaf(
             &merkle_slab.key(),
             *ctx.bumps.get("authority").unwrap(),
@@ -579,6 +582,11 @@ pub mod bubblegum {
         }?;
         let merkle_slab = ctx.accounts.merkle_slab.to_account_info();
         emit!(voucher.leaf_schema.to_event());
+        wrap_event(
+            voucher.leaf_schema.try_to_vec()?,
+            &ctx.accounts.candy_wrapper,
+        )?;
+
         replace_leaf(
             &merkle_slab.key(),
             *ctx.bumps.get("authority").unwrap(),
