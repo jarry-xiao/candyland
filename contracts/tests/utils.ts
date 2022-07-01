@@ -25,7 +25,7 @@ export async function execute(
     commitment: "confirmed",
     skipPreflight,
   });
-  await logTx(provider, txid, false);
+  await logTx(provider, txid, true);
   return txid;
 }
 

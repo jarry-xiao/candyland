@@ -19,6 +19,7 @@ async function handleLogSubscription(
 ) {
   const result = handleLogsAtomic(db, logs, ctx, parserState);
   if (result === ParseResult.LogTruncated) {
+    console.log("\t\t\tLOG TRUNCATED\n\n\n\n")
     plugGapsFromSlot(connection, db, parserState, ctx.slot, 0, Number.MAX_SAFE_INTEGER);
   }
 }

@@ -111,7 +111,6 @@ function decodeEventInstructionData(
         return [event.name, IdlCoder.typeDefLayout(eventTypeDef, idl.types)];
     });
     const layouts = new Map(rawLayouts);
-    // console.log(layouts);
     const buffer = bs58.decode(base58String);
     const layout = layouts.get(eventName);
     if (!layout) {
@@ -279,32 +278,6 @@ async function parseBubblegumMint(
         newLeafData,
         leafSchema,
     )
-}
-
-async function getLeafSchemaFromTransferIx(
-    accountKeys: PublicKey[],
-    instruction: CompiledInstruction,
-    decodedIx: Instruction,
-): Promise<LeafSchemaEvent> {
-    const accounts = {
-        delegate: accountKeys[instruction.accounts[2]],
-        newOwner: accountKeys[instruction.accounts[3]],
-        treeId: accountKeys[instruction.accounts[6]],
-    };
-    const data: TransferInstructionArgs = decodedIx.data as TransferInstructionArgs;
-    const leafSchema: LeafSchemaEvent = {
-        schema: {
-            v1: {
-                id: await getLeafAssetId(accounts.treeId, new BN(data.index)),
-                nonce: new BN(data.nonce),
-                dataHash: data.dataHash,
-                creatorHash: data.creatorHash,
-                owner: accounts.newOwner,
-                delegate: accounts.delegate,
-            }
-        }
-    }
-    return leafSchema;
 }
 
 async function parseBubblegumReplaceLeafInstruction(
