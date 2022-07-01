@@ -14,6 +14,8 @@ redis = {version = "0.21.5", features = ["aio", "tokio-comp", "streams"], option
 log = "0.4.11"
 thiserror = "1.0.30"
 async-trait = "0.1.53"
+figment = "0.10.6"
+serde = "1.0.137"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]

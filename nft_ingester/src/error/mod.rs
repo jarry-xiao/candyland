@@ -21,6 +21,8 @@ pub enum IngesterError {
     DeserializationError(String),
     #[error("Task Manager Error {0}")]
     TaskManagerError(String),
+    #[error("Missing or invalid configuration: ({msg})")]
+    ConfigurationError { msg: String },
 
 }
 

@@ -286,9 +286,9 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                 bubblegum::instruction::MintV1::deserialize(data_buf).unwrap();
             let accounts = instruction.accounts().unwrap();
             let update_authority = bytes_from_fb_table(keys, accounts[0] as usize);
-            let owner = bytes_from_fb_table(keys, accounts[3] as usize);
-            let delegate = bytes_from_fb_table(keys, accounts[4] as usize);
-            let merkle_slab = bytes_from_fb_table(keys, accounts[5] as usize);
+            let owner = bytes_from_fb_table(keys, accounts[4] as usize);
+            let delegate = bytes_from_fb_table(keys, accounts[5] as usize);
+            let merkle_slab = bytes_from_fb_table(keys, accounts[6] as usize);
             let metadata = ix.message.clone();
             let asset_data_id = db.transaction::<_, i64, IngesterError>(|txn| {
                 Box::pin(async move {

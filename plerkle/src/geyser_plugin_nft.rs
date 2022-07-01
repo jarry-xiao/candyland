@@ -1,4 +1,9 @@
+
 use {
+    figment::{
+        Figment,
+        providers::Env
+    },
     crate::{
         accounts_selector::AccountsSelector,
         error::PlerkleError,
@@ -28,7 +33,9 @@ use {
         runtime::{Builder, Runtime},
         sync::mpsc::{self as mpsc, Sender},
     },
+    serde::Deserialize
 };
+use messenger::MessengerConfig;
 
 struct SerializedData<'a> {
     stream: &'static str,
@@ -42,6 +49,12 @@ pub(crate) struct Plerkle<'a, T: Messenger + Default> {
     transaction_selector: Option<TransactionSelector>,
     messenger: PhantomData<T>,
     sender: Option<Sender<SerializedData<'a>>>,
+}
+
+#[derive(Deserialize,PartialEq,Debug)]
+pub struct PluginConfig {
+    pub messenger_config: MessengerConfig,
+    pub config_reload_ttl: Option<i64>
 }
 
 impl<'a, T: Messenger + Default> Plerkle<'a, T> {
@@ -188,10 +201,18 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
 
         let (sender, mut receiver) = mpsc::channel::<SerializedData>(32);
         self.sender = Some(sender);
-
+        let config: PluginConfig = Figment::new()
+            .join(Env::prefixed("PLUGIN_"))
+            .extract()
+            .map_err(|config_error|
+                GeyserPluginError::ConfigFileReadError {
+                    msg: format!("Could not read messenger config: {:?}", config_error)
+                }
+            )?;
         runtime.spawn(async move {
             // Create new Messenger connection.
-            if let Ok(mut messenger) = T::new().await {
+
+            if let Ok(mut messenger) = T::new(config.messenger_config).await {
                 messenger.add_stream(ACCOUNT_STREAM).await;
                 messenger.add_stream(SLOT_STREAM).await;
                 messenger.add_stream(TRANSACTION_STREAM).await;
