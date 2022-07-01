@@ -1,21 +1,25 @@
 /*
 This CLI is meant to help drive testing the backend
 */
-import { program } from 'commander';
+import { Command } from 'commander';
 import log from 'loglevel';
 import { PublicKey } from '@solana/web3.js';
 import {
-    getProvider, initEmptyTree, appendMessage, removeMessage,
+    initEmptyTree, appendMessage, removeMessage,
     showProof, showAssets, transferMessageOwner, batchInitTree,
     loadBatchInfoFromDir
 } from './helpers/crud';
 import {
     loadMessages, hashMessages, processLeaves, writeTree,
-    writeMetadata, writeProof, loadWalletKey
+    writeMetadata, writeProof
 } from './helpers/utils';
-import { buildTree } from '../tests/merkle-tree';
+import {
+    getProvider, loadWalletKey
+} from "../helpers/utils";
+import { buildTree } from '../../contracts/tests/merkle-tree';
 import { mkdirSync } from 'fs';
 
+const program = new Command();
 program.version('0.0.1');
 log.setLevel("DEBUG");
 

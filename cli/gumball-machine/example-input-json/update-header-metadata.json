@@ -1,0 +1,17 @@
+{
+  "args": {
+    "urlBase": "https://arweave.net",
+    "nameBase": "GUMBALL",
+    "symbol": "GUMBALL",
+    "sellerFeeBasisPoints": 100,
+    "isMutable": true,
+    "retainAuthority": true,
+    "encodeMethod": 1,
+    "price": 10,
+    "goLiveDate": 1234.0,
+    "botWallet": "CwKozhKgAEkxHhJ6AwBn6faFstKWmoFB4JYz18RyxExz",
+    "authority": "Es1EV724ihL7mYzjEiUV1QgcNdwoTpGByLiWSwKFRsAb",
+    "maxMintSize": 10
+  },
+  "optionals": {}
+}

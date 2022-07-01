@@ -2,38 +2,24 @@ import {
     PublicKey,
     Keypair,
     Transaction,
-    SystemProgram,
-    Connection
+    SystemProgram
 } from '@solana/web3.js';
 import {
     getMerkleRollAccountSize
-} from '../../tests/merkle-roll-serde';
-import { hash, getProofOfAssetFromServer, getRootFromServer, checkProof } from '../../tests/merkle-tree';
-import { Gummyroll, IDL as GUMMYROLL_IDL } from '../../target/types/gummyroll';
-import { GummyrollCrud, IDL as GUMMYROLL_CRUD_IDL } from '../../target/types/gummyroll_crud';
+} from '../../../contracts/sdk/gummyroll';
+import { hash, getProofOfAssetFromServer, checkProof } from '../../../contracts/tests/merkle-tree';
+import { Gummyroll, IDL as GUMMYROLL_IDL } from '../../../target/types/gummyroll';
+import { GummyrollCrud, IDL as GUMMYROLL_CRUD_IDL } from '../../../target/types/gummyroll_crud';
 import log from 'loglevel';
 import { Program, Provider } from '@project-serum/anchor';
-import NodeWallet from '@project-serum/anchor/dist/cjs/nodewallet';
-import { GUMMYROLL_PROGRAM_ID, GUMMYROLL_CRUD_PROGRAM_ID } from './constants';
-import { confirmTxOrThrow } from './utils';
+import {
+    PROGRAM_ID as GUMMYROLL_PROGRAM_ID
+} from "../../../contracts/sdk/gummyroll/index"
+import { GUMMYROLL_CRUD_PROGRAM_ID } from '../../helpers/constants';
+import { confirmTxOrThrow } from '../../helpers/utils';
 import fetch from 'cross-fetch';
 import { join } from 'path';
 import { readFileSync, existsSync } from 'fs';
-
-export async function getProvider(endpoint: string, payer: Keypair) {
-    console.log(endpoint);
-    const connection = new Connection(endpoint);
-    const provider = new Provider(
-        connection,
-        new NodeWallet(payer),
-        {
-            commitment: "confirmed",
-            skipPreflight: true,
-        }
-    )
-    await connection.requestAirdrop(payer.publicKey, 100e9);
-    return provider;
-}
 
 async function loadGummyroll(provider: Provider): Promise<Program<Gummyroll>> {
     // only on non-localnet
