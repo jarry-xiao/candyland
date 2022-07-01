@@ -20,7 +20,6 @@ cat << EOL > accountsdb-plugin-config.json
     "accounts_selector" : {
         "accounts" : [
             "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
-            "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS",
             "GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD",
             "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
             "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
@@ -30,7 +29,6 @@ cat << EOL > accountsdb-plugin-config.json
     "transaction_selector" : {
         "mentions" : [
             "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
-            "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS",
             "GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD",
             "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb",
             "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL",
