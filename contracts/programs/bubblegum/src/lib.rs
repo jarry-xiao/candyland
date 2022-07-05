@@ -221,8 +221,9 @@ pub struct DecompressV1<'info> {
     #[account(
     mut,
     seeds = [
-        voucher.leaf_schema.id().as_ref(),
-        token_program.key().as_ref()
+        ASSET_PREFIX.as_ref(),
+        voucher.merkle_slab.as_ref(),
+        voucher.leaf_schema.nonce().to_le_bytes().as_ref(),
     ],
     bump
     )]
@@ -645,8 +646,9 @@ pub mod bubblegum {
                             ctx.accounts.system_program.to_account_info(),
                         ],
                         &[&[
-                            voucher.leaf_schema.id().as_ref(),
-                            spl_token::id().as_ref(),
+                            ASSET_PREFIX.as_bytes(),
+                            voucher.merkle_slab.key().as_ref(),
+                            voucher.leaf_schema.nonce().to_le_bytes().as_ref(),
                             &[*ctx.bumps.get("mint").unwrap()],
                         ]],
                     )?;
