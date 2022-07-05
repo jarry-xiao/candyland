@@ -20,7 +20,7 @@ use crate::utils::get_metadata_args;
 
 declare_id!("GBALLoMcmimUutWvtNdFFGH5oguS7ghUUV6toQPppuTW");
 
-const COMPUTE_BUDGET_ADDRESS: &str = "ComputeBudget11111111111111111111111111111";
+const COMPUTE_BUDGET_ADDRESS: &str = "ComputeBudget111111111111111111111111111111";
 
 #[derive(Accounts)]
 pub struct InitGumballMachine<'info> {
@@ -170,16 +170,11 @@ fn assert_valid_single_instruction_transaction<'info>(
         let compute_budget_instruction =
             load_instruction_at_checked(0, instruction_sysvar_account)?;
 
-        let compute_budget_id: Pubkey = Pubkey::new(
-            bs58::decode(&COMPUTE_BUDGET_ADDRESS)
-                .into_vec()
-                .unwrap()
-                .as_ref(),
-        );
-        // pubkey!("ComputeBudget111111111111111111111111111111");
+        let compute_budget_id: Pubkey =
+            Pubkey::new(bs58::decode(&COMPUTE_BUDGET_ADDRESS).into_vec().unwrap()[..32].as_ref());
 
         assert_eq!(compute_budget_instruction.program_id, compute_budget_id);
-        let current_instruction = load_instruction_at_checked(0, instruction_sysvar_account)?;
+        let current_instruction = load_instruction_at_checked(1, instruction_sysvar_account)?;
         assert_eq!(current_instruction.program_id, id());
     } else if num_instructions == 1 {
         let only_instruction = load_instruction_at_checked(0, instruction_sysvar_account)?;

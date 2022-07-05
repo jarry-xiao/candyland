@@ -271,6 +271,7 @@ async function testWithBubblegumTransfers(
 
 async function initializeGumballMachine(
     payer: Keypair,
+    creator: Keypair,
     gumballMachineAcctKeypair: Keypair,
     gumballMachineAcctSize: number,
     merkleRollKeypair: Keypair,
@@ -279,9 +280,6 @@ async function initializeGumballMachine(
     mint: PublicKey,
     gumballMachine: anchor.Program<GumballMachine>,
 ) {
-    const bubblegumAuthorityPDAKey = await getBubblegumAuthorityPDA(
-        merkleRollKeypair.publicKey,
-    );
     const initializeGumballMachineInstrs =
         await createInitializeGumballMachineIxs(
             payer,
@@ -291,6 +289,7 @@ async function initializeGumballMachine(
             merkleRollAccountSize,
             gumballMachineInitArgs,
             mint,
+            creator.publicKey,
             GUMMYROLL_PROGRAM_ID,
             BUBBLEGUM_PROGRAM_ID,
             gumballMachine
@@ -298,7 +297,7 @@ async function initializeGumballMachine(
     await execute(
         gumballMachine.provider,
         initializeGumballMachineInstrs,
-        [payer, gumballMachineAcctKeypair, merkleRollKeypair],
+        [payer, gumballMachineAcctKeypair, merkleRollKeypair, creator],
         true
     );
 }
@@ -338,11 +337,11 @@ async function dispenseCompressedNFTForSol(
         additionalFee: 0,
     });
     const dispenseInstr = await createDispenseNFTForSolIx(
-        numNFTs,
-        payer,
+        { numItems: numNFTs },
+        payer.publicKey,
         receiver,
-        gumballMachineAcctKeypair,
-        merkleRollKeypair,
+        gumballMachineAcctKeypair.publicKey,
+        merkleRollKeypair.publicKey,
         GUMMYROLL_PROGRAM_ID,
         BUBBLEGUM_PROGRAM_ID,
         gumballMachine
@@ -416,6 +415,7 @@ async function truncateWithGumball(
 
     await initializeGumballMachine(
         payer,
+        creatorAddress,
         gumballMachineAcctKeypair,
         GUMBALL_MACHINE_ACCT_SIZE,
         merkleRollKeypair,
