@@ -435,14 +435,6 @@ describe("gumball-machine", () => {
       [payer],
       true
     );
-
-    // let txId = await GumballMachine.provider.send(tx, [payer], {
-    //   commitment: "confirmed",
-    //   skipPreflight: true
-    // });
-    // if (verbose) {
-    //   await logTx(GumballMachine.provider, txId);
-    // }
   }
 
   async function dispenseCompressedNFTForTokens(

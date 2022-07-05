@@ -5,8 +5,27 @@ import { Bubblegum } from "../../../target/types/bubblegum";
 import { Gummyroll } from "../../../target/types/gummyroll";
 import { NFTDatabaseConnection } from "../db";
 import { parseBubblegumInstruction } from "./instruction/bubblegum";
+import { parseBubblegumInnerInstructions } from "./innerInstruction/bubblegum";
+import { Idl, IdlTypeDef } from '@project-serum/anchor/dist/cjs/idl';
+import { IdlCoder } from '@project-serum/anchor/dist/cjs/coder/borsh/idl';
+import { Layout } from "buffer-layout";
+import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
+import {
+  Creator,
+  MetadataArgs,
+  metadataArgsBeet,
+  TokenProgramVersion,
+  TokenStandard,
+} from "../../bubblegum/src/generated";
+import { NewLeafEvent, LeafSchemaEvent } from "./ingester";
+import { keccak_256 } from "js-sha3";
+import { getLeafAssetId } from "../../bubblegum/src/convenience";
+import * as beetSolana from '@metaplex-foundation/beet-solana'
+import * as beet from '@metaplex-foundation/beet'
+
 import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from "../../gummyroll";
 import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "../../bubblegum/src/generated";
+import { CANDY_WRAPPER_PROGRAM_ID } from "../../utils";
 
 export type ParserState = {
   Gummyroll: anchor.Program<Gummyroll>;
@@ -73,8 +92,57 @@ function indexZippedInstruction(
     /// TODO: test with gumball-machine truncate mode
     /// TODO: write inner instruction parser
     console.log("[no outer bgum ix found] Ignoring for now");
+    if (innerInstructions.length) {
+      parseBubblegumInnerInstructions(
+        db,
+        slot,
+        parserState,
+        context,
+        accountKeys,
+        innerInstructions[0].instructions,
+      )
+    }
   }
 }
+
+export function decodeEventInstructionData(
+  idl: Idl,
+  eventName: string,
+  base58String: string,
+) {
+  const rawLayouts: [string, Layout<any>][] = idl.events.map((event) => {
+    let eventTypeDef: IdlTypeDef = {
+      name: event.name,
+      type: {
+        kind: "struct",
+        fields: event.fields.map((f) => {
+          return { name: f.name, type: f.type };
+        }),
+      },
+    };
+    return [event.name, IdlCoder.typeDefLayout(eventTypeDef, idl.types)];
+  });
+  const layouts = new Map(rawLayouts);
+  const buffer = bs58.decode(base58String);
+  const layout = layouts.get(eventName);
+  if (!layout) {
+    console.error("Could not find corresponding layout for event:", eventName);
+  }
+  const data = layout.decode(buffer);
+  return { data, name: eventName };
+}
+
+export function destructureBubblegumMintAccounts(
+  accountKeys: PublicKey[],
+  instruction: CompiledInstruction
+) {
+  return {
+    owner: accountKeys[instruction.accounts[4]],
+    delegate: accountKeys[instruction.accounts[5]],
+    merkleSlab: accountKeys[instruction.accounts[6]],
+  }
+}
+
 
 type ZippedInstruction = {
   instructionIndex: number,
@@ -144,4 +212,116 @@ export function loadPrograms(provider: anchor.Provider) {
     "target/idl/bubblegum.json"
   ) as anchor.Program<Bubblegum>;
   return { Gummyroll, Bubblegum };
+}
+
+export function hashMetadata(message: MetadataArgs) {
+  // Todo: fix Solita - This is an issue with beet serializing complex enums
+  message.tokenStandard = getTokenStandard(message.tokenStandard);
+  message.tokenProgramVersion = getTokenProgramVersion(message.tokenProgramVersion);
+
+  const [serialized, byteSize] = metadataArgsBeet.serialize(message);
+  if (byteSize < 20) {
+    console.log(serialized.length);
+    console.error("Unable to serialize metadata args properly")
+  }
+  return digest(serialized)
+}
+
+type UnverifiedCreator = {
+  address: PublicKey,
+  share: number
+};
+
+export const unverifiedCreatorBeet = new beet.BeetArgsStruct<UnverifiedCreator>(
+  [
+    ['address', beetSolana.publicKey],
+    ['share', beet.u8],
+  ],
+  'UnverifiedCreator'
+)
+
+export function hashCreators(creators: Creator[]) {
+  const bytes = [];
+  for (const creator of creators) {
+    const unverifiedCreator = {
+      address: creator.address,
+      share: creator.share
+    }
+    const [buffer, _byteSize] = unverifiedCreatorBeet.serialize(unverifiedCreator);
+    bytes.push(buffer);
+  }
+  return digest(Buffer.concat(bytes));
+}
+
+export async function leafSchemaFromLeafData(
+  owner: PublicKey,
+  delegate: PublicKey,
+  treeId: PublicKey,
+  newLeafData: NewLeafEvent
+): Promise<LeafSchemaEvent> {
+  const id = await getLeafAssetId(treeId, newLeafData.nonce);
+  return {
+    schema: {
+      v1: {
+        id,
+        owner,
+        delegate,
+        dataHash: [...hashMetadata(newLeafData.metadata)],
+        creatorHash: [...hashCreators(newLeafData.metadata.creators)],
+        nonce: newLeafData.nonce,
+      }
+    }
+  }
+}
+
+export function digest(input: Buffer): Buffer {
+  return Buffer.from(keccak_256.digest(input))
+}
+
+
+function getTokenProgramVersion(object: Object): TokenProgramVersion {
+  if (Object.keys(object).includes("original")) {
+    return TokenProgramVersion.Original
+  } else if (Object.keys(object).includes("token2022")) {
+    return TokenProgramVersion.Token2022
+  } else {
+    return object as TokenProgramVersion;
+  }
+}
+
+function getTokenStandard(object: Object): TokenStandard {
+  if (!object) { return null };
+  const keys = Object.keys(object);
+  if (keys.includes("nonFungible")) {
+    return TokenStandard.NonFungible
+  } else if (keys.includes("fungible")) {
+    return TokenStandard.Fungible
+  } else if (keys.includes("fungibleAsset")) {
+    return TokenStandard.FungibleAsset
+  } else if (keys.includes("nonFungibleEdition")) {
+    return TokenStandard.NonFungibleEdition
+  } else {
+    return object as TokenStandard;
+  }
+}
+
+/// Returns number of instructions read through
+export function findWrapInstructions(
+  accountKeys: PublicKey[],
+  instructions: CompiledInstruction[],
+  amount: number,
+): [CompiledInstruction[], number] {
+  let count = 0;
+  let found: CompiledInstruction[] = [];
+  while (found.length < amount && count < instructions.length) {
+    const ix = instructions[count];
+    if (accountKeys[ix.programIdIndex].equals(CANDY_WRAPPER_PROGRAM_ID)) {
+      found.push(ix);
+    }
+    count += 1;
+  }
+  if (found.length < amount) {
+    throw new Error(`Unable to find ${amount} wrap instructions: found ${found.length}`)
+  }
+  return [found, count];
 }

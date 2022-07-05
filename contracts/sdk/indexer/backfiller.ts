@@ -64,14 +64,7 @@ export async function plugGapsFromSlot(
     commitment: "confirmed",
   });
   for (const tx of blockData.transactions) {
-    if (
-      tx.transaction.message
-        .programIds()
-        .every((pk) => !pk.equals(parserState.Bubblegum.programId))
-    ) {
-      continue;
-    }
-    if (treeKey && tx.transaction.message.accountKeys.every((pk) => !pk.equals(treeKey))) {
+    if (treeKey && tx.transaction.message.accountKeys.every((pk) => !pk.equals(treeKey) && !pk.equals(parserState.Bubblegum.programId))) {
       continue;
     }
     if (tx.meta.err) {
