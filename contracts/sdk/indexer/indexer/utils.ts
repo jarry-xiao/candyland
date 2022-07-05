@@ -25,6 +25,7 @@ import * as beet from '@metaplex-foundation/beet'
 
 import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from "../../gummyroll";
 import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "../../bubblegum/src/generated";
+import { GumballMachine, PROGRAM_ID as GUMBALL_MACHINE_ID } from "../../gumball-machine";
 import { CANDY_WRAPPER_PROGRAM_ID } from "../../utils";
 
 export type ParserState = {
@@ -211,7 +212,12 @@ export function loadPrograms(provider: anchor.Provider) {
     BUBBLEGUM_PROGRAM_ID,
     "target/idl/bubblegum.json"
   ) as anchor.Program<Bubblegum>;
-  return { Gummyroll, Bubblegum };
+  const GumballMachine = loadProgram(
+    provider,
+    GUMBALL_MACHINE_ID,
+    "target/idl/gumball_machine.json"
+  ) as anchor.Program<GumballMachine>;
+  return { Gummyroll, Bubblegum, GumballMachine };
 }
 
 export function hashMetadata(message: MetadataArgs) {

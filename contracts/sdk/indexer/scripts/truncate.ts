@@ -1,9 +1,21 @@
-import { Keypair, Connection, TransactionResponse, PublicKey } from "@solana/web3.js";
+import {
+    Keypair,
+    Connection,
+    TransactionResponse,
+    TransactionInstruction,
+    PublicKey,
+    SYSVAR_SLOT_HASHES_PUBKEY,
+    SYSVAR_INSTRUCTIONS_PUBKEY,
+    LAMPORTS_PER_SOL,
+    SystemProgram,
+    ComputeBudgetProgram,
+} from "@solana/web3.js";
 import * as anchor from '@project-serum/anchor';
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 import { CANDY_WRAPPER_PROGRAM_ID } from "../../utils";
 import { getBubblegumAuthorityPDA, getCreateTreeIxs, getLeafAssetId } from "../../bubblegum/src/convenience";
-import { addProof, PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from '../../gummyroll';
+import { addProof, getMerkleRollAccountSize, PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from '../../gummyroll';
+import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "../../bubblegum/src/generated";
 import {
     TokenStandard,
     MetadataArgs,
@@ -13,13 +25,19 @@ import {
     LeafSchema,
     leafSchemaBeet,
 } from "../../bubblegum/src/generated";
-import { execute } from "../../../tests/utils";
-import { hashCreators, hashMetadata } from "../indexer/instruction/bubblegum";
+import { execute, num32ToBuffer } from "../../../tests/utils";
+import { hashCreators, hashMetadata } from "../indexer/utils";
 import { BN } from "@project-serum/anchor";
 import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
 import fetch from "node-fetch";
 import { keccak_256 } from 'js-sha3';
 import { BinaryWriter } from 'borsh';
+import { createAddConfigLinesInstruction, createInitializeGumballMachineIxs, decodeGumballMachine, EncodeMethod, GumballMachine, gumballMachineHeaderBeet, InitializeGumballMachineInstructionArgs } from "../../gumball-machine";
+import { getWillyWonkaPDAKey } from "../../gumball-machine";
+import { createDispenseNFTForSolIx } from "../../gumball-machine";
+import { loadPrograms } from "../indexer/utils";
+import { strToByteArray } from "../../utils";
+import { NATIVE_MINT } from "@solana/spl-token";
 
 // const url = "http://api.explorer.mainnet-beta.solana.com";
 const url = "http://127.0.0.1:8899";
@@ -47,16 +65,20 @@ async function main() {
         commitment: "confirmed",
     });
 
-    // TODO: add gumball-machine version of truncate(test cpi indexing using instruction data)
-    let { txId, tx } = await truncateViaBubblegum(connection, provider, payer);
-    checkTxTruncated(tx);
+    // // TODO: add gumball-machine version of truncate(test cpi indexing using instruction data)
+    // let { txId, tx } = await truncateViaBubblegum(connection, provider, payer);
+    // checkTxTruncated(tx);
 
-    // TOOD: add this after gumball-machine mints
-    let results = await testWithBubblegumTransfers(connection, provider, payer);
+    // // TOOD: add this after gumball-machine mints
+    // let results = await testWithBubblegumTransfers(connection, provider, payer);
+    // results.txs.map((tx) => {
+    //     checkTxTruncated(tx);
+    // })
 
-    results.txs.map((tx) => {
-        checkTxTruncated(tx);
-    })
+    const { GumballMachine } = loadPrograms(provider);
+    await truncateWithGumball(
+        connection, provider, payer, GumballMachine
+    );
 }
 
 function checkTxTruncated(tx: TransactionResponse) {
@@ -245,6 +267,188 @@ async function testWithBubblegumTransfers(
     console.log(`Transferred all NFTs to ${finalDestination.publicKey.toString()}`);
     console.log(`Executed multiple transfer ixs here: ${txIds}`);
     return { txIds, txs };
+}
+
+async function initializeGumballMachine(
+    payer: Keypair,
+    gumballMachineAcctKeypair: Keypair,
+    gumballMachineAcctSize: number,
+    merkleRollKeypair: Keypair,
+    merkleRollAccountSize: number,
+    gumballMachineInitArgs: InitializeGumballMachineInstructionArgs,
+    mint: PublicKey,
+    gumballMachine: anchor.Program<GumballMachine>,
+) {
+    const bubblegumAuthorityPDAKey = await getBubblegumAuthorityPDA(
+        merkleRollKeypair.publicKey,
+    );
+    const initializeGumballMachineInstrs =
+        await createInitializeGumballMachineIxs(
+            payer,
+            gumballMachineAcctKeypair,
+            gumballMachineAcctSize,
+            merkleRollKeypair,
+            merkleRollAccountSize,
+            gumballMachineInitArgs,
+            mint,
+            GUMMYROLL_PROGRAM_ID,
+            BUBBLEGUM_PROGRAM_ID,
+            gumballMachine
+        );
+    await execute(
+        gumballMachine.provider,
+        initializeGumballMachineInstrs,
+        [payer, gumballMachineAcctKeypair, merkleRollKeypair],
+        true
+    );
+}
+
+async function addConfigLines(
+    provider: anchor.Provider,
+    authority: Keypair,
+    gumballMachineAcctKey: PublicKey,
+    configLinesToAdd: Uint8Array,
+) {
+    const addConfigLinesInstr = createAddConfigLinesInstruction(
+        {
+            gumballMachine: gumballMachineAcctKey,
+            authority: authority.publicKey,
+        },
+        {
+            newConfigLinesData: configLinesToAdd,
+        }
+    );
+    await execute(
+        provider,
+        [addConfigLinesInstr],
+        [authority]
+    )
+}
+
+async function dispenseCompressedNFTForSol(
+    numNFTs: BN,
+    payer: Keypair,
+    receiver: PublicKey,
+    gumballMachineAcctKeypair: Keypair,
+    merkleRollKeypair: Keypair,
+    gumballMachine: anchor.Program<GumballMachine>,
+) {
+    const additionalComputeBudgetInstruction = ComputeBudgetProgram.requestUnits({
+        units: 1000000,
+        additionalFee: 0,
+    });
+    const dispenseInstr = await createDispenseNFTForSolIx(
+        numNFTs,
+        payer,
+        receiver,
+        gumballMachineAcctKeypair,
+        merkleRollKeypair,
+        GUMMYROLL_PROGRAM_ID,
+        BUBBLEGUM_PROGRAM_ID,
+        gumballMachine
+    );
+    const txId = await execute(
+        gumballMachine.provider,
+        [additionalComputeBudgetInstruction, dispenseInstr],
+        [payer],
+        true
+    );
+}
+
+async function truncateWithGumball(
+    connection: Connection,
+    provider: anchor.Provider,
+    payer: Keypair,
+    gumballMachine: anchor.Program<GumballMachine>,
+) {
+    const EXTENSION_LEN = 28;
+    const MAX_MINT_SIZE = 10;
+    const GUMBALL_MACHINE_ACCT_CONFIG_INDEX_ARRAY_SIZE = 1000;
+    const GUMBALL_MACHINE_ACCT_CONFIG_LINES_SIZE = 7000;
+    const GUMBALL_MACHINE_ACCT_SIZE =
+        gumballMachineHeaderBeet.byteSize +
+        GUMBALL_MACHINE_ACCT_CONFIG_INDEX_ARRAY_SIZE +
+        GUMBALL_MACHINE_ACCT_CONFIG_LINES_SIZE;
+    const MERKLE_ROLL_ACCT_SIZE = getMerkleRollAccountSize(3, 8);
+
+    const creatorAddress = keypairFromString('gumball-machine-creat0r');
+    const gumballMachineAcctKeypair = keypairFromString('gumball-machine-acct')
+    const merkleRollKeypair = keypairFromString("gumball-machine-tree");
+    const nftBuyer = keypairFromString("gumball-machine-buyer")
+    const botWallet = Keypair.generate();
+
+    // Give creator enough funds to produce accounts for gumball-machine
+    await connection.requestAirdrop(
+        creatorAddress.publicKey,
+        4 * LAMPORTS_PER_SOL,
+    );
+    await connection.requestAirdrop(
+        payer.publicKey,
+        11 * LAMPORTS_PER_SOL,
+    );
+    await connection.requestAirdrop(
+        nftBuyer.publicKey,
+        11 * LAMPORTS_PER_SOL,
+    );
+    console.log("airdrop successfull")
+
+    const baseGumballMachineInitProps = {
+        maxDepth: 3,
+        maxBufferSize: 8,
+        urlBase: strToByteArray("https://arweave.net", 64),
+        nameBase: strToByteArray("Milady", 32),
+        symbol: strToByteArray("MILADY", 8),
+        sellerFeeBasisPoints: 100,
+        isMutable: true,
+        retainAuthority: true,
+        encodeMethod: EncodeMethod.Base58Encode,
+        price: new BN(0.1),
+        goLiveDate: new BN(1234.0),
+        botWallet: botWallet.publicKey,
+        // receiver: creatorReceiverTokenAccount.address,
+        receiver: creatorAddress.publicKey,
+        authority: creatorAddress.publicKey,
+        collectionKey: SystemProgram.programId, // 0x0 -> no collection key
+        extensionLen: new BN(EXTENSION_LEN),
+        maxMintSize: new BN(MAX_MINT_SIZE),
+        maxItems: new BN(250),
+    };
+
+    await initializeGumballMachine(
+        payer,
+        gumballMachineAcctKeypair,
+        GUMBALL_MACHINE_ACCT_SIZE,
+        merkleRollKeypair,
+        MERKLE_ROLL_ACCT_SIZE,
+        baseGumballMachineInitProps,
+        NATIVE_MINT,
+        gumballMachine
+    );
+    console.log('init`d');
+
+    // add 10 config lines
+    let arr: number[] = [];
+    const buffers = [];
+    for (let i = 0; i < MAX_MINT_SIZE + 1; i++) {
+        const str = `url-${i}                                         `.slice(0, EXTENSION_LEN);
+        arr = arr.concat(strToByteArray(str));
+        buffers.push(Buffer.from(str));
+    }
+    await addConfigLines(
+        provider,
+        creatorAddress,
+        gumballMachineAcctKeypair.publicKey,
+        Buffer.from(arr),
+    );
+
+    await dispenseCompressedNFTForSol(
+        new BN(6),
+        nftBuyer,
+        creatorAddress.publicKey,
+        gumballMachineAcctKeypair,
+        merkleRollKeypair,
+        gumballMachine
+    )
 }
 
 main();
