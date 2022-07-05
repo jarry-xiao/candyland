@@ -20,6 +20,8 @@ use crate::utils::get_metadata_args;
 
 declare_id!("GBALLoMcmimUutWvtNdFFGH5oguS7ghUUV6toQPppuTW");
 
+const COMPUTE_BUDGET_ADDRESS: &str = "ComputeBudget11111111111111111111111111111";
+
 #[derive(Accounts)]
 pub struct InitGumballMachine<'info> {
     /// CHECK: Validation occurs in instruction
@@ -156,16 +158,35 @@ pub struct Destroy<'info> {
 fn assert_valid_single_instruction_transaction<'info>(
     instruction_sysvar_account: &AccountInfo<'info>,
 ) -> Result<()> {
-    // There should only be one instruction in this transaction (the current call to dispense_...)
+    // There should only be one non compute-budget instruction
+    // in this transaction (i.e. the current call to dispense_...)
     let instruction_sysvar = instruction_sysvar_account.try_borrow_data()?;
     let mut fixed_data = [0u8; 2];
     fixed_data.copy_from_slice(&instruction_sysvar[0..2]);
     let num_instructions = u16::from_le_bytes(fixed_data);
-    // assert_eq!(num_instructions, 1);
+    if num_instructions > 2 {
+        assert!(false, "Suspicious transaction, failing")
+    } else if num_instructions == 2 {
+        let compute_budget_instruction =
+            load_instruction_at_checked(0, instruction_sysvar_account)?;
 
+        let compute_budget_id: Pubkey = Pubkey::new(
+            bs58::decode(&COMPUTE_BUDGET_ADDRESS)
+                .into_vec()
+                .unwrap()
+                .as_ref(),
+        );
+        // pubkey!("ComputeBudget111111111111111111111111111111");
+
+        assert_eq!(compute_budget_instruction.program_id, compute_budget_id);
+        let current_instruction = load_instruction_at_checked(0, instruction_sysvar_account)?;
+        assert_eq!(current_instruction.program_id, id());
+    } else if num_instructions == 1 {
+        let only_instruction = load_instruction_at_checked(0, instruction_sysvar_account)?;
+        assert_eq!(only_instruction.program_id, id());
+    }
     // We should not be executing dispense... from a CPI
-    // let only_instruction = load_instruction_at_checked(0, instruction_sysvar_account)?;
-    // assert_eq!(only_instruction.program_id, id());
+
     return Ok(());
 }
 
@@ -220,7 +241,7 @@ fn fisher_yates_shuffle_and_fetch_nft_metadata<'info>(
 // For efficiency, this returns the GumballMachineHeader because it's required to validate
 // payment parameters. But the main purpose of this function is to determine which config
 // line to mint to the user, and CPI to bubblegum to actually execute the mint
-// Also returns the number of nfts successfully minted, so that the purchaser is charged 
+// Also returns the number of nfts successfully minted, so that the purchaser is charged
 // appropriately
 fn find_and_mint_compressed_nfts<'info>(
     gumball_machine: &AccountInfo<'info>,
@@ -259,9 +280,11 @@ fn find_and_mint_compressed_nfts<'info>(
 
     let indices = cast_slice_mut::<u8, u32>(indices_data);
     let num_nfts_to_mint: u64 = (num_items).max(1).min(gumball_header.remaining);
-    assert!(num_nfts_to_mint > 0, "There are no remaining NFTs to dispense!");
-    for _ in 0..num_nfts_to_mint
-    {
+    assert!(
+        num_nfts_to_mint > 0,
+        "There are no remaining NFTs to dispense!"
+    );
+    for _ in 0..num_nfts_to_mint {
         let message = fisher_yates_shuffle_and_fetch_nft_metadata(
             recent_blockhashes,
             gumball_header,
