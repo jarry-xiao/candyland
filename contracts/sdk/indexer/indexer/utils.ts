@@ -90,9 +90,6 @@ function indexZippedInstruction(
       innerInstructions
     );
   } else {
-    /// TODO: test with gumball-machine truncate mode
-    /// TODO: write inner instruction parser
-    console.log("[no outer bgum ix found] Ignoring for now");
     if (innerInstructions.length) {
       parseBubblegumInnerInstructions(
         db,

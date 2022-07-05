@@ -13,7 +13,7 @@ import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
 import { ChangeLogEvent, ingestBubblegumCreateTree, ingestBubblegumMint, ingestBubblegumReplaceLeaf, LeafSchemaEvent, NewLeafEvent } from "../ingester";
 
 /**
- *  This kind of sux because there is no depth associated
+ *  This kind of difficult because there is no depth associated with the inner instructions
  */
 export async function parseBubblegumInnerInstructions(
     db: NFTDatabaseConnection,
@@ -181,6 +181,7 @@ async function parseBubblegumExecutionContext(
                     instructions,
                     currentIndex
                 );
+            /// TODO(ngundotra): add tests for the following leaf-replacements
             case "Redeem":
                 return await parseBubblegumReplaceLeafInstructions(
                     db,
