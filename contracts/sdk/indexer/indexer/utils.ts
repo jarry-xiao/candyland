@@ -155,16 +155,15 @@ function zipInstructions(
 ): ZippedInstruction[] {
   const zippedIxs: ZippedInstruction[] = [];
   let innerIxIndex = 0;
-  for (let instructionIndex = 0; instructionIndex < instructions.length; instructionIndex++) {
-    const innerIxs = [];
-    while (innerIxIndex < innerInstructions.length && innerInstructions[innerIxIndex].index <= instructionIndex) {
-      innerIxs.push(innerInstructions[innerIxIndex]);
-      innerIxIndex += 1;
-    }
+  const innerIxMap: Map<number, CompiledInnerInstruction> = new Map();
+  for (const innerIx of innerInstructions) {
+    innerIxMap.set(innerIx.index, innerIx);
+  }
+  for (const [instructionIndex, instruction] of instructions.entries()) {
     zippedIxs.push({
       instructionIndex,
-      instruction: instructions[instructionIndex],
-      innerInstructions: innerIxs
+      instruction,
+      innerInstructions: innerIxMap.has(instructionIndex) ? [innerIxMap.get(instructionIndex)] : []
     })
   }
   return zippedIxs;
@@ -186,14 +185,14 @@ export function handleInstructionsAtomic(
   const { accountKeys, instructions, innerInstructions } = instructionInfo;
 
   const zippedInstructions = zipInstructions(instructions, innerInstructions);
-  for (let i = 0; i < zippedInstructions.length; i++) {
+  for (const zippedInstruction of zippedInstructions) {
     indexZippedInstruction(
       db,
       { txId, startSeq, endSeq },
       context.slot,
       parsedState,
       accountKeys,
-      zippedInstructions[i],
+      zippedInstruction,
     )
   }
 }
