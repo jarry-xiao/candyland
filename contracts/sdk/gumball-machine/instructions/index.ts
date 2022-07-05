@@ -95,7 +95,6 @@ export async function createInitializeGumballMachineIxs(
 export async function createDispenseNFTForSolIx(
   args: DispenseNftSolInstructionArgs,
   payer: PublicKey,
-  numNFTs: BN,
   receiver: PublicKey,
   gumballMachinePubkey: PublicKey,
   merkleRollPubkey: PublicKey,
@@ -132,7 +131,6 @@ export async function createDispenseNFTForSolIx(
 export async function createDispenseNFTForTokensIx(
   args: DispenseNftTokenInstructionArgs,
   payer: PublicKey,
-  numNFTs: BN,
   payerTokens: PublicKey,
   receiver: PublicKey,
   gumballMachinePubkey: PublicKey,

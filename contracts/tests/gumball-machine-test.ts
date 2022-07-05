@@ -38,7 +38,6 @@ import {
   val,
   strToByteArray,
   strToByteUint8Array,
-  logTx
 } from "../sdk/utils/index";
 import {
   GumballMachineHeader,
@@ -52,7 +51,7 @@ import {
   getAccount,
 } from "../../deps/solana-program-library/token/js/src";
 import { NATIVE_MINT } from "@solana/spl-token";
-import { num32ToBuffer, arrayEquals, execute } from "./utils";
+import { num32ToBuffer, arrayEquals, execute, logTx } from "./utils";
 import { EncodeMethod } from "../sdk/gumball-machine/src/generated/types/EncodeMethod";
 import { getBubblegumAuthorityPDA } from "../sdk/bubblegum/src/convenience";
 
@@ -414,10 +413,6 @@ describe("gumball-machine", () => {
     merkleRollKeypair: Keypair,
     verbose?: boolean
   ) {
-    const additionalComputeBudgetInstruction = ComputeBudgetProgram.requestUnits({
-      units: 1000000,
-      additionalFee: 0,
-    });
     const dispenseInstr = await createDispenseNFTForSolIx(
       { numItems: numNFTs },
       payer.publicKey,
@@ -428,10 +423,9 @@ describe("gumball-machine", () => {
       BubblegumProgramId,
       GumballMachine
     );
-    const tx = new Transaction().add(additionalComputeBudgetInstruction).add(dispenseInstr);
     const txId = await execute(
       GumballMachine.provider,
-      [additionalComputeBudgetInstruction, dispenseInstr],
+      [dispenseInstr],
       [payer],
       true
     );
@@ -524,7 +518,6 @@ describe("gumball-machine", () => {
       );
     });
 
-    const EXTENSION_LEN = 28;
     describe("native sol projects", async () => {
       let creatorPaymentWallet: Keypair;
       beforeEach(async () => {
@@ -550,7 +543,7 @@ describe("gumball-machine", () => {
           receiver: creatorPaymentWallet.publicKey,
           authority: creatorAddress.publicKey,
           collectionKey: SystemProgram.programId, // 0x0 -> no collection key
-          extensionLen: new BN(EXTENSION_LEN),
+          extensionLen: new BN(28),
           maxMintSize: new BN(10),
           maxItems: new BN(250),
         };
@@ -574,24 +567,14 @@ describe("gumball-machine", () => {
           NATIVE_MINT
         );
 
-        // add 10 config lines
-        let arr: number[] = [];
-        const buffers = [];
-        for (let i = 0; i < 11; i++) {
-          const str = `url-${i}                                         `.slice(0, EXTENSION_LEN);
-          arr = arr.concat(strToByteArray(str));
-          buffers.push(Buffer.from(str));
-        }
-        // strToByteUint8Array("uluvnpwncgchwnbqfpbtdlcpdthc"),
-        // Buffer.from("uluvnpwncgchwnbqfpbtdlcpdthc")
         await addConfigLines(
           creatorAddress,
           gumballMachineAcctKeypair.publicKey,
           GUMBALL_MACHINE_ACCT_SIZE,
           GUMBALL_MACHINE_ACCT_CONFIG_INDEX_ARRAY_SIZE,
           GUMBALL_MACHINE_ACCT_CONFIG_LINES_SIZE,
-          Buffer.from(arr),
-          Buffer.concat(buffers),
+          strToByteUint8Array("uluvnpwncgchwnbqfpbtdlcpdthc"),
+          Buffer.from("uluvnpwncgchwnbqfpbtdlcpdthc")
         );
       });
       describe("dispense nft sol instruction", async () => {
@@ -614,7 +597,7 @@ describe("gumball-machine", () => {
             "confirmed"
           );
         });
-        describe.skip("transaction atomicity attacks fail", async () => {
+        describe("transaction atomicity attacks fail", async () => {
           let dispenseNFTForSolInstr;
           let dummyNewAcctKeypair;
           let dummyInstr;
@@ -643,37 +626,43 @@ describe("gumball-machine", () => {
             const tx = new Transaction()
               .add(dispenseNFTForSolInstr)
               .add(dummyInstr);
+            let confirmedTxId: string;
             try {
-              await GumballMachine.provider.send(
+              confirmedTxId = await GumballMachine.provider.send(
                 tx,
                 [nftBuyer, payer, dummyNewAcctKeypair],
                 {
                   commitment: "confirmed",
                 }
               );
+            } catch (e) { }
+
+            if (confirmedTxId)
               assert(
                 false,
                 "Dispense should fail when part of transaction with multiple instructions, but it succeeded"
               );
-            } catch (e) { }
           });
           it("Cannot dispense NFT for SOL with prior instructions in transaction", async () => {
             const tx = new Transaction()
               .add(dummyInstr)
               .add(dispenseNFTForSolInstr);
+            let confirmedTxId: string;
             try {
-              await GumballMachine.provider.send(
+              confirmedTxId = await GumballMachine.provider.send(
                 tx,
                 [nftBuyer, payer, dummyNewAcctKeypair],
                 {
                   commitment: "confirmed",
                 }
               );
+            } catch (e) { }
+
+            if (confirmedTxId)
               assert(
                 false,
                 "Dispense should fail when part of transaction with multiple instructions, but it succeeded"
               );
-            } catch (e) { }
           });
         });
         it("Can dispense single NFT paid in sol", async () => {
@@ -703,14 +692,12 @@ describe("gumball-machine", () => {
           );
 
           // Purchase the compressed NFT with SOL
-          console.log("YES THIS IS WORKING AS INTENDED");
           await dispenseCompressedNFTForSol(
-            new BN(6),
+            new BN(1),
             nftBuyer,
             baseGumballMachineInitProps.receiver,
             gumballMachineAcctKeypair,
-            merkleRollKeypair,
-            true
+            merkleRollKeypair
           );
           const nftBuyerBalanceAfterPurchase = await connection.getBalance(
             nftBuyer.publicKey
@@ -736,7 +723,7 @@ describe("gumball-machine", () => {
         });
       });
       // @notice: We only test admin instructions on SOL projects because they are completely (for now) independent of project mint
-      describe.skip("admin instructions", async () => {
+      describe("admin instructions", async () => {
         it("Can update config lines", async () => {
           await updateConfigLines(
             creatorAddress,
@@ -804,7 +791,7 @@ describe("gumball-machine", () => {
         });
       });
     });
-    describe.skip("spl token projects", async () => {
+    describe("spl token projects", async () => {
       let someMint: PublicKey;
       let creatorReceiverTokenAccount;
       let botWallet;
