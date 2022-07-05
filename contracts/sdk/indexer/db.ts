@@ -97,34 +97,6 @@ export class NFTDatabaseConnection {
     }
   }
 
-  /// Can be used to kick of gapfill for all leafnodes in db
-  async findMostRecentNodes() {
-    return await this.connection.run(
-      `
-      SELECT * FROM merkle 
-      WHERE seq in 
-        (SELECT seq FROM 
-          (SELECT node_idx, MAX(seq) AS seq 
-          FROM merkle 
-          WHERE level = 0 group by node_idx
-        ));
-      `
-    );
-  }
-
-  async dropMostRecentNodes() {
-    return await this.connection.run(
-      `
-      DELETE FROM merkle
-      WHERE seq in 
-        (SELECT seq FROM 
-          (SELECT node_idx, MAX(seq) AS seq 
-          FROM merkle 
-          WHERE level = 0 group by node_idx
-        ));
-      `
-    );
-  }
 
   async updateLeafSchema(
     leafSchemaRecord: LeafSchemaEvent,
