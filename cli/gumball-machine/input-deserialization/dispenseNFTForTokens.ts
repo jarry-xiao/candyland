@@ -3,11 +3,11 @@ import {
   DispenseNftTokenInstructionArgs
 } from "../../../contracts/sdk/gumball-machine";
 import {
-  assertNonNegativeAndConvertToBN
+  assertInRangeAndReturnNum
 } from "./utils";
 
 export function deserializeDispenseNFTTokensJson(input): DispenseNftTokenInstructionArgs {
   return {
-    numItems: assertNonNegativeAndConvertToBN(input.args.numItems, "numItems")
+    numItems: assertInRangeAndReturnNum(input.args.numItems, "numItems")
   }
 }

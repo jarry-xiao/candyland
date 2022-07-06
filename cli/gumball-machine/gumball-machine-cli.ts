@@ -7,6 +7,8 @@ import {
     Transaction,
     Connection as web3Connection,
     LAMPORTS_PER_SOL,
+    ComputeBudgetInstruction,
+    ComputeBudgetProgram
   } from "@solana/web3.js";
 import {
     getProvider, loadWalletKey
@@ -19,6 +21,7 @@ import {
     createUpdateConfigLinesInstruction,
     createUpdateHeaderMetadataInstruction,
     createDestroyInstruction,
+    initializeGumballMachineIndices,
 } from "../../contracts/sdk/gumball-machine";
 import { Program, Provider } from '@project-serum/anchor';
 import {
@@ -46,6 +49,7 @@ import {
     PROGRAM_ID as BUBBLEGUM_PROGRAM_ID
 } from "../../contracts/sdk/bubblegum/src/generated";
 import {
+    createInitializeIndicesChunkInstruction,
     PROGRAM_ID as GUMBALL_MACHINE_PROGRAM_ID
 } from "../../contracts/sdk/gumball-machine/src/generated";
 import {
@@ -60,6 +64,7 @@ import {
 import {
     resolve
 } from 'path';
+import { deserializeInitIndicesJson } from './input-deserialization/initIndices';
 
 const program = new Command();
 program
@@ -119,7 +124,7 @@ createCommand("init")
         await provider.connection.confirmTransaction(
             await provider.connection.requestAirdrop(
               creatorKeypair.publicKey,
-              LAMPORTS_PER_SOL
+              75*LAMPORTS_PER_SOL
             ),
             "confirmed"
         );
@@ -139,6 +144,35 @@ createCommand("init")
             );
         const txId = await execute(provider, initializeGumballMachineInstrs, [creatorKeypair, gumballMachineKeypair, merkleRollKeypair], false, true);
         log.info(`TX Completed Successfully: ${txId}`);
+    });
+
+createCommand("init-indices")
+    .description("Initialize the NFT indices for the gumball machine. This command may execute multiple transactions.")
+    .requiredOption(
+        "-a, --authority-keypair-path <string>",
+        'Path to gumball machine creator keypair'
+    )
+    .requiredOption(
+        "-g, --gumball-machine-pubkey <string>",
+        'Public key of the gumball machine'
+    )
+    .requiredOption(
+        "-j, --json-config-filepath <string>",
+        "File path to JSON file with args"
+    )
+    .action(async (options) => {
+        const { url, payerKeypairPath, authorityKeypairPath, gumballMachinePubkey, jsonConfigFilepath } = options;
+
+        const payerKeypair = loadWalletKey(payerKeypairPath);
+        const authorityKeypair = loadWalletKey(authorityKeypairPath);
+        const gumballMachinePublicKey = new PublicKey(gumballMachinePubkey);
+
+        const inputObject = JSON.parse(readFileSync(resolve(__dirname, jsonConfigFilepath)).toString());
+        const initIndicesArgs = deserializeInitIndicesJson(inputObject);
+
+        const provider = await getProvider(url, payerKeypair);
+
+        await initializeGumballMachineIndices(provider, initIndicesArgs.maxItems, authorityKeypair, gumballMachinePublicKey, true);
     });
 
 createCommand("add-config-lines")
