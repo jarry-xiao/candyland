@@ -65,11 +65,16 @@ Example `init.json` (note the actual example json directory is also included for
     "goLiveDate": 1234.0,
     "botWallet": "H8DWGKyCSaKtgh1GjyqexVcMe8FPyKQoBhKH79QnhDWx",
     "receiver": "H8DWGKyCSaKtgh1GjyqexVcMe8FPyKQoBhKH79QnhDWx",
-    "authority": "Es1EV724ihL7mYzjEiUV1QgcNdwoTpGByLiWSwKFRsAb",
+    "authority": "5RomdRbiZ3UYwpojr9j3SQptjJQULmx6rpU1Bfbr7mpG",
     "collectionKey": null,
     "extensionLen": 28,
     "maxMintSize": 10,
-    "maxItems": 250
+    "maxItems": 250,
+    "creatorKeys": [
+      "H8DWGKyCSaKtgh1GjyqexVcMe8FPyKQoBhKH79QnhDWx",
+      "Es1EV724ihL7mYzjEiUV1QgcNdwoTpGByLiWSwKFRsAb"
+    ],
+    "creatorShares": [1, 5]
   },
   "optionals": {
     "canopyDepth": 2

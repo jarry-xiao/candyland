@@ -13,7 +13,7 @@ import {
   strToByteUint8Array
 } from "../../../contracts/sdk/utils/index";
 
-export function getBufferFromStringArr(stringArray: [string]): Buffer {
+export function getBufferFromStringArr(stringArray: string[]): Buffer {
   const buffer = stringArray.reduce(
     (prevVal, curVal) =>
       Buffer.concat([prevVal, Buffer.from(curVal)]),

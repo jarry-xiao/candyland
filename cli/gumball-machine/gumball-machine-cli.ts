@@ -133,7 +133,6 @@ createCommand("init")
               merkleRollAcctSize,
               gumballMachineInitArgs,
               mintPublicKey,
-              creatorKeypair.publicKey,
               GUMMYROLL_PROGRAM_ID,
               BUBBLEGUM_PROGRAM_ID,
               gumballMachine
