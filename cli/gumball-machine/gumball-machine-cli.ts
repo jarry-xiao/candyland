@@ -126,14 +126,13 @@ createCommand("init")
 
         const initializeGumballMachineInstrs =
             await createInitializeGumballMachineIxs(
-              creatorKeypair,
-              gumballMachineKeypair,
+              creatorKeypair.publicKey,
+              gumballMachineKeypair.publicKey,
               gumballMachineAcctSize,
-              merkleRollKeypair,
+              merkleRollKeypair.publicKey,
               merkleRollAcctSize,
               gumballMachineInitArgs,
               mintPublicKey,
-              creatorKeypair.publicKey,
               GUMMYROLL_PROGRAM_ID,
               BUBBLEGUM_PROGRAM_ID,
               gumballMachine
