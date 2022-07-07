@@ -1,4 +1,4 @@
-use crate::utils::traverse_to_parent;
+use crate::utils::hash_to_parent;
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 /// Stores proof for a given Merkle root update
@@ -37,11 +37,11 @@ impl<const MAX_DEPTH: usize> ChangeLog<MAX_DEPTH> {
     }
 
     /// Sets all change log values from a leaf and valid proof
-    pub fn recompute_path(&mut self, index: u32, mut node: Node, proof: &[Node]) -> Node {
+    pub fn replace_and_recompute_path(&mut self, index: u32, mut node: Node, proof: &[Node]) -> Node {
         self.index = index;
         for (i, sibling) in proof.iter().enumerate() {
             self.path[i] = node;
-            traverse_to_parent(&mut node, sibling, self.index >> i & 1 == 0);
+            hash_to_parent(&mut node, sibling, self.index >> i & 1 == 0);
         }
         self.root = node;
         node

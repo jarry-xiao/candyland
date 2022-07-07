@@ -1,7 +1,7 @@
 use crate::{
     error::CMTError,
     state::{ChangeLog, Node, Path, EMPTY},
-    utils::{empty_node, empty_node_cached, fill_in_proof, recompute, traverse_to_parent},
+    utils::{empty_node, empty_node_cached, fill_in_proof, recompute, hash_to_parent},
 };
 use bytemuck::{Pod, Zeroable};
 pub(crate) use log_compute;
@@ -167,20 +167,20 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             if i < intersection {
                 // Compute proof to the appended node from empty nodes
                 let sibling = empty_node_cached::<MAX_DEPTH>(i as u32, &mut empty_node_cache);
-                traverse_to_parent(
+                hash_to_parent(
                     &mut intersection_node,
                     &self.rightmost_proof.proof[i],
                     ((self.rightmost_proof.index - 1) >> i) & 1 == 0,
                 );
-                traverse_to_parent(&mut node, &sibling, true);
+                hash_to_parent(&mut node, &sibling, true);
                 self.rightmost_proof.proof[i] = sibling;
             } else if i == intersection {
                 // Compute the where the new node intersects the main tree
-                traverse_to_parent(&mut node, &intersection_node, false);
+                hash_to_parent(&mut node, &intersection_node, false);
                 self.rightmost_proof.proof[intersection] = intersection_node;
             } else {
                 // Update the change list path up to the root
-                traverse_to_parent(
+                hash_to_parent(
                     &mut node,
                     &self.rightmost_proof.proof[i],
                     ((self.rightmost_proof.index - 1) >> i) & 1 == 0,
@@ -385,7 +385,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
     fn update_buffers_from_proof(&mut self, start: Node, proof: &[Node], index: u32) -> Node {
         let change_log = &mut self.change_logs[self.active_index as usize];
         // Also updates change_log's current root
-        let root = change_log.recompute_path(index, start, proof);
+        let root = change_log.replace_and_recompute_path(index, start, proof);
         // Update rightmost path if possible
         if self.rightmost_proof.index < (1 << MAX_DEPTH) {
             if index < self.rightmost_proof.index as u32 {

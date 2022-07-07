@@ -26,14 +26,14 @@ pub fn empty_node_cached<const N: usize>(level: u32, cache: &mut Box<[Node; N]>)
 pub fn recompute(leaf: Node, proof: &[Node], index: u32) -> Node {
     let mut current_node = leaf;
     for (depth, sibling) in proof.iter().enumerate() {
-        traverse_to_parent(&mut current_node, sibling, index >> depth & 1 == 0);
+        hash_to_parent(&mut current_node, sibling, index >> depth & 1 == 0);
     }
     current_node
 }
 
 /// Computes the parent node of `node` and `sibling` and copies the result into `node`
 #[inline(always)]
-pub fn traverse_to_parent(node: &mut Node, sibling: &Node, is_left: bool) {
+pub fn hash_to_parent(node: &mut Node, sibling: &Node, is_left: bool) {
     let parent = if is_left {
         hashv(&[node, sibling])
     } else {
