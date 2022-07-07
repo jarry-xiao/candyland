@@ -1,10 +1,20 @@
 import express from "express";
 import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
 import { bootstrap, NFTDatabaseConnection, Proof } from "./db";
-import cors from 'cors';
+import cors from "cors";
+const { program } = require("commander");
+
+program.option("-d, --db-path <string>");
+program.parse(process.argv);
+const options = program.opts();
+
+let dbPath = "db";
+if (options.dbPath) {
+  dbPath = options.dbPath;
+}
 
 const app = express();
-app.use(cors())
+app.use(cors());
 app.use(express.json());
 
 let nftDb: NFTDatabaseConnection;
@@ -62,6 +72,6 @@ app.get("/assets", async (req, res) => {
 });
 
 app.listen(port, async () => {
-  nftDb = await bootstrap(false);
+  nftDb = await bootstrap(dbPath, false);
   console.log(`Tree server listening on port ${port}`);
 });
