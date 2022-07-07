@@ -31,12 +31,11 @@ pub fn recompute(leaf: Node, proof: &[Node], index: u32) -> Node {
     current_node
 }
 
-/// Computes the parent node of `node` and `sibling` and copies the result into `node` 
+/// Computes the parent node of `node` and `sibling` and copies the result into `node`
 #[inline(always)]
 pub fn traverse_to_parent(node: &mut Node, sibling: &Node, is_left: bool) {
     let parent = if is_left {
         hashv(&[node, sibling])
-
     } else {
         hashv(&[sibling, node])
     };
