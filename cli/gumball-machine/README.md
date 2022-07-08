@@ -94,6 +94,29 @@ Created Gumball Machine Pubkey: 4SLVDrLyadq6rDb3sKiDR2nX99BiGvXME51Z8B3sPCrE
 Created Merkle Roll Publickey: FFsMEokRrRNmaWXoXeud42A27UNXq7qzfLCDbrosyoC4
 ```
 
+### init-indices
+
+Corresponds to `initialize_indices_chunk` EXCEPT that it intializes ALL indices, rather than just one chunk. 
+
+Example usage: initializing all NFT indices for a GumballMachine on localnet.
+
+`ts-node gumball-machine-cli.ts init-indices -u "http://127.0.0.1:8899" -a "/Users/samorend/Documents/candyland/cli/gumball-machine/creator-keypair.json" -g FyXXuXP7taniCXhf4crGXan4UAzP6aKYBcNfk37yC5P5 -j "./example-input-json/init-indices.json"`
+
+Example `init-indices.json`:
+
+```json
+{
+  "args": {
+    "maxItems": 1048576
+  },
+  "optionals": {}
+}
+```
+
+One thing to note is that this is the ONLY JSON file which does not EXACTLY correspond to the Solita type associated with the corresponding on-chain instruction. This is because only partially initializing the indices of a gumball machine can leave your machine in a bad state, and is generally seen as an intermediary step in getting your machine fully initialized. For this reason, the CLI takes care of initializing your indicies chunk by chunk, and all you need to specify is the SAME `maxItems` value that you specified to the `init` command.
+
+This command does not currently support any optionals, the optionals field can be omitted entirely.
+
 ### add-config-lines
 
 Corresponds to `add_config_lines`. Adds config lines to the specific GumballMachine account to enable future minting.

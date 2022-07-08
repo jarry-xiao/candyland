@@ -31,7 +31,7 @@ export function deserializeUpdateHeaderMetadataJson(input): UpdateHeaderMetadata
     goLiveDate: assertNonNegativeAndConvertToBN(input.args.goLiveDate, "goLiveDate"),
     botWallet: assertLengthAndConvertToPublicKey(input.args.botWallet, "botWallet"),
     authority: assertLengthAndConvertToPublicKey(input.args.authority, "authority"),
-    maxMintSize: assertNonNegativeAndConvertToBN(input.args.maxMintSize, "maxMintSize")
+    maxMintSize: assertInRangeAndReturnNum(input.args.maxMintSize, "maxMintSize")
   }
   return gumballMachineUpdateHeaderMetadataArgs;
 }
