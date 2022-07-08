@@ -1,3 +1,5 @@
+//! State related to storing a buffer of Merkle tree roots on-chain.
+//!
 use anchor_lang::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
 use concurrent_merkle_tree::state::{ChangeLog, Node};
@@ -28,9 +30,14 @@ pub struct NewLeafEvent {
 pub struct ChangeLogEvent {
     /// Public key of the Merkle Roll
     pub id: Pubkey,
+
     /// Nodes of off-chain merkle tree
     pub path: Vec<PathNode>,
+
+    /// Index corresponding to the number of successful operations on this tree.
+    /// Used by the off-chain indexer to figure out when there are gaps to be backfilled.
     pub seq: u64,
+
     /// Bitmap of node parity (used when hashing)
     pub index: u32,
 }
@@ -65,10 +72,23 @@ impl<const MAX_DEPTH: usize> From<(Box<ChangeLog<MAX_DEPTH>>, Pubkey, u64)>
 #[derive(BorshDeserialize, BorshSerialize)]
 #[repr(C)]
 pub struct MerkleRollHeader {
+    /// Buffer of changelogs stored on-chain. Must be a power of 2;
+    /// Valid options limited to: `(8, 64, 256, 512, 1024, 2048)`
     pub max_buffer_size: u32,
+
+    /// Depth of the Merkle tree to store.
+    /// Valid options are any integer between 14-30
+    /// Tree capacity can be calculated as power(2, max_depth)
     pub max_depth: u32,
+
+    /// Authority that validates the content of the trees.
+    /// Typically a program, e.g., the Bubblegum contract validates that leaves are valid NFTs.
     pub authority: Pubkey,
+
+    /// Authority that is responsible for signing for new additions to the tree.
     pub append_authority: Pubkey,
+
+    /// TODO(jon): Not sure what this is!
     pub creation_slot: u64,
 }
 
