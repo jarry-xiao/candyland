@@ -20,7 +20,8 @@ use crate::api::RpcApiBuilder;
 async fn main() -> Result<(), DasApiError> {
     let config = load_config()?;
     let addr = SocketAddr::from(([0, 0, 0, 0], config.server_port));
-    let server = HttpServerBuilder::default().build(addr).await?;
+    let server = HttpServerBuilder::default().health_api("/healthz", "healthz")?.build(addr).await?;
+
     let api = DasApi::from_config(config).await?;
     let rpc = RpcApiBuilder::build(Box::new(api))?;
     println!("Server Started");
