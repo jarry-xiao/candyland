@@ -69,16 +69,28 @@ impl<const MAX_DEPTH: usize> From<(Box<ChangeLog<MAX_DEPTH>>, Pubkey, u64)>
     }
 }
 
+/// Initialization parameters for a Gummyroll Merkle tree.
+///
+/// Only the following permutations are valid:
+///
+/// | max_depth | max_buffer_size       |
+/// | --------- | --------------------- |
+/// | 14        | (64, 256, 1024, 2048) |           
+/// | 20        | (64, 256, 1024, 2048) |           
+/// | 24        | (64, 256, 512, 1024, 2048) |           
+/// | 26        | (64, 256, 512, 1024, 2048) |           
+/// | 30        | (512, 1024, 2048) |           
+///
 #[derive(BorshDeserialize, BorshSerialize)]
 #[repr(C)]
 pub struct MerkleRollHeader {
-    /// Buffer of changelogs stored on-chain. Must be a power of 2;
-    /// Valid options limited to: `(8, 64, 256, 512, 1024, 2048)`
+    /// Buffer of changelogs stored on-chain.
+    /// Must be a power of 2; see above table for valid combinations.
     pub max_buffer_size: u32,
 
     /// Depth of the Merkle tree to store.
-    /// Valid options are any integer between 14-30
-    /// Tree capacity can be calculated as power(2, max_depth)
+    /// Tree capacity can be calculated as power(2, max_depth).
+    /// See above table for valid options.
     pub max_depth: u32,
 
     /// Authority that validates the content of the trees.
@@ -86,9 +98,11 @@ pub struct MerkleRollHeader {
     pub authority: Pubkey,
 
     /// Authority that is responsible for signing for new additions to the tree.
+    /// DEPRECATED: Likely to be removed!
     pub append_authority: Pubkey,
 
-    /// TODO(jon): Not sure what this is!
+    /// Slot corresponding to when the Merkle tree was created.
+    /// Provides a lower-bound on what slot to start (re-)building a tree from.
     pub creation_slot: u64,
 }
 

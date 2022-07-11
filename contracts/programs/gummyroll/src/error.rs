@@ -17,9 +17,7 @@ pub enum GummyrollError {
     #[msg("Issue zero copying concurrent merkle tree data")]
     ZeroCopyError,
 
-    /// The Gummyroll tree supports two configuration parameters: `max_depth` and `max_buffer_size`.
-    /// - `max_buffer_size` must be a power of 2; valid values are limited to `(8, 64, 256, 512, 1024, 2048)`
-    /// - `max_depth` can be any integer between 14 and 30.
+    /// See [MerkleRollHeader](/gummyroll/state/struct.MerkleRollHeader.html) for valid configuration options.
     #[msg("An unsupported max depth or max buffer size constant was provided")]
     MerkleRollConstantsError,
 

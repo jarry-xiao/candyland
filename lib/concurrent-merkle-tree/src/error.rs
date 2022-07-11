@@ -26,7 +26,7 @@ pub enum CMTError {
     #[error("Invalid number of bytes passed for node (expected 32 bytes)")]
     InvalidNodeByteLength,
 
-    /// Root not found in changelog buffer
+    /// Fast forward error: we cannot find a valid point to fast-forward the current proof from
     #[error("Root not found in changelog buffer")]
     RootNotFound,
 
