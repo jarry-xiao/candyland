@@ -5,6 +5,7 @@
   "main": "index.ts",
   "license": "MIT",
   "dependencies": {
+    "@project-serum/anchor": "^0.21.0",
     "commander": "^9.2.0",
     "csv-parse": "^5.0.4",
     "csv-writer": "^1.6.0",
