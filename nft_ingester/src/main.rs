@@ -51,13 +51,15 @@ pub struct IngesterConfig {
     database_url: String,
 }
 
-
 #[tokio::main]
 async fn main() {
     let config: IngesterConfig = Figment::new()
         .join(Env::prefixed("INGESTER_"))
         .extract()
-        .map_err(|config_error| IngesterError::ConfigurationError { msg: format!("{}", config_error) }).unwrap();
+        .map_err(|config_error| IngesterError::ConfigurationError {
+            msg: format!("{}", config_error),
+        })
+        .unwrap();
     // Setup Postgres.
     let mut tasks = vec![];
     let pool = PgPoolOptions::new()
@@ -257,6 +259,8 @@ async fn backfill_tree_from_seq_1(_db: &DatabaseConnection, _tree: &[u8]) -> Res
 }
 
 async fn fetch_and_plug_gaps(db: &DatabaseConnection, tree: &[u8]) -> Result<i64, DbErr> {
+    let _val = get_missing_data(db, tree).await;
+
     //TODO implement gap filler, for now just return the max sequence number.
     let items = get_items_with_max_seq(db, tree).await?;
 
@@ -265,6 +269,45 @@ async fn fetch_and_plug_gaps(db: &DatabaseConnection, tree: &[u8]) -> Result<i64
     } else {
         Ok(0)
     }
+}
+
+#[derive(Debug, FromQueryResult, Clone)]
+struct SimpleBackfillItem {
+    seq: i64,
+    slot: i64,
+}
+
+async fn get_missing_data(
+    db: &DatabaseConnection,
+    tree: &[u8],
+) -> Result<Vec<(SimpleBackfillItem, SimpleBackfillItem)>, DbErr> {
+    let mut query = backfill_items::Entity::find()
+        .select_only()
+        .column(backfill_items::Column::Seq)
+        .column(backfill_items::Column::Slot)
+        .filter(backfill_items::Column::Tree.eq(tree))
+        .order_by_asc(backfill_items::Column::Seq)
+        .build(DbBackend::Postgres);
+    query.sql = query.sql.replace("SELECT", "SELECT DISTINCT");
+
+    let rows = SimpleBackfillItem::find_by_statement(query).all(db).await?;
+
+    let mut gaps = vec![];
+
+    for (prev, curr) in rows.iter().zip(rows.iter().skip(1)) {
+        if curr.seq == prev.seq {
+            let message = format!(
+                "Error in DB, identical sequence numbers with different slots: {}, {}",
+                prev.slot, curr.slot
+            );
+            println!("{}", message);
+            return Err(DbErr::Custom(message));
+        } else if curr.seq - prev.seq > 1 {
+            gaps.push((prev.clone(), curr.clone()));
+        }
+    }
+
+    Ok(gaps)
 }
 
 async fn get_items_with_max_seq(db: &DatabaseConnection, tree: &[u8]) -> Result<Vec<Model>, DbErr> {
