@@ -73,8 +73,9 @@ impl TransactionSelector {
             return true;
         }
         for address in mentioned_addresses {
-            println!("{}",address.to_string());
+            info!("Address to be included {}",address.to_string());
             if self.mentioned_addresses.contains(address.as_ref()) {
+                info!("Address included {}",address.to_string());
                 return true;
             }
         }
