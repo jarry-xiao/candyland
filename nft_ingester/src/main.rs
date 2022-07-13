@@ -46,6 +46,7 @@ pub struct IngesterConfig {
 
 #[tokio::main]
 async fn main() {
+    println!("Starting DASgester");
     let config: IngesterConfig = Figment::new()
         .join(Env::prefixed("INGESTER_"))
         .extract()
@@ -59,6 +60,7 @@ async fn main() {
         .unwrap();
     let background_task_manager = TaskManager::new("background-tasks".to_string(), pool.clone()).unwrap();
     // Service streams as separate concurrent processes.
+    println!("Setting up tasks");
     tasks.push(service_transaction_stream::<RedisMessenger>(pool, background_task_manager.get_sender(), config.messenger_config.clone()).await);
     // Wait for ctrl-c.
     match tokio::signal::ctrl_c().await {
@@ -85,6 +87,7 @@ async fn service_transaction_stream<T: Messenger>(
 
         manager = setup_manager(manager, pool, tasks).await;
         let mut messenger = T::new(messenger_config).await.unwrap();
+        println!("Setting up transaction listener");
         loop {
             // This call to messenger.recv() blocks with no timeout until
             // a message is received on the stream.
@@ -105,7 +108,7 @@ async fn service_account_stream<T: Messenger>(
         let task_manager = TaskManager::new("background-tasks".to_string(), pool.clone()).unwrap();
         manager = setup_manager(manager, pool, tasks).await;
         let mut messenger = T::new(messenger_config).await.unwrap();
-
+        println!("Setting up account listener");
         loop {
             // This call to messenger.recv() blocks with no timeout until
             // a message is received on the stream.

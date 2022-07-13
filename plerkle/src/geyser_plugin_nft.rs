@@ -224,6 +224,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
 
                 // Receive messages in a loop as long as at least one Sender is in scope.
                 while let Some(data) = receiver.recv().await {
+                    println!("got message");
                     let bytes = data.builder.finished_data();
                     let _ = messenger.send(data.stream, bytes).await;
                 }
