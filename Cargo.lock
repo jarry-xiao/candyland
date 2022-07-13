@@ -2375,6 +2375,7 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
+ "solana-client",
  "solana-sdk",
  "sqlx",
  "thiserror",
