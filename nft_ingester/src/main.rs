@@ -15,11 +15,17 @@ use {
     },
     digital_asset_types::dao::backfill_items::{self, Model},
     figment::{providers::Env, Figment},
+    flatbuffers::FlatBufferBuilder,
     futures_util::TryFutureExt,
     hex::ToHex,
     messenger::{Messenger, RedisMessenger, ACCOUNT_STREAM, TRANSACTION_STREAM},
-    plerkle_serialization::account_info_generated::account_info::root_as_account_info,
-    plerkle_serialization::transaction_info_generated::transaction_info::root_as_transaction_info,
+    plerkle_serialization::{
+        account_info_generated::account_info::root_as_account_info,
+        transaction_info_generated::transaction_info::root_as_transaction_info,
+        transaction_info_generated::transaction_info::{
+            self, TransactionInfo, TransactionInfoArgs,
+        },
+    },
     sea_orm::{
         entity::*,
         query::*,
@@ -29,9 +35,13 @@ use {
     serde::Deserialize,
     solana_client::nonblocking::rpc_client::RpcClient,
     solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey},
+    solana_transaction_status::{UiInstruction::Compiled, UiRawMessage, UiTransactionStatusMeta},
     sqlx::{self, postgres::PgPoolOptions, Pool, Postgres},
-    std::{str::FromStr, time::Duration},
-    tokio::sync::mpsc::UnboundedSender,
+    std::str::FromStr,
+    tokio::{
+        sync::mpsc::UnboundedSender,
+        time::{sleep, Duration},
+    },
 };
 
 async fn setup_manager<'a, 'b>(
@@ -81,7 +91,7 @@ async fn main() {
         .await,
     );
     // Start up backfiller process.
-    tasks.push(backfiller(pool.clone()).await);
+    tasks.push(backfiller::<RedisMessenger>(pool.clone(), config.messenger_config.clone()).await);
     // Wait for ctrl-c.
     match tokio::signal::ctrl_c().await {
         Ok(()) => {}
@@ -140,7 +150,10 @@ async fn service_account_stream<T: Messenger>(
 
 const CHANNEL: &str = "new_item_added";
 
-async fn backfiller(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
+async fn backfiller<T: Messenger>(
+    pool: Pool<Postgres>,
+    messenger_config: MessengerConfig,
+) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         println!("Backfiller task running");
         let db = SqlxPostgresConnector::from_sqlx_postgres_pool(pool.clone());
@@ -158,10 +171,22 @@ async fn backfiller(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
             return;
         }
 
-        // TODO: Maybe use `new_with_timeout_and_commitment()` or similar if needed.
-        let rpc_client = RpcClient::new(String::from("http://candyland-solana-1:8899"));
+        // TODO: Get config from Figment.
+        // TODO: Maybe use `new_with_timeout_and_commitment()`.
+        // Instantiate RPC client.
+        let url = "http://candyland-solana-1:8899".to_string();
+        let commitment_config = CommitmentConfig::processed();
+        let rpc_client = RpcClient::new_with_commitment(url, commitment_config);
+
+        // Instantiate messenger.
+        let mut messenger = T::new(messenger_config).await.unwrap();
+        messenger.add_stream(TRANSACTION_STREAM).await;
+        messenger.set_buffer_size(TRANSACTION_STREAM, 5000).await;
 
         loop {
+            // Sleep used for Debug.
+            sleep(Duration::from_millis(1000)).await;
+
             match get_trees_to_backfill(&db).await {
                 Ok(trees) => {
                     if trees.force_chk_trees.len() == 0 && trees.multi_row_trees.len() == 0 {
@@ -170,7 +195,12 @@ async fn backfiller(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
                     } else {
                         match rpc_client.get_version().await {
                             Ok(version) => println!("RPC client version {version}"),
-                            Err(err) => println!("RPC client error {err}"),
+                            Err(err) => {
+                                println!("RPC client error {err}");
+                                // Sleep used for Debug.
+                                sleep(Duration::from_millis(1000)).await;
+                                continue;
+                            }
                         }
 
                         // Trees with the `force_chk` flag must be backfilled from seq num 1.
@@ -179,10 +209,15 @@ async fn backfiller(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
                             trees.force_chk_trees.len()
                         );
                         for tree in trees.force_chk_trees.iter() {
-                            let tree_str = tree.tree.encode_hex::<String>();
+                            let tree_str = bs58::encode(&tree.tree).into_string();
                             println!("Backfilling tree: {tree_str}");
-                            if let Err(err) =
-                                backfill_tree_from_seq_1(&rpc_client, &db, &tree.tree).await
+                            if let Err(err) = backfill_tree_from_seq_1(
+                                &rpc_client,
+                                &db,
+                                &tree.tree,
+                                &mut messenger,
+                            )
+                            .await
                             {
                                 println!(
                                     "Failed to fetch and plug gaps for {tree_str}, error: {err}"
@@ -201,15 +236,22 @@ async fn backfiller(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
                             trees.multi_row_trees.len()
                         );
                         for tree in trees.multi_row_trees.iter() {
-                            let tree_str = tree.tree.encode_hex::<String>();
+                            let tree_str = bs58::encode(&tree.tree).into_string();
                             println!("Backfilling tree: {tree_str}");
-                            match fetch_and_plug_gaps(&rpc_client, &db, &tree.tree).await {
+                            match fetch_and_plug_gaps(&rpc_client, &db, &tree.tree, &mut messenger)
+                                .await
+                            {
                                 Ok(max_seq) => {
+                                    // Debug.
+                                    println!("Successfully fetched and plug gaps for {tree_str}");
+
                                     // Only delete extra tree rows if fetching and plugging gaps worked.
                                     if let Err(err) =
                                         delete_extra_tree_rows(&db, &tree.tree, max_seq).await
                                     {
                                         println!("Error deleting rows: {err}");
+                                    } else {
+                                        println!("Successfully deleted rows up to {max_seq}");
                                     }
                                 }
                                 Err(err) => {
@@ -265,24 +307,26 @@ async fn get_trees_to_backfill(db: &DatabaseConnection) -> Result<BackfillTrees,
     })
 }
 
-async fn backfill_tree_from_seq_1(
+async fn backfill_tree_from_seq_1<T: Messenger>(
     _rpc_client: &RpcClient,
     _db: &DatabaseConnection,
     _tree: &[u8],
+    _messenger: &T,
 ) -> Result<(), DbErr> {
     //TODO implement gap filler.
     Ok(())
 }
 
-async fn fetch_and_plug_gaps(
+async fn fetch_and_plug_gaps<T: Messenger>(
     rpc_client: &RpcClient,
     db: &DatabaseConnection,
     tree: &[u8],
+    messenger: &mut T,
 ) -> Result<i64, DbErr> {
     let gaps = get_missing_data(db, tree).await?;
 
     for gap in gaps {
-        let _result = plug_gap(rpc_client, db, gap, tree).await?;
+        let _result = plug_gap(rpc_client, db, gap, tree, messenger).await?;
     }
 
     //TODO implement gap filler, for now just return the max sequence number.
@@ -295,46 +339,239 @@ async fn fetch_and_plug_gaps(
     }
 }
 
-async fn plug_gap(
+const VOTE: &str = "Vote111111111111111111111111111111111111111";
+
+async fn plug_gap<T: Messenger>(
     rpc_client: &RpcClient,
     db: &DatabaseConnection,
     gap: GapInfo,
     tree: &[u8],
+    messenger: &mut T,
 ) -> Result<(), DbErr> {
+    // TODO: This needs to make sure all slots are available otherwise it will partially
+    // fail and redo the whole backfill process.  So for now checking the max block before
+    // looping as a quick workaround.
+    let _ = rpc_client
+        .get_block(gap.curr.slot as u64)
+        .await
+        .map_err(|e| DbErr::Custom(format!("Blocks needed for backfilling not finalized: {e}")))?;
+
     for slot in gap.prev.slot..gap.curr.slot {
         let block_data = rpc_client
             .get_block(slot as u64)
             .await
             .map_err(|e| DbErr::Custom(e.to_string()))?;
 
-        //println!("block_data: {:?}", block_data);
+        // Debug.
+        println!("num txs: {}", block_data.transactions.len());
         for tx in block_data.transactions {
-            let tree_key = Pubkey::new(tree);
-            if let Some(meta) = tx.meta {
-                if meta.err.is_some() {
+            // Debug.
+            //println!("HERE IS THE TX");
+            //println!("{:#?}", tx);
+
+            // See if transaction has an error.
+            let meta = if let Some(meta) = &tx.meta {
+                if let Some(err) = &meta.err {
+                    println!("Transaction has error: {err}");
                     continue;
                 }
+                meta
+            } else {
+                println!("Unexpected, EncodedTransactionWithStatusMeta struct has no metadata");
+                continue;
+            };
 
-                let tx = tx
-                    .transaction
-                    .decode()
-                    .ok_or(DbErr::Custom("Could not decode tx".to_string()))?;
-                if tx
-                    .message
-                    .static_account_keys()
-                    .iter()
-                    .all(|pk| *pk != tree_key && *pk != BubblegumProgramID())
-                {
-                    continue;
+            // Get `UiTransaction` out of `EncodedTransactionWithStatusMeta`.
+            let ui_transaction = match tx.transaction {
+                solana_transaction_status::EncodedTransaction::Json(ref ui_transaction) => {
+                    ui_transaction
                 }
+                _ => {
+                    return Err(DbErr::Custom(
+                        "Unsupported format for EncodedTransaction".to_string(),
+                    ));
+                }
+            };
 
-                // Put in database or Redis.
-                // Handle instructions and handle logs, or just put whole tx in Redis
+            // See if transaction is a vote.
+            let ui_raw_message = match &ui_transaction.message {
+                solana_transaction_status::UiMessage::Raw(ui_raw_message) => {
+                    if ui_raw_message.account_keys.iter().any(|key| key == VOTE) {
+                        // Debug.
+                        println!("Skipping vote transaction");
+                        continue;
+                    } else {
+                        ui_raw_message
+                    }
+                }
+                _ => {
+                    return Err(DbErr::Custom(
+                        "Unsupported format for UiMessage".to_string(),
+                    ));
+                }
+            };
+
+            // Filter out transactions that don't have to do with the tree we are interested in or
+            // the Bubblegum program.
+            let tree = bs58::encode(tree).into_string();
+            let bubblegum = BubblegumProgramID().to_string();
+            if ui_raw_message
+                .account_keys
+                .iter()
+                .all(|pk| *pk != tree && *pk != bubblegum)
+            {
+                // Debug.
+                println!("This transaction is being skipped\n\n");
+                continue;
             }
+
+            // Debug.
+            println!("Serializing transaction");
+            // Serialize data.
+            let builder = FlatBufferBuilder::new();
+            let builder =
+                serialize_transaction(builder, &meta, &ui_raw_message, slot.try_into().unwrap());
+
+            // Debug.
+            println!("Putting data into Redis");
+            // Put data into Redis.
+            let _ = messenger
+                .send(TRANSACTION_STREAM, builder.finished_data())
+                .await
+                .map_err(|e| DbErr::Custom(e.to_string()))?;
         }
     }
 
     Ok(())
+}
+
+pub fn serialize_transaction<'a>(
+    mut builder: FlatBufferBuilder<'a>,
+    meta: &UiTransactionStatusMeta,
+    ui_raw_message: &UiRawMessage,
+    slot: u64,
+) -> FlatBufferBuilder<'a> {
+    // Serialize account keys.
+    let account_keys = &ui_raw_message.account_keys;
+    let account_keys_len = account_keys.len();
+
+    let account_keys = if account_keys_len > 0 {
+        let mut account_keys_fb_vec = Vec::with_capacity(account_keys_len);
+        for key in account_keys.iter() {
+            // TODO deal with this failure.
+            let key = Pubkey::from_str(key).unwrap();
+
+            let key = builder.create_vector(&key.to_bytes());
+            let pubkey = transaction_info::Pubkey::create(
+                &mut builder,
+                &transaction_info::PubkeyArgs { key: Some(key) },
+            );
+            account_keys_fb_vec.push(pubkey);
+        }
+        Some(builder.create_vector(&account_keys_fb_vec))
+    } else {
+        None
+    };
+
+    // Serialize log messages.
+    let log_messages = if let Some(log_messages) = meta.log_messages.as_ref() {
+        let mut log_messages_fb_vec = Vec::with_capacity(log_messages.len());
+        for message in log_messages {
+            log_messages_fb_vec.push(builder.create_string(&message));
+        }
+        Some(builder.create_vector(&log_messages_fb_vec))
+    } else {
+        None
+    };
+
+    // Serialize inner instructions.
+    let inner_instructions = if let Some(inner_instructions_vec) = meta.inner_instructions.as_ref()
+    {
+        let mut overall_fb_vec = Vec::with_capacity(inner_instructions_vec.len());
+        for inner_instructions in inner_instructions_vec.iter() {
+            let index = inner_instructions.index;
+            let mut instructions_fb_vec = Vec::with_capacity(inner_instructions.instructions.len());
+            for ui_instruction in inner_instructions.instructions.iter() {
+                if let Compiled(ui_compiled_instruction) = ui_instruction {
+                    let program_id_index = ui_compiled_instruction.program_id_index;
+                    let accounts = Some(builder.create_vector(&ui_compiled_instruction.accounts));
+
+                    // TODO deal with this failure.
+                    let data = bs58::decode(&ui_compiled_instruction.data)
+                        .into_vec()
+                        .unwrap();
+
+                    let data = Some(builder.create_vector(&data));
+                    instructions_fb_vec.push(transaction_info::CompiledInstruction::create(
+                        &mut builder,
+                        &transaction_info::CompiledInstructionArgs {
+                            program_id_index,
+                            accounts,
+                            data,
+                        },
+                    ));
+                }
+            }
+
+            let instructions = Some(builder.create_vector(&instructions_fb_vec));
+            overall_fb_vec.push(transaction_info::InnerInstructions::create(
+                &mut builder,
+                &transaction_info::InnerInstructionsArgs {
+                    index,
+                    instructions,
+                },
+            ))
+        }
+
+        Some(builder.create_vector(&overall_fb_vec))
+    } else {
+        None
+    };
+
+    // Serialize outer instructions.
+    let outer_instructions = &ui_raw_message.instructions;
+    let outer_instructions = if outer_instructions.len() > 0 {
+        let mut instructions_fb_vec = Vec::with_capacity(outer_instructions.len());
+        for ui_compiled_instruction in outer_instructions.iter() {
+            let program_id_index = ui_compiled_instruction.program_id_index;
+            let accounts = Some(builder.create_vector(&ui_compiled_instruction.accounts));
+
+            // TODO deal with this failure.
+            let data = bs58::decode(&ui_compiled_instruction.data)
+                .into_vec()
+                .unwrap();
+
+            let data = Some(builder.create_vector(&data));
+            instructions_fb_vec.push(transaction_info::CompiledInstruction::create(
+                &mut builder,
+                &transaction_info::CompiledInstructionArgs {
+                    program_id_index,
+                    accounts,
+                    data,
+                },
+            ));
+        }
+        Some(builder.create_vector(&instructions_fb_vec))
+    } else {
+        None
+    };
+
+    // Serialize everything into Transaction Info table.
+    let transaction_info = TransactionInfo::create(
+        &mut builder,
+        &TransactionInfoArgs {
+            is_vote: false,
+            account_keys,
+            log_messages,
+            inner_instructions,
+            outer_instructions,
+            slot,
+        },
+    );
+
+    // Finalize buffer and return to caller.
+    builder.finish(transaction_info, None);
+    builder
 }
 
 #[derive(Debug, FromQueryResult, Clone)]
@@ -365,7 +602,6 @@ async fn get_missing_data(db: &DatabaseConnection, tree: &[u8]) -> Result<Vec<Ga
     query.sql = query.sql.replace("SELECT", "SELECT DISTINCT");
 
     let rows = SimpleBackfillItem::find_by_statement(query).all(db).await?;
-
     let mut gaps = vec![];
 
     for (prev, curr) in rows.iter().zip(rows.iter().skip(1)) {
@@ -416,6 +652,14 @@ async fn delete_extra_tree_rows(
     tree: &[u8],
     seq: i64,
 ) -> Result<(), DbErr> {
+    // Debug.
+    let test_items = backfill_items::Entity::find()
+        .filter(backfill_items::Column::Tree.eq(tree))
+        .all(db)
+        .await?;
+
+    println!("Count of items before delete: {}", test_items.len());
+
     // Delete all rows in the `backfill_items` table for a specified tree, except for the row with
     // the user-specified sequence number.  One row for each tree must remain so that gaps can be
     // detected after subsequent inserts.
@@ -440,6 +684,14 @@ async fn delete_extra_tree_rows(
                 .await?;
         }
     }
+
+    // Debug.
+    let test_items = backfill_items::Entity::find()
+        .filter(backfill_items::Column::Tree.eq(tree))
+        .all(db)
+        .await?;
+
+    println!("Count of items after delete: {}", test_items.len());
 
     Ok(())
 }
