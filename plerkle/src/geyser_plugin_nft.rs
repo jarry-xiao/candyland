@@ -111,6 +111,7 @@ impl<'a, T: Messenger + Default> Plerkle<'a, T> {
             } else {
                 Vec::default()
             };
+            info!("Programs being Tracked: {:?}", accounts);
             TransactionSelector::new(&accounts)
         }
     }
