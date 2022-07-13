@@ -318,6 +318,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
         match transaction_info {
             ReplicaTransactionInfoVersions::V0_0_1(transaction_info) => {
+
                 // Don't log votes or transactions with error status.
                 if transaction_info.is_vote
                     || transaction_info.transaction_status_meta.status.is_err()
