@@ -164,6 +164,9 @@ export class NFTDatabaseConnection {
     const primarySaleHappened = newLeafEvent.metadata.primarySaleHappened;
     const sellerFeeBasisPoints = newLeafEvent.metadata.sellerFeeBasisPoints;
     const isMutable = newLeafEvent.metadata.isMutable;
+    const editionNonce = newLeafEvent.metadata.editionNonce;
+    const collection = newLeafEvent.metadata.collection;
+    const uses = newLeafEvent.metadata.uses;
     let creators: Array<Creator> = [];
     for (let i = 0; i < 5; ++i) {
       if (newLeafEvent.metadata.creators.length < i + 1) {
@@ -176,6 +179,7 @@ export class NFTDatabaseConnection {
         creators.push(newLeafEvent.metadata.creators[i]);
       }
     }
+    console.log(newLeafEvent.metadata);
     await this.connection.run(
       `
         INSERT INTO 
@@ -187,6 +191,9 @@ export class NFTDatabaseConnection {
           primary_sale_happened,
           seller_fee_basis_points,
           is_mutable,
+          edition_nonce,
+          collection,
+          uses,
           creator0,
           share0,
           verified0,
@@ -203,7 +210,7 @@ export class NFTDatabaseConnection {
           share4,
           verified4
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (asset_id)
         DO UPDATE SET
           uri = excluded.uri,
@@ -212,6 +219,9 @@ export class NFTDatabaseConnection {
           primary_sale_happened = excluded.primary_sale_happened,
           seller_fee_basis_points = excluded.seller_fee_basis_points,
           is_mutable = excluded.is_mutable,
+          edition_nonce = excluded.edition_nonce,
+          collection = excluded.collection,
+          uses = excluded.uses,
           creator0 = excluded.creator0,
           share0 = excluded.share0,
           verified0 = excluded.verified0,
@@ -235,6 +245,9 @@ export class NFTDatabaseConnection {
       primarySaleHappened,
       sellerFeeBasisPoints,
       isMutable,
+      editionNonce,
+      collection,
+      uses,
       creators[0].address,
       creators[0].share,
       creators[0].verified,
@@ -752,6 +765,9 @@ export class NFTDatabaseConnection {
         n.uri as uri,
         n.name as name,
         n.symbol as symbol,
+        n.edition_nonce as editionNonce,
+        n.uses as uses,
+        n.collection as collection,
         n.seller_fee_basis_points as sellerFeeBasisPoints,
         ls.owner as owner,
         ls.delegate as delegate,
@@ -841,6 +857,9 @@ export class NFTDatabaseConnection {
         name: metadata.name,
         symbol: metadata.symbol,
         sellerFeeBasisPoints: metadata.sellerFeeBasisPoints,
+        editionNonce: metadata.editionNonce,
+        collection: metadata.collection,
+        uses: metadata.uses,
         owner: metadata.owner,
         delegate: metadata.delegate,
         leafHash: metadata.leafHash,
@@ -918,9 +937,13 @@ export async function bootstrap(
           name TEXT,
           symbol TEXT,
           uri TEXT,
-          seller_fee_basis_points INT, 
+          seller_fee_basis_points INT,
           primary_sale_happened BOOLEAN, 
           is_mutable BOOLEAN,
+          edition_nonce INT,
+          collection TEXT,
+          uses TEXT,
+          token_standard TEXT,
           creator0 TEXT,
           share0 INT,
           verified0 BOOLEAN,
