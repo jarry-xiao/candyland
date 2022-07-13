@@ -27,8 +27,10 @@ use {
         DatabaseConnection, DbBackend, DbErr, FromQueryResult, SqlxPostgresConnector,
     },
     serde::Deserialize,
-    solana_sdk::pubkey::Pubkey,
+    solana_client::nonblocking::rpc_client::RpcClient,
+    solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey},
     sqlx::{self, postgres::PgPoolOptions, Pool, Postgres},
+    std::{str::FromStr, time::Duration},
     tokio::sync::mpsc::UnboundedSender,
 };
 
@@ -156,6 +158,9 @@ async fn backfiller(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
             return;
         }
 
+        // TODO: Maybe use `new_with_timeout_and_commitment()` or similar if needed.
+        let rpc_client = RpcClient::new(String::from("http://candyland-solana-1:8899"));
+
         loop {
             match get_trees_to_backfill(&db).await {
                 Ok(trees) => {
@@ -163,6 +168,11 @@ async fn backfiller(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
                         // If there are no trees to backfill, wait for a notification on the channel.
                         let _notification = listener.recv().await.unwrap();
                     } else {
+                        match rpc_client.get_version().await {
+                            Ok(version) => println!("RPC client version {version}"),
+                            Err(err) => println!("RPC client error {err}"),
+                        }
+
                         // Trees with the `force_chk` flag must be backfilled from seq num 1.
                         println!(
                             "New trees to backfill from seq num 1: {}",
@@ -171,7 +181,9 @@ async fn backfiller(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
                         for tree in trees.force_chk_trees.iter() {
                             let tree_str = tree.tree.encode_hex::<String>();
                             println!("Backfilling tree: {tree_str}");
-                            if let Err(err) = backfill_tree_from_seq_1(&db, &tree.tree).await {
+                            if let Err(err) =
+                                backfill_tree_from_seq_1(&rpc_client, &db, &tree.tree).await
+                            {
                                 println!(
                                     "Failed to fetch and plug gaps for {tree_str}, error: {err}"
                                 );
@@ -191,7 +203,7 @@ async fn backfiller(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
                         for tree in trees.multi_row_trees.iter() {
                             let tree_str = tree.tree.encode_hex::<String>();
                             println!("Backfilling tree: {tree_str}");
-                            match fetch_and_plug_gaps(&db, &tree.tree).await {
+                            match fetch_and_plug_gaps(&rpc_client, &db, &tree.tree).await {
                                 Ok(max_seq) => {
                                     // Only delete extra tree rows if fetching and plugging gaps worked.
                                     if let Err(err) =
@@ -253,13 +265,25 @@ async fn get_trees_to_backfill(db: &DatabaseConnection) -> Result<BackfillTrees,
     })
 }
 
-async fn backfill_tree_from_seq_1(_db: &DatabaseConnection, _tree: &[u8]) -> Result<(), DbErr> {
+async fn backfill_tree_from_seq_1(
+    _rpc_client: &RpcClient,
+    _db: &DatabaseConnection,
+    _tree: &[u8],
+) -> Result<(), DbErr> {
     //TODO implement gap filler.
     Ok(())
 }
 
-async fn fetch_and_plug_gaps(db: &DatabaseConnection, tree: &[u8]) -> Result<i64, DbErr> {
-    let _val = get_missing_data(db, tree).await;
+async fn fetch_and_plug_gaps(
+    rpc_client: &RpcClient,
+    db: &DatabaseConnection,
+    tree: &[u8],
+) -> Result<i64, DbErr> {
+    let gaps = get_missing_data(db, tree).await?;
+
+    for gap in gaps {
+        let _result = plug_gap(rpc_client, db, gap, tree).await?;
+    }
 
     //TODO implement gap filler, for now just return the max sequence number.
     let items = get_items_with_max_seq(db, tree).await?;
@@ -271,16 +295,66 @@ async fn fetch_and_plug_gaps(db: &DatabaseConnection, tree: &[u8]) -> Result<i64
     }
 }
 
+async fn plug_gap(
+    rpc_client: &RpcClient,
+    db: &DatabaseConnection,
+    gap: GapInfo,
+    tree: &[u8],
+) -> Result<(), DbErr> {
+    for slot in gap.prev.slot..gap.curr.slot {
+        let block_data = rpc_client
+            .get_block(slot as u64)
+            .await
+            .map_err(|e| DbErr::Custom(e.to_string()))?;
+
+        //println!("block_data: {:?}", block_data);
+        for tx in block_data.transactions {
+            let tree_key = Pubkey::new(tree);
+            if let Some(meta) = tx.meta {
+                if meta.err.is_some() {
+                    continue;
+                }
+
+                let tx = tx
+                    .transaction
+                    .decode()
+                    .ok_or(DbErr::Custom("Could not decode tx".to_string()))?;
+                if tx
+                    .message
+                    .static_account_keys()
+                    .iter()
+                    .all(|pk| *pk != tree_key && *pk != BubblegumProgramID())
+                {
+                    continue;
+                }
+
+                // Put in database or Redis.
+                // Handle instructions and handle logs, or just put whole tx in Redis
+            }
+        }
+    }
+
+    Ok(())
+}
+
 #[derive(Debug, FromQueryResult, Clone)]
 struct SimpleBackfillItem {
     seq: i64,
     slot: i64,
 }
 
-async fn get_missing_data(
-    db: &DatabaseConnection,
-    tree: &[u8],
-) -> Result<Vec<(SimpleBackfillItem, SimpleBackfillItem)>, DbErr> {
+struct GapInfo {
+    prev: SimpleBackfillItem,
+    curr: SimpleBackfillItem,
+}
+
+impl GapInfo {
+    fn new(prev: SimpleBackfillItem, curr: SimpleBackfillItem) -> Self {
+        Self { prev, curr }
+    }
+}
+
+async fn get_missing_data(db: &DatabaseConnection, tree: &[u8]) -> Result<Vec<GapInfo>, DbErr> {
     let mut query = backfill_items::Entity::find()
         .select_only()
         .column(backfill_items::Column::Seq)
@@ -303,7 +377,7 @@ async fn get_missing_data(
             println!("{}", message);
             return Err(DbErr::Custom(message));
         } else if curr.seq - prev.seq > 1 {
-            gaps.push((prev.clone(), curr.clone()));
+            gaps.push(GapInfo::new(prev.clone(), curr.clone()));
         }
     }
 
