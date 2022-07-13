@@ -1,6 +1,4 @@
 #![cfg(feature = "redis")]
-
-use std::fmt::format;
 use {
     crate::{error::MessengerError, Messenger, MessengerConfig},
     async_trait::async_trait,
@@ -10,7 +8,6 @@ use {
         streams::{StreamId, StreamKey, StreamMaxlen, StreamReadOptions, StreamReadReply},
         AsyncCommands, RedisResult, Value,
     },
-    solana_geyser_plugin_interface::geyser_plugin_interface::{GeyserPluginError},
     std::{
         collections::HashMap,
         fmt::{Debug, Formatter},

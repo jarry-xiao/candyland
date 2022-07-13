@@ -1,3 +1,4 @@
+use solana_geyser_plugin_interface::geyser_plugin_interface::{ReplicaAccountInfoV2, ReplicaTransactionInfoV2};
 use {
     flatbuffers::FlatBufferBuilder,
     plerkle_serialization::{
@@ -16,7 +17,7 @@ use {
 
 pub fn serialize_account<'a>(
     mut builder: FlatBufferBuilder<'a>,
-    account: &ReplicaAccountInfo,
+    account: &ReplicaAccountInfoV2,
     slot: u64,
     is_startup: bool,
 ) -> FlatBufferBuilder<'a> {
@@ -76,7 +77,7 @@ pub fn serialize_slot_status<'a>(
 
 pub fn serialize_transaction<'a>(
     mut builder: FlatBufferBuilder<'a>,
-    transaction_info: &ReplicaTransactionInfo,
+    transaction_info: &ReplicaTransactionInfoV2,
     slot: u64,
 ) -> FlatBufferBuilder<'a> {
     // Flatten and serialize account keys.

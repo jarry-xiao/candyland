@@ -8,7 +8,6 @@ homepage = "https://solana.com/"
 documentation = "https://docs.rs/solana-geyser-plugin-interface"
 
 [dependencies]
-solana-geyser-plugin-interface  = { version = "=1.10.10" }
 plerkle-serialization={path= "../plerkle_serialization"}
 redis = {version = "0.21.5", features = ["aio", "tokio-comp", "streams", 'cluster'], optional = true}
 log = "0.4.11"

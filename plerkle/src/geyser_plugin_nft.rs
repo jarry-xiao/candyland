@@ -247,7 +247,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
         is_startup: bool,
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
         match account {
-            ReplicaAccountInfoVersions::V0_0_1(account) => {
+            ReplicaAccountInfoVersions::V0_0_2(account) => {
                 // Check if account was selected in config.
                 if let Some(accounts_selector) = &self.accounts_selector {
                     if !accounts_selector.is_account_selected(account.pubkey, account.owner) {
@@ -273,6 +273,9 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                     };
                     let _ = sender.send(data).await;
                 });
+            }
+            _ => {
+                info!("Old Transaction Replica Object")
             }
         }
 
@@ -317,7 +320,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
         slot: u64,
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
         match transaction_info {
-            ReplicaTransactionInfoVersions::V0_0_1(transaction_info) => {
+            ReplicaTransactionInfoVersions::V0_0_2(transaction_info) => {
 
                 // Don't log votes or transactions with error status.
                 if transaction_info.is_vote
@@ -354,6 +357,9 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                     };
                     let _ = sender.send(data).await;
                 });
+            }
+            _ => {
+                info!("Old Transaction Replica Object")
             }
         }
 

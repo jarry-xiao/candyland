@@ -2186,7 +2186,6 @@ dependencies = [
  "plerkle-serialization",
  "redis",
  "serde",
- "solana-geyser-plugin-interface",
  "thiserror",
 ]
 
@@ -2371,7 +2370,6 @@ dependencies = [
  "messenger",
  "num-integer",
  "num-traits",
- "plerkle",
  "plerkle-serialization",
  "redis",
  "regex",
@@ -2769,38 +2767,6 @@ name = "pkg-config"
 version = "0.3.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1df8c4ec4b0627e53bdf214615ad287367e482558cf84b109250b37464dc03ae"
-
-[[package]]
-name = "plerkle"
-version = "1.10.3"
-dependencies = [
- "anchor-client",
- "async-trait",
- "base64 0.13.0",
- "bs58 0.4.0",
- "bytemuck",
- "figment",
- "flatbuffers",
- "hex",
- "lazy_static",
- "log",
- "messenger",
- "num-integer",
- "plerkle-serialization",
- "regex",
- "serde",
- "serde_derive",
- "serde_json",
- "solana-geyser-plugin-interface",
- "solana-logger",
- "solana-measure",
- "solana-metrics",
- "solana-runtime",
- "solana-sdk",
- "solana-transaction-status",
- "thiserror",
- "tokio",
-]
 
 [[package]]
 name = "plerkle-serialization"
@@ -4047,18 +4013,6 @@ dependencies = [
  "quote 1.0.15",
  "rustc_version 0.4.0",
  "syn 1.0.98",
-]
-
-[[package]]
-name = "solana-geyser-plugin-interface"
-version = "1.10.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8b43412ec4549c2dae8b57b021259f3fd04ebf27c35853821f924fa7737c26b"
-dependencies = [
- "log",
- "solana-sdk",
- "solana-transaction-status",
- "thiserror",
 ]
 
 [[package]]
