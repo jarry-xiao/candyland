@@ -121,7 +121,7 @@ impl Messenger for RedisMessenger {
                 MessengerError::SendError { msg: e.to_string() }
             );
         } else {
-            info!("Data Sent");
+            info!("Data Sent to {}", stream_key);
         }
 
         Ok(())
