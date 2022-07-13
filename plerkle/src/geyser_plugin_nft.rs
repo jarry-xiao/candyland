@@ -220,7 +220,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                 messenger.add_stream(BLOCK_STREAM).await;
                 messenger.set_buffer_size(ACCOUNT_STREAM, 5000).await;
                 messenger.set_buffer_size(SLOT_STREAM, 5000).await;
-                messenger.set_buffer_size(TRANSACTION_STREAM, 5000).await;
+                messenger.set_buffer_size(TRANSACTION_STREAM, 500000).await;
                 messenger.set_buffer_size(BLOCK_STREAM, 5000).await;
 
                 // Receive messages in a loop as long as at least one Sender is in scope.
