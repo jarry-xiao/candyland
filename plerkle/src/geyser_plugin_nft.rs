@@ -334,9 +334,11 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                         transaction_info.is_vote,
                         Box::new(transaction_info.transaction.message().account_keys().iter()),
                     ) {
+                        info!("This txn dit not make it through");
                         return Ok(());
                     }
                 } else {
+                    info!("no selector");
                     return Ok(());
                 }
                 info!("This txn made it through");
