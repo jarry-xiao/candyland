@@ -98,6 +98,7 @@ impl<'a, T: Messenger + Default> Plerkle<'a, T> {
         let transaction_selector = &config["transaction_selector"];
 
         if transaction_selector.is_null() {
+            info!("TRANSACTION SELECTOR IS BROKEN");
             TransactionSelector::default()
         } else {
             let accounts = &transaction_selector["mentions"];
@@ -284,6 +285,9 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
     fn notify_end_of_startup(
         &mut self,
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
+
+        info!("END OF STARTUP");
+
         Ok(())
     }
 
