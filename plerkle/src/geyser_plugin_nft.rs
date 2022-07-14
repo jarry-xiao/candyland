@@ -400,9 +400,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
     }
 
     fn transaction_notifications_enabled(&self) -> bool {
-        self.transaction_selector
-            .as_ref()
-            .map_or_else(|| false, |selector| selector.is_enabled())
+        true
     }
 }
 
