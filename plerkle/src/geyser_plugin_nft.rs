@@ -111,7 +111,6 @@ impl<'a, T: Messenger + Default> Plerkle<'a, T> {
             } else {
                 Vec::default()
             };
-            info!("Programs being Tracked: {:?}", accounts);
             TransactionSelector::new(&accounts)
         }
     }
@@ -340,7 +339,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                 } else {
                     return Ok(());
                 }
-
+                info!("This txn made it through");
                 // Get runtime and sender channel.
                 let runtime = self.get_runtime()?;
                 let sender = self.get_sender_clone()?;
