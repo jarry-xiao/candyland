@@ -23,14 +23,15 @@ base64 = "0.13.0"
 lazy_static = "1.4.0"
 solana-geyser-plugin-interface  = { version = "=1.11.3" }
 solana-logger = { version = "=1.11.3" }
-solana-measure = { version = "=1.11.3" }
-solana-metrics = { version = "=1.11.3" }
-solana-runtime = { version = "=1.11.3" }
 bs58 = "0.4.0"
 bytemuck = "1.7.2"
 serde = "1.0.133"
 serde_derive = "1.0.103"
 serde_json = "1.0.74"
+metrics = "0.19.0"
+solana-runtime = "1.11.3"
+metrics-exporter-statsd = "0.3.0"
+tracing = "0.1.35"
 hex = "0.4.3"
 messenger={path= "../messenger"}
 flatbuffers = "2.1.2"
