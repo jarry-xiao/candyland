@@ -2,7 +2,7 @@
   "args": {
     "maxDepth": 20,
     "maxBufferSize": 64,
-    "urlBase": "https://bubblegum-nfts.xyz/asset/gltf/",
+    "urlBase": "http://localhost:3000/asset/gltf",
     "nameBase": "GUMBALL",
     "symbol": "GUMBALL",
     "sellerFeeBasisPoints": 100,
@@ -13,16 +13,14 @@
     "goLiveDate": 1234.0,
     "botWallet": "H8DWGKyCSaKtgh1GjyqexVcMe8FPyKQoBhKH79QnhDWx",
     "receiver": "H8DWGKyCSaKtgh1GjyqexVcMe8FPyKQoBhKH79QnhDWx",
-    "authority": "5RomdRbiZ3UYwpojr9j3SQptjJQULmx6rpU1Bfbr7mpG",
+    "authority": "BVXdE7ngZVfmX6UntgamuFJfTqKFtTjSY51prPRB9u69",
     "collectionKey": null,
     "extensionLen": 0,
     "maxMintSize": 100,
-    "maxItems": 1048576,
+    "maxItems": 50000,
     "creatorKeys": [
-      "H8DWGKyCSaKtgh1GjyqexVcMe8FPyKQoBhKH79QnhDWx",
-      "Es1EV724ihL7mYzjEiUV1QgcNdwoTpGByLiWSwKFRsAb"
     ],
-    "creatorShares": [1, 5]
+    "creatorShares": []
   },
   "optionals": {
     "canopyDepth": 4
