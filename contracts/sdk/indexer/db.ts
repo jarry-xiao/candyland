@@ -892,15 +892,15 @@ export type Proof = {
 
 // this is a top-level await
 export async function bootstrap(
+  dbPath: string = "db",
   create: boolean = true
 ): Promise<NFTDatabaseConnection> {
   // open the database
-  const dir = "db";
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir);
+  if (!fs.existsSync(dbPath)) {
+    fs.mkdirSync(dbPath);
   }
   const db = await open({
-    filename: `${dir}/merkle.db`,
+    filename: `${dbPath}/merkle.db`,
     driver: sqlite3.Database,
   });
 
