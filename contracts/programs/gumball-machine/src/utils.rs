@@ -58,7 +58,7 @@ pub fn get_metadata_args(
         symbol: symbol.to_string(),
         uri: uri_base.to_owned() + "/" + &config,
         seller_fee_basis_points,
-        primary_sale_happened: false,
+        primary_sale_happened: true,
         is_mutable,
         edition_nonce: None,
         token_standard: None,
