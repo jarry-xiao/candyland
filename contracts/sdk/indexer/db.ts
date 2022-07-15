@@ -108,7 +108,6 @@ export class NFTDatabaseConnection {
     redeemed: boolean = false,
     compressed: boolean = true,
   ) {
-    console.log("Updating redeemed to be:", redeemed);
     const leafSchema = leafSchemaRecord.schema.v1;
     await this.connection.run(
       `

@@ -243,7 +243,6 @@ export async function parseBubblegumLog(
                 parser,
                 optionalInfo,
             )
-            console.log('DECOMPRESSED!');
             break;
         case "Redeem":
             await parseBubblegumReplaceLeaf(
@@ -255,11 +254,9 @@ export async function parseBubblegumLog(
                 true,
                 true
             );
-            console.log("Set redeemed to true")
             break;
         case "CancelRedeem":
             await parseBubblegumReplaceLeaf(db, parsedLog.logs, slot, parser, optionalInfo, false, true);
-            console.log("Canceled redeem");
             break;
         case "Burn":
             await parseBubblegumReplaceLeaf(db, parsedLog.logs, slot, parser, optionalInfo);
