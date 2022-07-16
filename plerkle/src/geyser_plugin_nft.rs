@@ -1,4 +1,4 @@
-use metrics::increment_counter;
+use metrics::{increment_counter, Recorder};
 use {
     figment::{
         Figment,
@@ -43,6 +43,7 @@ use {
         counter,
         histogram,
         gauge,
+        describe_counter,
     },
 };
 
@@ -207,6 +208,8 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                                 msg: format!("Mterics Configuration Error {:?}", err),
                             })?;
                     info!("Metrics Enabled");
+                    describe_counter!("startup", "startups to test the system");
+                    describe_counter!("transaction_seen_event", "all txn events");
                     increment_counter!("startup");
                 }
             }
