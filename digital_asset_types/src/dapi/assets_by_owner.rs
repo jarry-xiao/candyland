@@ -24,7 +24,19 @@ pub async fn get_assets_by_owner(
     before: String,
     after: String,
 ) -> Result<AssetList, DbErr> {
-  
+    //  let asset_list: Option<cl_items::Model> = cl_items::Entity::find()
+    //         .join_rev(
+    //             JoinType::Join,
+    //             asset::Entity::belongs_to(cl_items::Entity)
+    //                 .from(asset::Column::Nonce)
+    //                 .to(cl_items::Column::LeafIdx)
+    //                 .into(),
+    //         )
+    //         .order_by_desc(cl_items::Column::Seq)
+    //         .filter(Expr::cust("asset.tree_id = cl_items.tree"))
+    //         .filter(Expr::cust_with_values("asset.id = ?::bytea", vec![asset_id]))
+    //         .filter(cl_items::Column::Level.eq(0i64))
+    //         .one(db).await?;
 
     let asset_list = cl_items::Entity::find().all(db).await?;
     Ok(())
