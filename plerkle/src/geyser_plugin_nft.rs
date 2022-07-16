@@ -197,8 +197,8 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                     let uri = config["metrics_uri"].as_str().unwrap().to_string();
                     let port = config["metrics_port"].as_u64().unwrap() as u16;
                     let recorder = StatsdBuilder::from(uri, port)
-                        .with_queue_size(50000)
-                        .with_buffer_size(512)
+                        .with_queue_size(5000)
+                        .with_buffer_size(256)
                         .build(Some("plerkle"))
                         .expect("Could not create StatsdRecorder");
                     metrics::set_boxed_recorder(Box::new(recorder))
@@ -206,6 +206,8 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                             GeyserPluginError::ConfigFileReadError {
                                 msg: format!("Mterics Configuration Error {:?}", err),
                             })?;
+                    info!("Metrics Enabled");
+                    increment_counter!("startup");
                 }
             }
             Err(err) => {
