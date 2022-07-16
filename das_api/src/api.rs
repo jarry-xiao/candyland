@@ -9,7 +9,7 @@ pub trait ApiContract: Send + Sync + 'static {
     async fn get_asset_proof(&self, asset_id: String) -> Result<AssetProof, DasApiError>;
     async fn get_asset(&self, asset_id: String) -> Result<Asset, DasApiError>;
     async fn get_assets_by_owner(
-        &mut self,
+        &self,
         owner_address: String,
         sort_by: AssetSorting,
         limit: u32,
@@ -82,11 +82,19 @@ impl<'a> RpcApiBuilder {
         module.register_async_method("get_asset", |rpc_params, rpc_context| async move {
             let asset_id = rpc_params.one::<String>()?;
             println!("Asset Id {}", asset_id);
-            rpc_context
-                .get_asset(asset_id)
-                .await
-                .map_err(Into::into)
+            rpc_context.get_asset(asset_id).await.map_err(Into::into)
         })?;
+        module.register_async_method(
+            "get_assets_by_owner",
+            |rpc_params, rpc_context| async move {
+                let (owner_address, sort_by, limit, page, before, after) =
+                    rpc_params.parse().unwrap();
+                rpc_context
+                    .get_assets_by_owner(owner_address, sort_by, limit, page, before, after)
+                    .await
+                    .map_err(Into::into)
+            },
+        )?;
 
         Ok(module)
     }
