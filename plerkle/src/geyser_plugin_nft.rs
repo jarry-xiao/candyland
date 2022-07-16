@@ -59,7 +59,6 @@ pub(crate) struct Plerkle<'a, T: Messenger + Default> {
     transaction_selector: Option<TransactionSelector>,
     messenger: PhantomData<T>,
     sender: Option<Sender<SerializedData<'a>>>,
-    metrics_client: Option<StatsdRecorder>,
 }
 
 #[derive(Deserialize, PartialEq, Debug)]
@@ -208,9 +207,6 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                                 msg: format!("Mterics Configuration Error {:?}", err),
                             })?;
                     info!("Metrics Enabled");
-                    describe_counter!("startup", "startups to test the system");
-                    describe_counter!("transaction_seen_event", "all txn events");
-                    increment_counter!("startup");
                 }
             }
             Err(err) => {
@@ -378,6 +374,8 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                 // Serialize data.
                 let builder = FlatBufferBuilder::new();
                 let builder = serialize_transaction(builder, transaction_info, slot);
+                let slt_idx = format!("{}-{}", slot, transaction_info.index);
+                increment_counter!("transaction_seen_event", "slot-idx" => slt_idx);
                 // Send transaction info over channel.
                 runtime.spawn(async move {
                     let data = SerializedData {
@@ -386,8 +384,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                     };
                     let _ = sender.send(data).await;
                 });
-                let slt_idx = format!("{}-{}", slot, transaction_info.index);
-                increment_counter!("transaction_seen_event", "slot-idx" => slt_idx);
+
             }
             _ => {
                 info!("Old Transaction Replica Object")
