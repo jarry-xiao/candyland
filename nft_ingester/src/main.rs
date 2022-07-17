@@ -211,7 +211,8 @@ async fn backfiller<T: Messenger>(
                         for tree in trees.force_chk_trees.iter() {
                             let tree_str = bs58::encode(&tree.tree).into_string();
                             println!("Backfilling tree: {tree_str}");
-                            if let Err(err) = backfill_tree_from_seq_1(
+
+                            match backfill_tree_from_seq_1(
                                 &rpc_client,
                                 &db,
                                 &tree.tree,
@@ -219,12 +220,31 @@ async fn backfiller<T: Messenger>(
                             )
                             .await
                             {
-                                println!(
-                                    "Failed to fetch and plug gaps for {tree_str}, error: {err}"
-                                );
-                            } else {
-                                if let Err(err) = clear_force_chk_flag(&db, &tree.tree).await {
-                                    println!("Error clearing force_chk flag: {err}");
+                                Ok(opt_max_seq) => {
+                                    if let Some(_max_seq) = opt_max_seq {
+                                        // Debug.
+                                        println!(
+                                            "Successfully backfilled tree from seq 1: {tree_str}"
+                                        );
+
+                                        // Only delete extra tree rows if fetching and plugging gaps worked.
+                                        if let Err(err) =
+                                            clear_force_chk_flag(&db, &tree.tree).await
+                                        {
+                                            println!("Error clearing force_chk flag: {err}");
+                                        } else {
+                                            // Debug.
+                                            println!("Successfully cleared force_chk flag");
+                                        }
+                                    } else {
+                                        // Debug.
+                                        println!("Unexpected error, tree was in list, but no rows found for {tree_str}");
+                                    }
+                                }
+                                Err(err) => {
+                                    println!(
+                                        "Failed to fetch and plug gaps for {tree_str}, error: {err}"
+                                    );
                                 }
                             }
                         }
@@ -238,20 +258,29 @@ async fn backfiller<T: Messenger>(
                         for tree in trees.multi_row_trees.iter() {
                             let tree_str = bs58::encode(&tree.tree).into_string();
                             println!("Backfilling tree: {tree_str}");
+
                             match fetch_and_plug_gaps(&rpc_client, &db, &tree.tree, &mut messenger)
                                 .await
                             {
-                                Ok(max_seq) => {
-                                    // Debug.
-                                    println!("Successfully fetched and plug gaps for {tree_str}");
+                                Ok(opt_max_seq) => {
+                                    if let Some(max_seq) = opt_max_seq {
+                                        // Debug.
+                                        println!(
+                                            "Successfully fetched and plug gaps for {tree_str}"
+                                        );
 
-                                    // Only delete extra tree rows if fetching and plugging gaps worked.
-                                    if let Err(err) =
-                                        delete_extra_tree_rows(&db, &tree.tree, max_seq).await
-                                    {
-                                        println!("Error deleting rows: {err}");
+                                        // Only delete extra tree rows if fetching and plugging gaps worked.
+                                        if let Err(err) =
+                                            delete_extra_tree_rows(&db, &tree.tree, max_seq).await
+                                        {
+                                            println!("Error deleting rows: {err}");
+                                        } else {
+                                            // Debug.
+                                            println!("Successfully deleted rows up to {max_seq}");
+                                        }
                                     } else {
-                                        println!("Successfully deleted rows up to {max_seq}");
+                                        // Debug.
+                                        println!("Unexpected error, tree was in list, but no rows found for {tree_str}");
                                     }
                                 }
                                 Err(err) => {
@@ -276,7 +305,6 @@ async fn backfiller<T: Messenger>(
 struct UniqueTree {
     tree: Vec<u8>,
 }
-
 struct BackfillTrees {
     force_chk_trees: Vec<UniqueTree>,
     multi_row_trees: Vec<UniqueTree>,
@@ -309,42 +337,41 @@ async fn get_trees_to_backfill(db: &DatabaseConnection) -> Result<BackfillTrees,
 
 async fn backfill_tree_from_seq_1<T: Messenger>(
     _rpc_client: &RpcClient,
-    _db: &DatabaseConnection,
-    _tree: &[u8],
+    db: &DatabaseConnection,
+    tree: &[u8],
     _messenger: &T,
-) -> Result<(), DbErr> {
-    //TODO implement gap filler.
-    Ok(())
+) -> Result<Option<i64>, DbErr> {
+    //TODO implement gap filler that gap fills from sequence number 1.
+    //For now just return the max sequence number.
+    get_max_seq(db, tree).await
 }
 
+// Similar to `fetchAndPlugGaps()` in `backfiller.ts`.
 async fn fetch_and_plug_gaps<T: Messenger>(
     rpc_client: &RpcClient,
     db: &DatabaseConnection,
     tree: &[u8],
     messenger: &mut T,
-) -> Result<i64, DbErr> {
-    let gaps = get_missing_data(db, tree).await?;
+) -> Result<Option<i64>, DbErr> {
+    let (opt_max_seq, gaps) = get_missing_data(db, tree).await?;
 
-    for gap in gaps {
-        let _result = plug_gap(rpc_client, db, gap, tree, messenger).await?;
+    // Similar to `plugGapsBatched()` in `backfiller.ts` (although not batched).
+    for gap in gaps.iter() {
+        // Similar to `plugGaps()` in `backfiller.ts`.
+        let _result = plug_gap(rpc_client, db, &gap, tree, messenger).await?;
     }
 
-    //TODO implement gap filler, for now just return the max sequence number.
-    let items = get_items_with_max_seq(db, tree).await?;
-
-    if items.len() > 0 {
-        Ok(items[0].seq)
-    } else {
-        Ok(0)
-    }
+    Ok(opt_max_seq)
 }
 
+// Account key used to determine if transaction is a simple vote.
 const VOTE: &str = "Vote111111111111111111111111111111111111111";
 
+// Similar to `plugGaps()` in `backfiller.ts`.
 async fn plug_gap<T: Messenger>(
     rpc_client: &RpcClient,
     db: &DatabaseConnection,
-    gap: GapInfo,
+    gap: &GapInfo,
     tree: &[u8],
     messenger: &mut T,
 ) -> Result<(), DbErr> {
@@ -591,19 +618,56 @@ impl GapInfo {
     }
 }
 
-async fn get_missing_data(db: &DatabaseConnection, tree: &[u8]) -> Result<Vec<GapInfo>, DbErr> {
+#[derive(Debug, FromQueryResult, Clone)]
+struct MaxSeqItem {
+    max: i64,
+}
+
+// Similar to `getMissingData()` in `db.ts`.
+async fn get_missing_data(
+    db: &DatabaseConnection,
+    tree: &[u8],
+) -> Result<(Option<i64>, Vec<GapInfo>), DbErr> {
+    // Get the maximum sequence number that has been backfilled, and use
+    // that for the starting sequence number for backfilling.
+    let mut query = backfill_items::Entity::find()
+        .select_only()
+        .column(backfill_items::Column::Seq)
+        .filter(backfill_items::Column::Backfilled.eq(true))
+        .filter(backfill_items::Column::Tree.eq(tree))
+        .group_by(backfill_items::Column::Tree)
+        .build(DbBackend::Postgres);
+
+    query.sql = query.sql.replace(
+        "SELECT \"backfill_items\".\"seq\"",
+        "SELECT MAX (\"backfill_items\".\"seq\")",
+    );
+
+    // Debug.
+    //println!("{}", query.to_string());
+
+    let start_seq_vec = MaxSeqItem::find_by_statement(query).all(db).await?;
+    let start_seq = if start_seq_vec.len() > 0 {
+        start_seq_vec[0].max
+    } else {
+        0
+    };
+
+    // Get all rows for the tree that have not yet been backfilled.
     let mut query = backfill_items::Entity::find()
         .select_only()
         .column(backfill_items::Column::Seq)
         .column(backfill_items::Column::Slot)
+        .filter(backfill_items::Column::Seq.gte(start_seq))
         .filter(backfill_items::Column::Tree.eq(tree))
         .order_by_asc(backfill_items::Column::Seq)
         .build(DbBackend::Postgres);
-    query.sql = query.sql.replace("SELECT", "SELECT DISTINCT");
 
+    query.sql = query.sql.replace("SELECT", "SELECT DISTINCT");
     let rows = SimpleBackfillItem::find_by_statement(query).all(db).await?;
     let mut gaps = vec![];
 
+    // Look at each pair of trees looking for a gap in sequence number.
     for (prev, curr) in rows.iter().zip(rows.iter().skip(1)) {
         if curr.seq == prev.seq {
             let message = format!(
@@ -617,12 +681,15 @@ async fn get_missing_data(db: &DatabaseConnection, tree: &[u8]) -> Result<Vec<Ga
         }
     }
 
-    Ok(gaps)
+    // Get the max sequence number if any rows were returned from the query.
+    let opt_max_seq = rows.last().map(|row| row.seq);
+
+    Ok((opt_max_seq, gaps))
 }
 
-async fn get_items_with_max_seq(db: &DatabaseConnection, tree: &[u8]) -> Result<Vec<Model>, DbErr> {
+async fn get_max_seq(db: &DatabaseConnection, tree: &[u8]) -> Result<Option<i64>, DbErr> {
     //TODO Find better, simpler query for this.
-    backfill_items::Entity::find()
+    let rows = backfill_items::Entity::find()
         .filter(backfill_items::Column::Tree.eq(tree))
         .filter(
             Condition::any().add(
@@ -636,7 +703,9 @@ async fn get_items_with_max_seq(db: &DatabaseConnection, tree: &[u8]) -> Result<
             ),
         )
         .all(db)
-        .await
+        .await?;
+
+    Ok(rows.last().map(|row| row.seq))
 }
 
 async fn clear_force_chk_flag(db: &DatabaseConnection, tree: &[u8]) -> Result<UpdateResult, DbErr> {
@@ -657,8 +726,10 @@ async fn delete_extra_tree_rows(
         .filter(backfill_items::Column::Tree.eq(tree))
         .all(db)
         .await?;
-
     println!("Count of items before delete: {}", test_items.len());
+    for item in test_items {
+        println!("Seq ID {}", item.seq);
+    }
 
     // Delete all rows in the `backfill_items` table for a specified tree, except for the row with
     // the user-specified sequence number.  One row for each tree must remain so that gaps can be
@@ -685,13 +756,22 @@ async fn delete_extra_tree_rows(
         }
     }
 
+    // Mark remaining row as backfilled so future backfilling can start above this sequence number.
+    backfill_items::Entity::update_many()
+        .col_expr(backfill_items::Column::Backfilled, Expr::value(true))
+        .filter(backfill_items::Column::Tree.eq(tree))
+        .exec(db)
+        .await?;
+
     // Debug.
     let test_items = backfill_items::Entity::find()
         .filter(backfill_items::Column::Tree.eq(tree))
         .all(db)
         .await?;
-
     println!("Count of items after delete: {}", test_items.len());
+    for item in test_items {
+        println!("Seq ID {}", item.seq);
+    }
 
     Ok(())
 }

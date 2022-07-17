@@ -191,6 +191,7 @@ pub async fn gummyroll_change_log_event_to_database(
             seq: Set(change_log_event.seq as i64),
             slot: Set(slot as i64),
             force_chk: Set(Some(force_chk)),
+            backfilled: Set(Some(false)),
             ..Default::default()
         };
 
