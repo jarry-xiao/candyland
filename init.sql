@@ -49,7 +49,7 @@ as $BODY$
 declare
 begin
     if (tg_op = 'INSERT') then
-        perform pg_notify('new_item_added', 'hello');
+        perform pg_notify('backfill_item_added', 'hello');
     end if;
 
     return null;

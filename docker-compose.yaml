@@ -5,8 +5,9 @@ services:
       - redis
     restart: always
     environment:
+      INGESTER_DATABASE_CONFIG: '{listener_channel="backfill_item_added", url="postgres://solana:solana@db/solana"}'
       INGESTER_MESSENGER_CONFIG: '{redis_connection_str="redis://redis"}'
-      INGESTER_DATABASE_URL: 'postgres://solana:solana@db/solana'
+      INGESTER_RPC_CONFIG: '{url="http://candyland-solana-1:8899"}'
     build:
       context: .
       dockerfile: Ingest.Dockerfile

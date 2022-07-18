@@ -40,14 +40,24 @@ async fn setup_manager<'a, 'b>(
     manager
 }
 
-#[derive(Deserialize, PartialEq, Debug)]
+// Types and constants used for Figment configuration items.
+pub type DatabaseConfig = figment::value::Dict;
+pub const DATABASE_URL_KEY: &str = "url";
+pub const DATABASE_LISTENER_CHANNEL_KEY: &str = "listener_channel";
+pub type RpcConfig = figment::value::Dict;
+pub const RPC_URL_KEY: &str = "url";
+
+// Struct used for Figment configuration items.
+#[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct IngesterConfig {
+    database_config: DatabaseConfig,
     messenger_config: MessengerConfig,
-    database_url: String,
+    rpc_config: RpcConfig,
 }
 
 #[tokio::main]
 async fn main() {
+    // Read config.
     let config: IngesterConfig = Figment::new()
         .join(Env::prefixed("INGESTER_"))
         .extract()
@@ -55,16 +65,25 @@ async fn main() {
             msg: format!("{}", config_error),
         })
         .unwrap();
+    // Get database config.
+    let url = config
+        .database_config
+        .get(&*DATABASE_URL_KEY)
+        .and_then(|u| u.clone().into_string())
+        .ok_or(IngesterError::ConfigurationError {
+            msg: format!("Database connection string missing: {}", DATABASE_URL_KEY),
+        })
+        .unwrap();
     // Setup Postgres.
-    let mut tasks = vec![];
     let pool = PgPoolOptions::new()
         .max_connections(5)
-        .connect(&*config.database_url)
+        .connect(&url)
         .await
         .unwrap();
     let background_task_manager =
         TaskManager::new("background-tasks".to_string(), pool.clone()).unwrap();
     // Service streams as separate concurrent processes.
+    let mut tasks = vec![];
     tasks.push(
         service_transaction_stream::<RedisMessenger>(
             pool.clone(),
@@ -74,7 +93,7 @@ async fn main() {
         .await,
     );
     // Start up backfiller process.
-    tasks.push(backfiller::<RedisMessenger>(pool.clone(), config.messenger_config.clone()).await);
+    tasks.push(backfiller::<RedisMessenger>(pool.clone(), config.clone()).await);
     // Wait for ctrl-c.
     match tokio::signal::ctrl_c().await {
         Ok(()) => {}
