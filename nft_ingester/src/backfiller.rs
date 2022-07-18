@@ -41,9 +41,8 @@ pub async fn backfiller<T: Messenger>(
     tokio::spawn(async move {
         println!("Backfiller task running");
 
-        if let Ok(mut backfiller) = Backfiller::<T>::new(pool, config).await {
-            backfiller.run().await;
-        }
+        let mut backfiller = Backfiller::<T>::new(pool, config).await;
+        backfiller.run().await;
     })
 }
 
@@ -95,18 +94,17 @@ struct Backfiller<T: Messenger> {
 
 impl<T: Messenger> Backfiller<T> {
     /// Create a new `Backfiller` struct.
-    async fn new(pool: Pool<Postgres>, config: IngesterConfig) -> Result<Self, ()> {
+    async fn new(pool: Pool<Postgres>, config: IngesterConfig) -> Self {
         // Create Sea ORM database connection used later for queries.
         let db = SqlxPostgresConnector::from_sqlx_postgres_pool(pool.clone());
 
         // Connect to database using sqlx and create PgListener.
-        let mut listener = match sqlx::postgres::PgListener::connect_with(&pool.clone()).await {
-            Ok(listener) => listener,
-            Err(err) => {
-                println!("Could not connect to database for PgListener {err}");
-                return Err(());
-            }
-        };
+        let mut listener = sqlx::postgres::PgListener::connect_with(&pool.clone())
+            .await
+            .map_err(|e| IngesterError::StorageListenerError {
+                msg: format!("Could not connect to db for PgListener {e}"),
+            })
+            .unwrap();
 
         // Get database listener channel.
         let channel = config
@@ -122,10 +120,13 @@ impl<T: Messenger> Backfiller<T> {
             .unwrap();
 
         // Setup listener on channel.
-        if let Err(err) = listener.listen(&channel).await {
-            println!("Error listening to channel on backfill_items table {err}");
-            return Err(());
-        }
+        listener
+            .listen(&channel)
+            .await
+            .map_err(|e| IngesterError::StorageListenerError {
+                msg: format!("Error listening to channel on backfill_items tbl {e}"),
+            })
+            .unwrap();
 
         // Get RPC URL.
         let rpc_url = config
@@ -145,13 +146,13 @@ impl<T: Messenger> Backfiller<T> {
         messenger.add_stream(TRANSACTION_STREAM).await;
         messenger.set_buffer_size(TRANSACTION_STREAM, 5000).await;
 
-        Ok(Self {
+        Self {
             db,
             listener,
             rpc_client,
             messenger,
             failure_delay: INITIAL_FAILURE_DELAY,
-        })
+        }
     }
 
     /// Run the backfiller task.
@@ -233,8 +234,11 @@ impl<T: Messenger> Backfiller<T> {
                                         );
 
                                         // Only delete extra tree rows if fetching and plugging gaps worked.
-                                        if let Err(err) =
-                                            self.delete_extra_tree_rows(&tree.tree, max_seq).await
+                                        if let Err(err) = self
+                                            .delete_extra_rows_and_mark_as_backfilled(
+                                                &tree.tree, max_seq,
+                                            )
+                                            .await
                                         {
                                             println!("Error deleting rows: {err}");
                                             self.sleep_and_increase_delay().await;
@@ -343,7 +347,7 @@ impl<T: Messenger> Backfiller<T> {
     }
 
     // Similar to `fetchAndPlugGaps()` in `backfiller.ts`.
-    async fn fetch_and_plug_gaps(&mut self, tree: &[u8]) -> Result<Option<i64>, DbErr> {
+    async fn fetch_and_plug_gaps(&mut self, tree: &[u8]) -> Result<Option<i64>, IngesterError> {
         let (opt_max_seq, gaps) = self.get_missing_data(tree).await?;
 
         // Similar to `plugGapsBatched()` in `backfiller.ts` (although not batched).
@@ -422,7 +426,7 @@ impl<T: Messenger> Backfiller<T> {
     }
 
     // Similar to `plugGaps()` in `backfiller.ts`.
-    async fn plug_gap(&mut self, gap: &GapInfo, tree: &[u8]) -> Result<(), DbErr> {
+    async fn plug_gap(&mut self, gap: &GapInfo, tree: &[u8]) -> Result<(), IngesterError> {
         // TODO: This needs to make sure all slots are available otherwise it will partially
         // fail and redo the whole backfill process.  So for now checking the max block before
         // looping as a quick workaround.
@@ -430,16 +434,14 @@ impl<T: Messenger> Backfiller<T> {
             .rpc_client
             .get_block(gap.curr.slot as u64)
             .await
-            .map_err(|e| {
-                DbErr::Custom(format!("Blocks needed for backfilling not finalized: {e}"))
-            })?;
+            .map_err(|e| IngesterError::RpcGetDataError(e.to_string()))?;
 
         for slot in gap.prev.slot..gap.curr.slot {
             let block_data = self
                 .rpc_client
                 .get_block(slot as u64)
                 .await
-                .map_err(|e| DbErr::Custom(e.to_string()))?;
+                .map_err(|e| IngesterError::RpcGetDataError(e.to_string()))?;
 
             // Debug.
             println!("num txs: {}", block_data.transactions.len());
@@ -466,8 +468,8 @@ impl<T: Messenger> Backfiller<T> {
                         ui_transaction
                     }
                     _ => {
-                        return Err(DbErr::Custom(
-                            "Unsupported format for EncodedTransaction".to_string(),
+                        return Err(IngesterError::RpcDataUnsupportedFormat(
+                            "EncodedTransaction".to_string(),
                         ));
                     }
                 };
@@ -484,8 +486,8 @@ impl<T: Messenger> Backfiller<T> {
                         }
                     }
                     _ => {
-                        return Err(DbErr::Custom(
-                            "Unsupported format for UiMessage".to_string(),
+                        return Err(IngesterError::RpcDataUnsupportedFormat(
+                            "UiMessage".to_string(),
                         ));
                     }
                 };
@@ -500,7 +502,7 @@ impl<T: Messenger> Backfiller<T> {
                     .all(|pk| *pk != tree && *pk != bubblegum)
                 {
                     // Debug.
-                    println!("This transaction is being skipped\n\n");
+                    println!("Skipping tx unrelated to tree or bubblegum PID");
                     continue;
                 }
 
@@ -513,7 +515,7 @@ impl<T: Messenger> Backfiller<T> {
                     &meta,
                     &ui_raw_message,
                     slot.try_into().unwrap(),
-                );
+                )?;
 
                 // Debug.
                 println!("Putting data into Redis");
@@ -521,15 +523,18 @@ impl<T: Messenger> Backfiller<T> {
                 let _ = self
                     .messenger
                     .send(TRANSACTION_STREAM, builder.finished_data())
-                    .await
-                    .map_err(|e| DbErr::Custom(e.to_string()))?;
+                    .await?;
             }
         }
 
         Ok(())
     }
 
-    async fn delete_extra_tree_rows(&self, tree: &[u8], seq: i64) -> Result<(), DbErr> {
+    async fn delete_extra_rows_and_mark_as_backfilled(
+        &self,
+        tree: &[u8],
+        seq: i64,
+    ) -> Result<(), DbErr> {
         // Debug.
         let test_items = backfill_items::Entity::find()
             .filter(backfill_items::Column::Tree.eq(tree))
@@ -591,7 +596,7 @@ fn serialize_transaction<'a>(
     meta: &UiTransactionStatusMeta,
     ui_raw_message: &UiRawMessage,
     slot: u64,
-) -> FlatBufferBuilder<'a> {
+) -> Result<FlatBufferBuilder<'a>, IngesterError> {
     // Serialize account keys.
     let account_keys = &ui_raw_message.account_keys;
     let account_keys_len = account_keys.len();
@@ -599,9 +604,8 @@ fn serialize_transaction<'a>(
     let account_keys = if account_keys_len > 0 {
         let mut account_keys_fb_vec = Vec::with_capacity(account_keys_len);
         for key in account_keys.iter() {
-            // TODO deal with this failure.
-            let key = Pubkey::from_str(key).unwrap();
-
+            let key = Pubkey::from_str(key)
+                .map_err(|e| IngesterError::SerializatonError(e.to_string()))?;
             let key = builder.create_vector(&key.to_bytes());
             let pubkey = transaction_info::Pubkey::create(
                 &mut builder,
@@ -636,12 +640,9 @@ fn serialize_transaction<'a>(
                 if let Compiled(ui_compiled_instruction) = ui_instruction {
                     let program_id_index = ui_compiled_instruction.program_id_index;
                     let accounts = Some(builder.create_vector(&ui_compiled_instruction.accounts));
-
-                    // TODO deal with this failure.
                     let data = bs58::decode(&ui_compiled_instruction.data)
                         .into_vec()
-                        .unwrap();
-
+                        .map_err(|e| IngesterError::SerializatonError(e.to_string()))?;
                     let data = Some(builder.create_vector(&data));
                     instructions_fb_vec.push(transaction_info::CompiledInstruction::create(
                         &mut builder,
@@ -676,12 +677,9 @@ fn serialize_transaction<'a>(
         for ui_compiled_instruction in outer_instructions.iter() {
             let program_id_index = ui_compiled_instruction.program_id_index;
             let accounts = Some(builder.create_vector(&ui_compiled_instruction.accounts));
-
-            // TODO deal with this failure.
             let data = bs58::decode(&ui_compiled_instruction.data)
                 .into_vec()
-                .unwrap();
-
+                .map_err(|e| IngesterError::SerializatonError(e.to_string()))?;
             let data = Some(builder.create_vector(&data));
             instructions_fb_vec.push(transaction_info::CompiledInstruction::create(
                 &mut builder,
@@ -712,5 +710,5 @@ fn serialize_transaction<'a>(
 
     // Finalize buffer and return to caller.
     builder.finish(transaction_info, None);
-    builder
+    Ok(builder)
 }

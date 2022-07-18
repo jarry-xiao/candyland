@@ -1,7 +1,10 @@
-use sea_orm::{DbErr, TransactionError};
-use thiserror::Error;
-use tokio::sync::mpsc::error::SendError;
-use crate::BgTask;
+use {
+    crate::BgTask,
+    messenger::error::MessengerError,
+    sea_orm::{DbErr, TransactionError},
+    thiserror::Error,
+    tokio::sync::mpsc::error::SendError,
+};
 
 #[derive(Error, Debug)]
 pub enum IngesterError {
@@ -13,6 +16,8 @@ pub enum IngesterError {
     BatchInitNetworkingError,
     #[error("Error writing batch files")]
     BatchInitIOError,
+    #[error("Storage listener error: ({msg})")]
+    StorageListenerError { msg: String },
     #[error("Storage Write Error {0}")]
     StorageWriteError(String),
     #[error("NotImplemented")]
@@ -23,7 +28,14 @@ pub enum IngesterError {
     TaskManagerError(String),
     #[error("Missing or invalid configuration: ({msg})")]
     ConfigurationError { msg: String },
-
+    #[error("Error getting RPC data {0}")]
+    RpcGetDataError(String),
+    #[error("RPC returned data in unsupported format {0}")]
+    RpcDataUnsupportedFormat(String),
+    #[error("Data serializaton error {0}")]
+    SerializatonError(String),
+    #[error("Messenger error {0}")]
+    MessengerError(String),
 }
 
 impl From<reqwest::Error> for IngesterError {
@@ -56,3 +68,8 @@ impl From<SendError<Box<dyn BgTask>>> for IngesterError {
     }
 }
 
+impl From<MessengerError> for IngesterError {
+    fn from(e: MessengerError) -> Self {
+        IngesterError::MessengerError(e.to_string())
+    }
+}
