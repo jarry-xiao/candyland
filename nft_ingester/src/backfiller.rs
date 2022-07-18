@@ -1,9 +1,9 @@
-use crate::error::IngesterError;
-use messenger::MessengerConfig;
 use {
-    crate::parsers::*,
+    crate::{
+        error::IngesterError, parsers::*, IngesterConfig, DATABASE_LISTENER_CHANNEL_KEY,
+        RPC_URL_KEY,
+    },
     digital_asset_types::dao::backfill_items,
-    figment::{providers::Env, Figment},
     flatbuffers::FlatBufferBuilder,
     messenger::{Messenger, TRANSACTION_STREAM},
     plerkle_serialization::transaction_info_generated::transaction_info::{
@@ -23,16 +23,17 @@ use {
     tokio::time::{sleep, Duration},
 };
 
-const CHANNEL: &str = "new_item_added";
-
 pub async fn backfiller<T: Messenger>(
     pool: Pool<Postgres>,
-    messenger_config: MessengerConfig,
+    config: IngesterConfig,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         println!("Backfiller task running");
+
+        // Create Sea ORM database connection used later for queries.
         let db = SqlxPostgresConnector::from_sqlx_postgres_pool(pool.clone());
-        // Connect to db and create PgListener.
+
+        // Connect to database using sqlx and create PgListener.
         let mut listener = match sqlx::postgres::PgListener::connect_with(&pool.clone()).await {
             Ok(listener) => listener,
             Err(err) => {
@@ -40,21 +41,41 @@ pub async fn backfiller<T: Messenger>(
                 return;
             }
         };
+
+        // Get database listener channel.
+        let channel = config
+            .database_config
+            .get(&*DATABASE_LISTENER_CHANNEL_KEY)
+            .and_then(|u| u.clone().into_string())
+            .ok_or(IngesterError::ConfigurationError {
+                msg: format!(
+                    "Database listener channel missing: {}",
+                    DATABASE_LISTENER_CHANNEL_KEY
+                ),
+            })
+            .unwrap();
+
         // Setup listener on channel.
-        if let Err(err) = listener.listen(CHANNEL).await {
+        if let Err(err) = listener.listen(&channel).await {
             println!("Error listening to channel on backfill_items table {err}");
             return;
         }
 
-        // TODO: Get config from Figment.
-        // TODO: Maybe use `new_with_timeout_and_commitment()`.
+        // Get RPC URL.
+        let rpc_url = config
+            .rpc_config
+            .get(&*RPC_URL_KEY)
+            .and_then(|u| u.clone().into_string())
+            .ok_or(IngesterError::ConfigurationError {
+                msg: format!("RPC URL missing: {}", RPC_URL_KEY),
+            })
+            .unwrap();
+
         // Instantiate RPC client.
-        let url = "http://candyland-solana-1:8899".to_string();
-        let commitment_config = CommitmentConfig::processed();
-        let rpc_client = RpcClient::new_with_commitment(url, commitment_config);
+        let rpc_client = RpcClient::new_with_commitment(rpc_url, CommitmentConfig::processed());
 
         // Instantiate messenger.
-        let mut messenger = T::new(messenger_config).await.unwrap();
+        let mut messenger = T::new(config.messenger_config).await.unwrap();
         messenger.add_stream(TRANSACTION_STREAM).await;
         messenger.set_buffer_size(TRANSACTION_STREAM, 5000).await;
 
@@ -117,9 +138,8 @@ pub async fn backfiller<T: Messenger>(
                                     }
                                 }
                                 Err(err) => {
-                                    println!(
-                                        "Failed to fetch and plug gaps for {tree_str}, error: {err}"
-                                    );
+                                    println!("Failed to fetch and plug gaps for {tree_str}");
+                                    println!("{err}");
                                 }
                             }
                         }
@@ -159,9 +179,8 @@ pub async fn backfiller<T: Messenger>(
                                     }
                                 }
                                 Err(err) => {
-                                    println!(
-                                        "Failed to fetch and plug gaps for {tree_str}, error: {err}"
-                                    );
+                                    println!("Failed to fetch and plug gaps for {tree_str}");
+                                    println!("{err}");
                                 }
                             }
                         }
@@ -518,7 +537,7 @@ async fn get_missing_data(
     );
 
     // Debug.
-    println!("{}", query.to_string());
+    //println!("{}", query.to_string());
 
     let start_seq_vec = MaxSeqItem::find_by_statement(query).all(db).await?;
     let start_seq = if start_seq_vec.len() > 0 {
@@ -527,7 +546,8 @@ async fn get_missing_data(
         0
     };
 
-    println!("MAX: {}", start_seq);
+    // Debug.
+    //println!("MAX: {}", start_seq);
 
     // Get all rows for the tree that have not yet been backfilled.
     let mut query = backfill_items::Entity::find()
