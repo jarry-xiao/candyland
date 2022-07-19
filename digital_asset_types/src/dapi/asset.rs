@@ -109,7 +109,7 @@ fn v1_content_from_json(metadata: &serde_json::Value) -> Result<Content, DbErr> 
     })
 }
 
-fn get_content(asset: &asset::Model, data: &asset_data::Model) -> Result<Content, DbErr> {
+pub fn get_content(asset: &asset::Model, data: &asset_data::Model) -> Result<Content, DbErr> {
     match data.schema_version {
         1 => {
             v1_content_from_json(&data.metadata)

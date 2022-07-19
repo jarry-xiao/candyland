@@ -1,3 +1,5 @@
+use digital_asset_types::dapi::asset::get_asset;
+use digital_asset_types::rpc::Asset;
 use {
     crate::api::ApiContract,
     crate::config::Config,
@@ -5,7 +7,7 @@ use {
     crate::DasApiError,
     async_trait::async_trait,
     digital_asset_types::{
-        dapi::change_logs::*,
+        dapi::{assets_by_owner::*, change_logs::*},
         rpc::{
             filter::{AssetSorting, OfferSorting},
             response::{AssetList, ListingsList, OfferList},
@@ -15,8 +17,6 @@ use {
     sea_orm::{DatabaseConnection, DbErr, SqlxPostgresConnector},
     sqlx::postgres::PgPoolOptions,
 };
-use digital_asset_types::dapi::asset::get_asset;
-use digital_asset_types::rpc::Asset;
 
 pub struct DasApi {
     db_connection: DatabaseConnection,
@@ -65,15 +65,27 @@ impl ApiContract for DasApi {
     }
 
     async fn get_assets_by_owner(
-        &mut self,
-        _owner_address: String,
-        _sort_by: AssetSorting,
-        _limit: u32,
-        _page: u32,
-        _before: String,
-        _after: String,
+        self: &DasApi,
+        owner_address: String,
+        sort_by: AssetSorting,
+        limit: u32,
+        page: u32,
+        before: String,
+        after: String,
     ) -> Result<AssetList, DasApiError> {
-        todo!()
+        let owner_address = validate_pubkey(owner_address.clone())?;
+        let owner_address_bytes = owner_address.to_bytes().to_vec();
+        get_assets_by_owner(
+            &self.db_connection,
+            owner_address_bytes,
+            sort_by,
+            limit,
+            page,
+            before,
+            after,
+        )
+        .await
+        .map_err(Into::into)
     }
 
     async fn get_listed_assets_by_owner(
