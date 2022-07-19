@@ -48,10 +48,6 @@ pub struct Initialize<'info> {
     /// Typically a program, e.g., the Bubblegum contract validates that leaves are valid NFTs.
     pub authority: Signer<'info>,
 
-    /// Authority that is responsible for signing for new additions to the tree.
-    /// CHECK: unsafe
-    pub append_authority: UncheckedAccount<'info>,
-
     /// Program used to emit changelogs as instruction data.
     /// See `WRAPYChf58WFCnyjXKJHtrPgzKXgHp6MD9aVDqJBbGh`
     pub candy_wrapper: Program<'info, CandyWrapper>,
@@ -84,9 +80,6 @@ pub struct Append<'info> {
     /// Typically a program, e.g., the Bubblegum contract validates that leaves are valid NFTs.
     pub authority: Signer<'info>,
 
-    /// Authority that is responsible for signing for new additions to the tree.
-    pub append_authority: Signer<'info>,
-
     /// Program used to emit changelogs as instruction data.
     /// See `WRAPYChf58WFCnyjXKJHtrPgzKXgHp6MD9aVDqJBbGh`
     pub candy_wrapper: Program<'info, CandyWrapper>,
@@ -100,7 +93,7 @@ pub struct VerifyLeaf<'info> {
     pub merkle_roll: UncheckedAccount<'info>,
 }
 
-/// Context for transferring `authority` or `append_authority`
+/// Context for transferring `authority`
 #[derive(Accounts)]
 pub struct TransferAuthority<'info> {
     #[account(mut)]
@@ -339,7 +332,6 @@ pub mod gummyroll {
             max_depth,
             max_buffer_size,
             &ctx.accounts.authority.key(),
-            &ctx.accounts.append_authority.key(),
             Clock::get()?.slot,
         );
         header.serialize(&mut header_bytes)?;
@@ -378,7 +370,6 @@ pub mod gummyroll {
             max_depth,
             max_buffer_size,
             &ctx.accounts.authority.key(),
-            &ctx.accounts.append_authority.key(),
             Clock::get()?.slot,
         );
         header.serialize(&mut header_bytes)?;
@@ -451,12 +442,11 @@ pub mod gummyroll {
         update_canopy(canopy_bytes, header.max_depth, Some(change_log))
     }
 
-    /// Transfers `authority` or `append_authority`.
+    /// Transfers `authority`
     /// Requires `authority` to sign
     pub fn transfer_authority(
         ctx: Context<TransferAuthority>,
-        new_authority: Option<Pubkey>,
-        new_append_authority: Option<Pubkey>,
+        new_authority: Pubkey,
     ) -> Result<()> {
         let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
         let (mut header_bytes, _) = merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
@@ -464,23 +454,8 @@ pub mod gummyroll {
         let mut header = Box::new(MerkleRollHeader::try_from_slice(header_bytes)?);
         assert_eq!(header.authority, ctx.accounts.authority.key());
 
-        match new_authority {
-            Some(new_auth) => {
-                header.authority = new_auth;
-                msg!("Authority transferred to: {:?}", header.authority);
-            }
-            _ => {}
-        }
-        match new_append_authority {
-            Some(new_append_auth) => {
-                header.append_authority = new_append_auth;
-                msg!(
-                    "Append authority transferred to: {:?}",
-                    header.append_authority
-                );
-            }
-            _ => {}
-        }
+        header.authority = new_authority;
+        msg!("Authority transferred to: {:?}", header.authority);
         header.serialize(&mut header_bytes)?;
 
         Ok(())
@@ -511,7 +486,7 @@ pub mod gummyroll {
         Ok(())
     }
 
-    /// This instruction allows the tree's `append_authority` to append a new leaf to the tree
+    /// This instruction allows the tree's `authority` to append a new leaf to the tree
     /// without having to supply a valid proof.
     ///
     /// This is accomplished by using the rightmost_proof of the merkle roll to construct a
@@ -522,7 +497,6 @@ pub mod gummyroll {
 
         let header = Box::new(MerkleRollHeader::try_from_slice(header_bytes)?);
         assert_eq!(header.authority, ctx.accounts.authority.key());
-        assert_eq!(header.append_authority, ctx.accounts.append_authority.key());
 
         let id = ctx.accounts.merkle_roll.key();
         let merkle_roll_size = merkle_roll_get_size!(header)?;
