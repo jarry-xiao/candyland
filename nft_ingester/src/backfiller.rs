@@ -52,10 +52,19 @@ struct UniqueTree {
     tree: Vec<u8>,
 }
 
-/// Struct used when storing which trees to backfill.
-struct BackfillTrees {
-    force_chk_trees: Vec<UniqueTree>,
-    multi_row_trees: Vec<UniqueTree>,
+/// Struct used when storing trees to backfill.
+struct BackfillTree {
+    unique_tree: UniqueTree,
+    backfill_from_seq_1: bool,
+}
+
+impl BackfillTree {
+    fn new(unique_tree: UniqueTree, backfill_from_seq_1: bool) -> Self {
+        Self {
+            unique_tree,
+            backfill_from_seq_1,
+        }
+    }
 }
 
 /// Struct used when querying the max sequence number of a tree.
@@ -159,11 +168,13 @@ impl<T: Messenger> Backfiller<T> {
     async fn run(&mut self) {
         loop {
             match self.get_trees_to_backfill().await {
-                Ok(trees) => {
-                    if trees.force_chk_trees.len() == 0 && trees.multi_row_trees.len() == 0 {
+                Ok(backfill_trees) => {
+                    if backfill_trees.len() == 0 {
                         // If there are no trees to backfill, wait for a notification on the channel.
                         let _notification = self.listener.recv().await.unwrap();
                     } else {
+                        println!("New trees to backfill: {}", backfill_trees.len());
+
                         // First just check if we can talk to an RPC provider.
                         match self.rpc_client.get_version().await {
                             Ok(version) => println!("RPC client version {version}"),
@@ -174,73 +185,35 @@ impl<T: Messenger> Backfiller<T> {
                             }
                         }
 
-                        // Trees with the `force_chk` flag must be backfilled from seq num 1.
-                        println!(
-                            "New trees to backfill from seq num 1: {}",
-                            trees.force_chk_trees.len()
-                        );
-                        for tree in trees.force_chk_trees.iter() {
-                            let tree_str = bs58::encode(&tree.tree).into_string();
+                        for backfill_tree in backfill_trees {
+                            // Get the tree out of nested structs.
+                            let tree = backfill_tree.unique_tree.tree;
+                            let tree_str = bs58::encode(&tree).into_string();
                             println!("Backfilling tree: {tree_str}");
 
-                            match self.backfill_tree_from_seq_1(&tree.tree).await {
-                                Ok(opt_max_seq) => {
-                                    if let Some(_max_seq) = opt_max_seq {
-                                        // Debug.
-                                        println!(
-                                            "Successfully backfilled tree from seq 1: {tree_str}"
-                                        );
+                            // Call different methods based on whether tree needs to be backfilled
+                            // completely from seq number 1 or just have any gaps in seq number
+                            // filled.
+                            let result = if backfill_tree.backfill_from_seq_1 {
+                                self.backfill_tree_from_seq_1(&tree).await
+                            } else {
+                                self.fetch_and_plug_gaps(&tree).await
+                            };
 
-                                        // Only delete extra tree rows if fetching and plugging gaps worked.
-                                        if let Err(err) =
-                                            self.clear_force_chk_flag(&tree.tree).await
-                                        {
-                                            println!("Error clearing force_chk flag: {err}");
-                                            self.sleep_and_increase_delay().await;
-                                        } else {
-                                            // Debug.
-                                            println!("Successfully cleared force_chk flag");
-                                            self.reset_delay();
-                                        }
-                                    } else {
-                                        // Debug.
-                                        println!("Unexpected error, tree was in list, but no rows found for {tree_str}");
-                                    }
-                                }
-                                Err(err) => {
-                                    println!("Failed to fetch and plug gaps for {tree_str}");
-                                    println!("{err}");
-                                    self.sleep_and_increase_delay().await;
-                                }
-                            }
-                        }
-
-                        // Trees with multiple rows must be checked for the range of seq nums in
-                        // the `backfill_items` table.
-                        println!(
-                            "New trees to backfill by detecting gaps: {}",
-                            trees.multi_row_trees.len()
-                        );
-                        for tree in trees.multi_row_trees.iter() {
-                            let tree_str = bs58::encode(&tree.tree).into_string();
-                            println!("Backfilling tree: {tree_str}");
-
-                            match self.fetch_and_plug_gaps(&tree.tree).await {
+                            match result {
                                 Ok(opt_max_seq) => {
                                     if let Some(max_seq) = opt_max_seq {
                                         // Debug.
-                                        println!(
-                                            "Successfully fetched and plug gaps for {tree_str}"
-                                        );
+                                        println!("Successfully backfilled tree: {tree_str}");
 
                                         // Only delete extra tree rows if fetching and plugging gaps worked.
                                         if let Err(err) = self
                                             .delete_extra_rows_and_mark_as_backfilled(
-                                                &tree.tree, max_seq,
+                                                &tree, max_seq,
                                             )
                                             .await
                                         {
-                                            println!("Error deleting rows: {err}");
+                                            println!("Error deleting rows and marking as backfilled: {err}");
                                             self.sleep_and_increase_delay().await;
                                         } else {
                                             // Debug.
@@ -250,6 +223,7 @@ impl<T: Messenger> Backfiller<T> {
                                     } else {
                                         // Debug.
                                         println!("Unexpected error, tree was in list, but no rows found for {tree_str}");
+                                        self.sleep_and_increase_delay().await;
                                     }
                                 }
                                 Err(err) => {
@@ -263,7 +237,7 @@ impl<T: Messenger> Backfiller<T> {
                 }
                 Err(err) => {
                     // Print error but keep trying.
-                    println!("Could not get trees from db: {err}");
+                    println!("Could not get trees to backfill from db: {err}");
                     self.sleep_and_increase_delay().await;
                 }
             }
@@ -286,35 +260,49 @@ impl<T: Messenger> Backfiller<T> {
         self.failure_delay = INITIAL_FAILURE_DELAY;
     }
 
-    async fn get_trees_to_backfill(&self) -> Result<BackfillTrees, DbErr> {
+    async fn get_trees_to_backfill(&self) -> Result<Vec<BackfillTree>, DbErr> {
         // Get trees with the `force_chk` flag set.
         let force_chk_trees = UniqueTree::find_by_statement(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            r#"SELECT DISTINCT backfill_items.tree FROM backfill_items WHERE backfill_items.force_chk = TRUE"#,
+            "SELECT DISTINCT backfill_items.tree FROM backfill_items\n\
+            WHERE backfill_items.force_chk = TRUE",
             vec![],
         ))
         .all(&self.db)
         .await?;
+
+        // Convert this Vec of `UniqueTree` to a Vec of `BackfillTree` (which contain extra info).
+        let mut trees: Vec<BackfillTree> = force_chk_trees
+            .into_iter()
+            .map(|tree| BackfillTree::new(tree, true))
+            .collect();
 
         // Get trees with multiple rows from `backfill_items` table.
         let multi_row_trees = UniqueTree::find_by_statement(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            r#"SELECT backfill_items.tree FROM backfill_items GROUP BY backfill_items.tree HAVING COUNT(*) > 1"#,
+            "SELECT backfill_items.tree FROM backfill_items\n\
+            GROUP BY backfill_items.tree\n\
+            HAVING COUNT(*) > 1",
             vec![],
         ))
         .all(&self.db)
         .await?;
 
-        Ok(BackfillTrees {
-            force_chk_trees,
-            multi_row_trees,
-        })
+        // Convert this Vec of `UniqueTree` to a Vec of `BackfillTree` (which contain extra info).
+        let mut multi_row_trees: Vec<BackfillTree> = multi_row_trees
+            .into_iter()
+            .map(|tree| BackfillTree::new(tree, false))
+            .collect();
+
+        trees.append(&mut multi_row_trees);
+
+        Ok(trees)
     }
 
-    async fn backfill_tree_from_seq_1(&self, tree: &[u8]) -> Result<Option<i64>, DbErr> {
+    async fn backfill_tree_from_seq_1(&self, tree: &[u8]) -> Result<Option<i64>, IngesterError> {
         //TODO implement gap filler that gap fills from sequence number 1.
         //For now just return the max sequence number.
-        self.get_max_seq(tree).await
+        self.get_max_seq(tree).await.map_err(Into::into)
     }
 
     async fn get_max_seq(&self, tree: &[u8]) -> Result<Option<i64>, DbErr> {
@@ -405,7 +393,7 @@ impl<T: Messenger> Backfiller<T> {
             .await?;
         let mut gaps = vec![];
 
-        // Look at each pair of trees looking for a gap in sequence number.
+        // Look at each pair of subsequent rows, looking for a gap in sequence number.
         for (prev, curr) in rows.iter().zip(rows.iter().skip(1)) {
             if curr.seq == prev.seq {
                 let message = format!(

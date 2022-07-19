@@ -37,10 +37,12 @@ CREATE TABLE backfill_items
 
 CREATE INDEX backfill_items_tree_idx on backfill_items (tree);
 CREATE INDEX backfill_items_seq_idx on backfill_items (seq);
+CREATE INDEX backfill_items_slot_idx on backfill_items (slot);
 CREATE INDEX backfill_items_force_chk_idx on backfill_items (force_chk);
 CREATE INDEX backfill_items_backfilled_idx on backfill_items (backfilled);
 CREATE INDEX backfill_items_tree_seq_idx on backfill_items (tree, seq);
 CREATE INDEX backfill_items_tree_slot_idx on backfill_items (tree, slot);
+CREATE INDEX backfill_items_tree_force_chk_idx on backfill_items (tree, force_chk);
 
 CREATE or REPLACE FUNCTION notify_new_backfill_item()
     RETURNS trigger
