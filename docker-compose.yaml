@@ -7,7 +7,7 @@ services:
     environment:
       INGESTER_DATABASE_CONFIG: '{listener_channel="backfill_item_added", url="postgres://solana:solana@db/solana"}'
       INGESTER_MESSENGER_CONFIG: '{redis_connection_str="redis://redis"}'
-      INGESTER_RPC_CONFIG: '{url="http://candyland-solana-1:8899"}'
+      INGESTER_RPC_CONFIG: '{url="http://candyland-solana-1:8899", commitment="finalized"}'
     build:
       context: .
       dockerfile: Ingest.Dockerfile

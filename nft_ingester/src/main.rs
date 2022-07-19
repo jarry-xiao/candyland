@@ -46,6 +46,7 @@ pub const DATABASE_URL_KEY: &str = "url";
 pub const DATABASE_LISTENER_CHANNEL_KEY: &str = "listener_channel";
 pub type RpcConfig = figment::value::Dict;
 pub const RPC_URL_KEY: &str = "url";
+pub const RPC_COMMITMENT_KEY: &str = "commitment";
 
 // Struct used for Figment configuration items.
 #[derive(Deserialize, PartialEq, Debug, Clone)]

@@ -4,7 +4,7 @@
 use {
     crate::{
         error::IngesterError, parsers::*, IngesterConfig, DATABASE_LISTENER_CHANNEL_KEY,
-        RPC_URL_KEY,
+        RPC_COMMITMENT_KEY, RPC_URL_KEY,
     },
     digital_asset_types::dao::backfill_items,
     flatbuffers::FlatBufferBuilder,
@@ -18,9 +18,15 @@ use {
         sea_query::{Expr, Query},
         DatabaseConnection, DbBackend, DbErr, FromQueryResult, SqlxPostgresConnector,
     },
-    solana_client::nonblocking::rpc_client::RpcClient,
-    solana_sdk::{commitment_config::CommitmentConfig, pubkey::Pubkey},
-    solana_transaction_status::{UiInstruction::Compiled, UiRawMessage, UiTransactionStatusMeta},
+    solana_client::{nonblocking::rpc_client::RpcClient, rpc_config::RpcBlockConfig},
+    solana_sdk::{
+        commitment_config::{CommitmentConfig, CommitmentLevel},
+        pubkey::Pubkey,
+    },
+    solana_transaction_status::{
+        EncodedConfirmedBlock, UiInstruction::Compiled, UiRawMessage, UiTransactionEncoding,
+        UiTransactionStatusMeta,
+    },
     sqlx::{self, postgres::PgListener, Pool, Postgres},
     std::str::FromStr,
     tokio::time::{sleep, Duration},
@@ -52,10 +58,19 @@ struct UniqueTree {
     tree: Vec<u8>,
 }
 
-/// Struct used when storing which trees to backfill.
-struct BackfillTrees {
-    force_chk_trees: Vec<UniqueTree>,
-    multi_row_trees: Vec<UniqueTree>,
+/// Struct used when storing trees to backfill.
+struct BackfillTree {
+    unique_tree: UniqueTree,
+    backfill_from_seq_1: bool,
+}
+
+impl BackfillTree {
+    fn new(unique_tree: UniqueTree, backfill_from_seq_1: bool) -> Self {
+        Self {
+            unique_tree,
+            backfill_from_seq_1,
+        }
+    }
 }
 
 /// Struct used when querying the max sequence number of a tree.
@@ -88,6 +103,7 @@ struct Backfiller<T: Messenger> {
     db: DatabaseConnection,
     listener: PgListener,
     rpc_client: RpcClient,
+    rpc_block_config: RpcBlockConfig,
     messenger: T,
     failure_delay: u64,
 }
@@ -138,8 +154,34 @@ impl<T: Messenger> Backfiller<T> {
             })
             .unwrap();
 
+        // Get RPC commitment level.
+        let rpc_commitment_level = config
+            .rpc_config
+            .get(&*RPC_COMMITMENT_KEY)
+            .and_then(|v| v.as_str())
+            .ok_or(IngesterError::ConfigurationError {
+                msg: format!("RPC commitment level missing: {}", RPC_COMMITMENT_KEY),
+            })
+            .unwrap();
+
+        // Check if commitment level is valid and create `CommitmentConfig`.
+        let rpc_commitment = CommitmentConfig {
+            commitment: CommitmentLevel::from_str(rpc_commitment_level)
+                .map_err(|_| IngesterError::ConfigurationError {
+                    msg: format!("Invalid RPC commitment level: {}", rpc_commitment_level),
+                })
+                .unwrap(),
+        };
+
+        // Create `RpcBlockConfig` used when getting blocks from RPC provider.
+        let rpc_block_config = RpcBlockConfig {
+            encoding: Some(UiTransactionEncoding::Json),
+            commitment: Some(rpc_commitment),
+            ..RpcBlockConfig::default()
+        };
+
         // Instantiate RPC client.
-        let rpc_client = RpcClient::new_with_commitment(rpc_url, CommitmentConfig::processed());
+        let rpc_client = RpcClient::new_with_commitment(rpc_url, rpc_commitment);
 
         // Instantiate messenger.
         let mut messenger = T::new(config.messenger_config).await.unwrap();
@@ -150,6 +192,7 @@ impl<T: Messenger> Backfiller<T> {
             db,
             listener,
             rpc_client,
+            rpc_block_config,
             messenger,
             failure_delay: INITIAL_FAILURE_DELAY,
         }
@@ -157,13 +200,18 @@ impl<T: Messenger> Backfiller<T> {
 
     /// Run the backfiller task.
     async fn run(&mut self) {
+        // This is always looping, but if there are no trees to backfill, it will wait for a
+        // notification on the db listener channel before continuing.
         loop {
             match self.get_trees_to_backfill().await {
-                Ok(trees) => {
-                    if trees.force_chk_trees.len() == 0 && trees.multi_row_trees.len() == 0 {
-                        // If there are no trees to backfill, wait for a notification on the channel.
+                Ok(backfill_trees) => {
+                    if backfill_trees.len() == 0 {
+                        // If there are no trees to backfill, wait for a notification on the db
+                        // listener channel.
                         let _notification = self.listener.recv().await.unwrap();
                     } else {
+                        println!("New trees to backfill: {}", backfill_trees.len());
+
                         // First just check if we can talk to an RPC provider.
                         match self.rpc_client.get_version().await {
                             Ok(version) => println!("RPC client version {version}"),
@@ -174,73 +222,35 @@ impl<T: Messenger> Backfiller<T> {
                             }
                         }
 
-                        // Trees with the `force_chk` flag must be backfilled from seq num 1.
-                        println!(
-                            "New trees to backfill from seq num 1: {}",
-                            trees.force_chk_trees.len()
-                        );
-                        for tree in trees.force_chk_trees.iter() {
-                            let tree_str = bs58::encode(&tree.tree).into_string();
+                        for backfill_tree in backfill_trees {
+                            // Get the tree out of nested structs.
+                            let tree = backfill_tree.unique_tree.tree;
+                            let tree_str = bs58::encode(&tree).into_string();
                             println!("Backfilling tree: {tree_str}");
 
-                            match self.backfill_tree_from_seq_1(&tree.tree).await {
-                                Ok(opt_max_seq) => {
-                                    if let Some(_max_seq) = opt_max_seq {
-                                        // Debug.
-                                        println!(
-                                            "Successfully backfilled tree from seq 1: {tree_str}"
-                                        );
+                            // Call different methods based on whether tree needs to be backfilled
+                            // completely from seq number 1 or just have any gaps in seq number
+                            // filled.
+                            let result = if backfill_tree.backfill_from_seq_1 {
+                                self.backfill_tree_from_seq_1(&tree).await
+                            } else {
+                                self.fetch_and_plug_gaps(&tree).await
+                            };
 
-                                        // Only delete extra tree rows if fetching and plugging gaps worked.
-                                        if let Err(err) =
-                                            self.clear_force_chk_flag(&tree.tree).await
-                                        {
-                                            println!("Error clearing force_chk flag: {err}");
-                                            self.sleep_and_increase_delay().await;
-                                        } else {
-                                            // Debug.
-                                            println!("Successfully cleared force_chk flag");
-                                            self.reset_delay();
-                                        }
-                                    } else {
-                                        // Debug.
-                                        println!("Unexpected error, tree was in list, but no rows found for {tree_str}");
-                                    }
-                                }
-                                Err(err) => {
-                                    println!("Failed to fetch and plug gaps for {tree_str}");
-                                    println!("{err}");
-                                    self.sleep_and_increase_delay().await;
-                                }
-                            }
-                        }
-
-                        // Trees with multiple rows must be checked for the range of seq nums in
-                        // the `backfill_items` table.
-                        println!(
-                            "New trees to backfill by detecting gaps: {}",
-                            trees.multi_row_trees.len()
-                        );
-                        for tree in trees.multi_row_trees.iter() {
-                            let tree_str = bs58::encode(&tree.tree).into_string();
-                            println!("Backfilling tree: {tree_str}");
-
-                            match self.fetch_and_plug_gaps(&tree.tree).await {
+                            match result {
                                 Ok(opt_max_seq) => {
                                     if let Some(max_seq) = opt_max_seq {
                                         // Debug.
-                                        println!(
-                                            "Successfully fetched and plug gaps for {tree_str}"
-                                        );
+                                        println!("Successfully backfilled tree: {tree_str}");
 
                                         // Only delete extra tree rows if fetching and plugging gaps worked.
                                         if let Err(err) = self
                                             .delete_extra_rows_and_mark_as_backfilled(
-                                                &tree.tree, max_seq,
+                                                &tree, max_seq,
                                             )
                                             .await
                                         {
-                                            println!("Error deleting rows: {err}");
+                                            println!("Error deleting rows and marking as backfilled: {err}");
                                             self.sleep_and_increase_delay().await;
                                         } else {
                                             // Debug.
@@ -250,6 +260,7 @@ impl<T: Messenger> Backfiller<T> {
                                     } else {
                                         // Debug.
                                         println!("Unexpected error, tree was in list, but no rows found for {tree_str}");
+                                        self.sleep_and_increase_delay().await;
                                     }
                                 }
                                 Err(err) => {
@@ -263,7 +274,7 @@ impl<T: Messenger> Backfiller<T> {
                 }
                 Err(err) => {
                     // Print error but keep trying.
-                    println!("Could not get trees from db: {err}");
+                    println!("Could not get trees to backfill from db: {err}");
                     self.sleep_and_increase_delay().await;
                 }
             }
@@ -275,63 +286,65 @@ impl<T: Messenger> Backfiller<T> {
 
         // Increase failure delay up to `MAX_FAILURE_DELAY_MS`.
         self.failure_delay = self.failure_delay.saturating_mul(2);
-        self.failure_delay = if self.failure_delay > MAX_FAILURE_DELAY_MS {
-            MAX_FAILURE_DELAY_MS
-        } else {
-            self.failure_delay
-        };
+        if self.failure_delay > MAX_FAILURE_DELAY_MS {
+            self.failure_delay = MAX_FAILURE_DELAY_MS;
+        }
     }
 
     fn reset_delay(&mut self) {
         self.failure_delay = INITIAL_FAILURE_DELAY;
     }
 
-    async fn get_trees_to_backfill(&self) -> Result<BackfillTrees, DbErr> {
+    async fn get_trees_to_backfill(&self) -> Result<Vec<BackfillTree>, DbErr> {
         // Get trees with the `force_chk` flag set.
         let force_chk_trees = UniqueTree::find_by_statement(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            r#"SELECT DISTINCT backfill_items.tree FROM backfill_items WHERE backfill_items.force_chk = TRUE"#,
+            "SELECT DISTINCT backfill_items.tree FROM backfill_items\n\
+            WHERE backfill_items.force_chk = TRUE",
             vec![],
         ))
         .all(&self.db)
         .await?;
+
+        // Convert this Vec of `UniqueTree` to a Vec of `BackfillTree` (which contain extra info).
+        let mut trees: Vec<BackfillTree> = force_chk_trees
+            .into_iter()
+            .map(|tree| BackfillTree::new(tree, true))
+            .collect();
 
         // Get trees with multiple rows from `backfill_items` table.
         let multi_row_trees = UniqueTree::find_by_statement(Statement::from_sql_and_values(
             DbBackend::Postgres,
-            r#"SELECT backfill_items.tree FROM backfill_items GROUP BY backfill_items.tree HAVING COUNT(*) > 1"#,
+            "SELECT backfill_items.tree FROM backfill_items\n\
+            GROUP BY backfill_items.tree\n\
+            HAVING COUNT(*) > 1",
             vec![],
         ))
         .all(&self.db)
         .await?;
 
-        Ok(BackfillTrees {
-            force_chk_trees,
-            multi_row_trees,
-        })
+        // Convert this Vec of `UniqueTree` to a Vec of `BackfillTree` (which contain extra info).
+        let mut multi_row_trees: Vec<BackfillTree> = multi_row_trees
+            .into_iter()
+            .map(|tree| BackfillTree::new(tree, false))
+            .collect();
+
+        trees.append(&mut multi_row_trees);
+
+        Ok(trees)
     }
 
-    async fn backfill_tree_from_seq_1(&self, tree: &[u8]) -> Result<Option<i64>, DbErr> {
+    async fn backfill_tree_from_seq_1(&self, tree: &[u8]) -> Result<Option<i64>, IngesterError> {
         //TODO implement gap filler that gap fills from sequence number 1.
         //For now just return the max sequence number.
-        self.get_max_seq(tree).await
+        self.get_max_seq(tree).await.map_err(Into::into)
     }
 
     async fn get_max_seq(&self, tree: &[u8]) -> Result<Option<i64>, DbErr> {
-        //TODO Find better, simpler query for this.
         let rows = backfill_items::Entity::find()
             .filter(backfill_items::Column::Tree.eq(tree))
-            .filter(
-                Condition::any().add(
-                    backfill_items::Column::Seq.in_subquery(
-                        Query::select()
-                            .expr(backfill_items::Column::Seq.max())
-                            .from(backfill_items::Entity)
-                            .and_where(backfill_items::Column::Tree.eq(tree))
-                            .to_owned(),
-                    ),
-                ),
-            )
+            .order_by_desc(backfill_items::Column::Seq)
+            .limit(1)
             .all(&self.db)
             .await?;
 
@@ -376,18 +389,12 @@ impl<T: Messenger> Backfiller<T> {
             "SELECT MAX (\"backfill_items\".\"seq\")",
         );
 
-        // Debug.
-        //println!("{}", query.to_string());
-
         let start_seq_vec = MaxSeqItem::find_by_statement(query).all(&self.db).await?;
         let start_seq = if start_seq_vec.len() > 0 {
             start_seq_vec[0].max
         } else {
             0
         };
-
-        // Debug.
-        //println!("MAX: {}", start_seq);
 
         // Get all rows for the tree that have not yet been backfilled.
         let mut query = backfill_items::Entity::find()
@@ -405,7 +412,7 @@ impl<T: Messenger> Backfiller<T> {
             .await?;
         let mut gaps = vec![];
 
-        // Look at each pair of trees looking for a gap in sequence number.
+        // Look at each pair of subsequent rows, looking for a gap in sequence number.
         for (prev, curr) in rows.iter().zip(rows.iter().skip(1)) {
             if curr.seq == prev.seq {
                 let message = format!(
@@ -437,17 +444,18 @@ impl<T: Messenger> Backfiller<T> {
             .map_err(|e| IngesterError::RpcGetDataError(e.to_string()))?;
 
         for slot in gap.prev.slot..gap.curr.slot {
-            let block_data = self
-                .rpc_client
-                .get_block(slot as u64)
-                .await
-                .map_err(|e| IngesterError::RpcGetDataError(e.to_string()))?;
+            let block_data = EncodedConfirmedBlock::from(
+                self.rpc_client
+                    .get_block_with_config(slot as u64, self.rpc_block_config)
+                    .await
+                    .map_err(|e| IngesterError::RpcGetDataError(e.to_string()))?,
+            );
 
             // Debug.
             println!("num txs: {}", block_data.transactions.len());
             for tx in block_data.transactions {
                 // Debug.
-                //println!("HERE IS THE TX");
+                //println!("TX from RPC provider:");
                 //println!("{:#?}", tx);
 
                 // See if transaction has an error.
@@ -533,7 +541,7 @@ impl<T: Messenger> Backfiller<T> {
     async fn delete_extra_rows_and_mark_as_backfilled(
         &self,
         tree: &[u8],
-        seq: i64,
+        max_seq: i64,
     ) -> Result<(), DbErr> {
         // Debug.
         let test_items = backfill_items::Entity::find()
@@ -546,19 +554,19 @@ impl<T: Messenger> Backfiller<T> {
         }
 
         // Delete all rows in the `backfill_items` table for a specified tree, except for the row with
-        // the user-specified sequence number.  One row for each tree must remain so that gaps can be
+        // the caller-specified max seq number.  One row for each tree must remain so that gaps can be
         // detected after subsequent inserts.
         backfill_items::Entity::delete_many()
             .filter(backfill_items::Column::Tree.eq(tree))
-            .filter(backfill_items::Column::Seq.ne(seq))
+            .filter(backfill_items::Column::Seq.ne(max_seq))
             .exec(&self.db)
             .await?;
 
-        // Remove any duplicates that have the user-specified seq number (this should not happen under
-        // normal circumstances).
+        // Remove any duplicates that have the caller-specified max seq number.  This happens when
+        // a transaction that was already handled is replayed during backfilling.
         let items = backfill_items::Entity::find()
             .filter(backfill_items::Column::Tree.eq(tree))
-            .filter(backfill_items::Column::Seq.eq(seq))
+            .filter(backfill_items::Column::Seq.eq(max_seq))
             .all(&self.db)
             .await?;
 
@@ -576,6 +584,9 @@ impl<T: Messenger> Backfiller<T> {
             .filter(backfill_items::Column::Tree.eq(tree))
             .exec(&self.db)
             .await?;
+
+        // Clear the `force_chk` flag if it was set.
+        self.clear_force_chk_flag(tree).await?;
 
         // Debug.
         let test_items = backfill_items::Entity::find()
