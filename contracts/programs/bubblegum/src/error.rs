@@ -24,4 +24,12 @@ pub enum BubblegumError {
     MetadataUriTooLong,
     #[msg("Basis points in metadata cannot exceed 10000")]
     MetadataBasisPointsTooHigh,
+    #[msg("Not enough unapproved mints left")]
+    NotEnoughMintCapacity,
+    #[msg("Mint authority request not approved")]
+    MintAuthorityRequestNotApproved,
+    #[msg("Mint authority key does not match request")]
+    MintAuthorityRequestKeyMismatch,
+    #[msg("Missing the request account, needed to verify mint authority")]
+    MissingRequestAccount,
 }

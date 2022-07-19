@@ -11,19 +11,19 @@ import { MetadataArgs, metadataArgsBeet } from '../types/MetadataArgs'
 
 /**
  * @category Instructions
- * @category MintV1
+ * @category MintV1Creator
  * @category generated
  */
-export type MintV1InstructionArgs = {
+export type MintV1CreatorInstructionArgs = {
   message: MetadataArgs
 }
 /**
  * @category Instructions
- * @category MintV1
+ * @category MintV1Creator
  * @category generated
  */
-export const mintV1Struct = new beet.FixableBeetArgsStruct<
-  MintV1InstructionArgs & {
+export const mintV1CreatorStruct = new beet.FixableBeetArgsStruct<
+  MintV1CreatorInstructionArgs & {
     instructionDiscriminator: number[] /* size: 8 */
   }
 >(
@@ -31,12 +31,11 @@ export const mintV1Struct = new beet.FixableBeetArgsStruct<
     ['instructionDiscriminator', beet.uniformFixedSizeArray(beet.u8, 8)],
     ['message', metadataArgsBeet],
   ],
-  'MintV1InstructionArgs'
+  'MintV1CreatorInstructionArgs'
 )
 /**
- * Accounts required by the _mintV1_ instruction
+ * Accounts required by the _mintV1Creator_ instruction
  *
- * @property [_writable_] mintAuthorityRequest
  * @property [**signer**] mintAuthority
  * @property [_writable_] authority
  * @property [] candyWrapper
@@ -45,11 +44,10 @@ export const mintV1Struct = new beet.FixableBeetArgsStruct<
  * @property [] delegate
  * @property [_writable_] merkleSlab
  * @category Instructions
- * @category MintV1
+ * @category MintV1Creator
  * @category generated
  */
-export type MintV1InstructionAccounts = {
-  mintAuthorityRequest: web3.PublicKey
+export type MintV1CreatorInstructionAccounts = {
   mintAuthority: web3.PublicKey
   authority: web3.PublicKey
   candyWrapper: web3.PublicKey
@@ -59,35 +57,30 @@ export type MintV1InstructionAccounts = {
   merkleSlab: web3.PublicKey
 }
 
-export const mintV1InstructionDiscriminator = [
-  145, 98, 192, 118, 184, 147, 118, 104,
+export const mintV1CreatorInstructionDiscriminator = [
+  153, 190, 51, 230, 109, 157, 167, 16,
 ]
 
 /**
- * Creates a _MintV1_ instruction.
+ * Creates a _MintV1Creator_ instruction.
  *
  * @param accounts that will be accessed while the instruction is processed
  * @param args to provide as instruction data to the program
  *
  * @category Instructions
- * @category MintV1
+ * @category MintV1Creator
  * @category generated
  */
-export function createMintV1Instruction(
-  accounts: MintV1InstructionAccounts,
-  args: MintV1InstructionArgs,
+export function createMintV1CreatorInstruction(
+  accounts: MintV1CreatorInstructionAccounts,
+  args: MintV1CreatorInstructionArgs,
   programId = new web3.PublicKey('BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY')
 ) {
-  const [data] = mintV1Struct.serialize({
-    instructionDiscriminator: mintV1InstructionDiscriminator,
+  const [data] = mintV1CreatorStruct.serialize({
+    instructionDiscriminator: mintV1CreatorInstructionDiscriminator,
     ...args,
   })
   const keys: web3.AccountMeta[] = [
-    {
-      pubkey: accounts.mintAuthorityRequest,
-      isWritable: true,
-      isSigner: false,
-    },
     {
       pubkey: accounts.mintAuthority,
       isWritable: false,

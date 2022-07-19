@@ -53,8 +53,123 @@
       ]
     },
     {
+      "name": "requestMintAuthority",
+      "accounts": [
+        {
+          "name": "mintAuthorityRequest",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "mintAuthority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "treeAuthority",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "merkleSlab",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "mintCapacity",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "approveMintAuthorityRequest",
+      "accounts": [
+        {
+          "name": "mintAuthorityRequest",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "treeDelegate",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "treeAuthority",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "merkleSlab",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "mintV1Creator",
+      "accounts": [
+        {
+          "name": "mintAuthority",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "authority",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "candyWrapper",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "gummyrollProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "owner",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "delegate",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "merkleSlab",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "message",
+          "type": {
+            "defined": "MetadataArgs"
+          }
+        }
+      ]
+    },
+    {
       "name": "mintV1",
       "accounts": [
+        {
+          "name": "mintAuthorityRequest",
+          "isMut": true,
+          "isSigner": false
+        },
         {
           "name": "mintAuthority",
           "isMut": false,
@@ -606,12 +721,52 @@
   ],
   "accounts": [
     {
-      "name": "Nonce",
+      "name": "MintAuthorityRequest",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "count",
+            "name": "mintAuthority",
+            "type": "publicKey"
+          },
+          {
+            "name": "mintCapacity",
+            "type": "u64"
+          },
+          {
+            "name": "numMinted",
+            "type": "u64"
+          },
+          {
+            "name": "approved",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TreeAuthority",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "publicKey"
+          },
+          {
+            "name": "delegate",
+            "type": "publicKey"
+          },
+          {
+            "name": "totalMintCapacity",
+            "type": "u64"
+          },
+          {
+            "name": "numMintsApproved",
+            "type": "u64"
+          },
+          {
+            "name": "numMinted",
             "type": "u64"
           }
         ]
@@ -1081,6 +1236,26 @@
       "code": 6010,
       "name": "MetadataBasisPointsTooHigh",
       "msg": "Basis points in metadata cannot exceed 10000"
+    },
+    {
+      "code": 6011,
+      "name": "NotEnoughMintCapacity",
+      "msg": "Not enough unapproved mints left"
+    },
+    {
+      "code": 6012,
+      "name": "MintAuthorityRequestNotApproved",
+      "msg": "Mint authority request not approved"
+    },
+    {
+      "code": 6013,
+      "name": "MintAuthorityRequestKeyMismatch",
+      "msg": "Mint authority key does not match request"
+    },
+    {
+      "code": 6014,
+      "name": "MissingRequestAccount",
+      "msg": "Missing the request account, needed to verify mint authority"
     }
   ],
   "metadata": {

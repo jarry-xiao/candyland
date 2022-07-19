@@ -1,7 +1,7 @@
 import { BN } from "@project-serum/anchor";
 import { TransactionInstruction, PublicKey, Connection, AccountInfo } from "@solana/web3.js";
 import { keccak_256 } from "js-sha3";
-import { Creator, Nonce, PROGRAM_ID } from './generated';
+import { Creator, TreeAuthority, PROGRAM_ID } from './generated';
 import { CANDY_WRAPPER_PROGRAM_ID, bufferToArray, num16ToBuffer } from "../../utils";
 import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID, createAllocTreeIx } from "../../gummyroll";
 import { createCreateTreeInstruction } from "./generated";
@@ -14,9 +14,25 @@ export async function getBubblegumAuthorityPDA(merkleRollPubKey: PublicKey) {
     return bubblegumAuthorityPDAKey;
 }
 
+export async function getMintAuthorityRequestPDA(merkleRollPubKey: PublicKey, requester: PublicKey) {
+    const [mintAuthorityRequest] = await PublicKey.findProgramAddress(
+        [merkleRollPubKey.toBuffer(), requester.toBuffer()],
+        PROGRAM_ID
+    );
+    return mintAuthorityRequest;
+}
+
 export async function getNonceCount(connection: Connection, tree: PublicKey): Promise<BN> {
     const treeAuthority = await getBubblegumAuthorityPDA(tree);
-    return new BN((await Nonce.fromAccountAddress(connection, treeAuthority)).count);
+    return new BN((await TreeAuthority.fromAccountAddress(connection, treeAuthority)).numMinted);
+}
+
+export async function getMintAuthorityRequest(merkleRollPubKey: PublicKey, requesterPubkey: PublicKey): Promise<PublicKey> {
+    const [requestPubkey] = await PublicKey.findProgramAddress(
+        [merkleRollPubKey.toBuffer(), requesterPubkey.toBuffer()],
+        PROGRAM_ID
+    );
+    return requestPubkey;
 }
 
 export async function getVoucherPDA(connection: Connection, tree: PublicKey, leafIndex: number): Promise<PublicKey> {

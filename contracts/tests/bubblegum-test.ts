@@ -214,6 +214,8 @@ describe("bubblegum", function () {
     const mintIx = createMintV1Instruction(
       {
         mintAuthority: payer.publicKey,
+        // Dummy key
+        mintAuthorityRequest: payer.publicKey,
         authority: treeAuthority,
         candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
         gummyrollProgram: GummyrollProgramId,
@@ -442,6 +444,7 @@ describe("bubblegum", function () {
     const mintIx = createMintV1Instruction(
       {
         mintAuthority: payer.publicKey,
+        mintAuthorityRequest: payer.publicKey,
         authority: treeAuthority,
         candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
         gummyrollProgram: GummyrollProgramId,
