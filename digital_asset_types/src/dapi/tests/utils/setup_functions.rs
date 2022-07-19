@@ -6,19 +6,7 @@ use anchor_client::solana_sdk::{
     system_program, sysvar,
 };
 use anchor_lang::*;
-use mpl_auction_house::{
-    pda::{
-        find_auction_house_address, find_auction_house_fee_account_address,
-        find_auction_house_treasury_address, find_auctioneer_pda,
-        find_auctioneer_trade_state_address, find_bid_receipt_address, find_escrow_payment_address,
-        find_listing_receipt_address, find_program_as_signer_address,
-        find_public_bid_trade_state_address, find_purchase_receipt_address,
-        find_trade_state_address,
-    },
-    AuctionHouse, AuthorityScope,
-};
 
-use mpl_testing_utils::{solana::airdrop, utils::Metadata};
 use std::result::Result as StdResult;
 
 use bubblegum;

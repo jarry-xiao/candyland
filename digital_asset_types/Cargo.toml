@@ -26,3 +26,7 @@ mpl-token-metadata = { git = "https://github.com/jarry-xiao/metaplex-program-lib
 jsonpath_lib = "0.3.0"
 mime_guess = "2.0.4"
 url = "2.2.2"
+
+[dev-dependencies]
+solana-program = "~1.9.28"
+solana-program-test = "~1.9.28"
