@@ -18,6 +18,7 @@ pub struct Model {
     pub asset_id: Vec<u8>,
     pub group_key: String,
     pub group_value: String,
+    pub seq: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveColumn)]
@@ -26,6 +27,7 @@ pub enum Column {
     AssetId,
     GroupKey,
     GroupValue,
+    Seq,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DerivePrimaryKey)]
@@ -53,6 +55,7 @@ impl ColumnTrait for Column {
             Self::AssetId => ColumnType::Binary.def(),
             Self::GroupKey => ColumnType::Text.def(),
             Self::GroupValue => ColumnType::Text.def(),
+            Self::Seq => ColumnType::BigInteger.def(),
         }
     }
 }
