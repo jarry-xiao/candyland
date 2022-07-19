@@ -7,12 +7,16 @@ export const CANDY_WRAPPER_PROGRAM_ID = new PublicKey("WRAPYChf58WFCnyjXKJHtrPgz
 
 /// Wait for a transaction of a certain id to confirm and optionally log its messages
 export async function logTx(provider: Provider, txId: string, verbose: boolean = true) {
-  await provider.connection.confirmTransaction(txId, "confirmed");
-  if (verbose) {
+  const tx = await provider.connection.confirmTransaction(txId, "confirmed");
+  if (tx.value.err || verbose) {
     console.log(
       (await provider.connection.getConfirmedTransaction(txId, "confirmed")).meta
         .logMessages
     );
+  }
+  if (tx.value.err) {
+    console.log("Transaction failed");
+    throw new Error(JSON.stringify(tx.value.err));
   }
 };
 

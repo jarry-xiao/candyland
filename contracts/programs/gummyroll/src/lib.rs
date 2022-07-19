@@ -69,6 +69,22 @@ pub struct Modify<'info> {
     pub candy_wrapper: Program<'info, CandyWrapper>,
 }
 
+/// Context for appending a new leaf to the tree
+#[derive(Accounts)]
+pub struct Append<'info> {
+    #[account(mut)]
+    /// CHECK: This account is validated in the instruction
+    pub merkle_roll: UncheckedAccount<'info>,
+
+    /// Authority that validates the content of the trees.
+    /// Typically a program, e.g., the Bubblegum contract validates that leaves are valid NFTs.
+    pub authority: Signer<'info>,
+
+    /// Program used to emit changelogs as instruction data.
+    /// See `WRAPYChf58WFCnyjXKJHtrPgzKXgHp6MD9aVDqJBbGh`
+    pub candy_wrapper: Program<'info, CandyWrapper>,
+}
+
 /// Context for validating a provided proof against the Merkle tree.
 /// Throws an error if provided proof is invalid.
 #[derive(Accounts)]

@@ -331,6 +331,8 @@ fn find_and_mint_compressed_nfts<'info>(
                 owner: payer.to_account_info(),
                 delegate: payer.to_account_info(),
                 merkle_slab: merkle_slab.to_account_info(),
+                // dummy account
+                mint_authority_request: payer.to_account_info(),
             },
             authority_pda_signer,
         );
