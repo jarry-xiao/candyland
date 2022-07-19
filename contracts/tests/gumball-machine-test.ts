@@ -285,12 +285,12 @@ describe("gumball-machine", () => {
       let c: GumballCreatorAdapter = {
         address: gumballMachineInitArgs.creatorKeys[i],
         share: gumballMachineInitArgs.creatorShares[i],
-        verified: 1
+        verified: 0
       }
       expectedCreators.push(c);
     }
     gumballMachineInitArgs.creatorKeys
-    let c: GumballCreatorAdapter = { address: Keypair.generate().publicKey, verified: 1, share: 1 };
+    let c: GumballCreatorAdapter = { address: Keypair.generate().publicKey, verified: 0, share: 1 };
     let expectedOnChainHeader: GumballMachineHeader = {
       urlBase: gumballMachineInitArgs.urlBase,
       nameBase: gumballMachineInitArgs.nameBase,
@@ -490,6 +490,8 @@ describe("gumball-machine", () => {
     merkleRollKeypair: Keypair,
     verbose?: boolean
   ) {
+    // Request max compute for tx (by default: 200k given per instruction)
+    const requestCU = ComputeBudgetProgram.requestUnits({ units: 1.4e6, additionalFee: 0 });
     const dispenseInstr = await createDispenseNFTForSolIx(
       { numItems: numNFTs },
       payer.publicKey,
@@ -499,7 +501,7 @@ describe("gumball-machine", () => {
     );
     const txId = await execute(
       GumballMachine.provider,
-      [dispenseInstr],
+      [requestCU, dispenseInstr],
       [payer],
       true
     );
@@ -846,7 +848,7 @@ describe("gumball-machine", () => {
             let c: GumballCreatorAdapter = {
               address: creatorKeys[i],
               share: creatorShares[i],
-              verified: 1
+              verified: 0
             }
             expectedCreators.push(c);
           }
@@ -1270,7 +1272,7 @@ describe("gumball-machine", () => {
             let c: GumballCreatorAdapter = {
               address: creatorKeys[i],
               share: creatorShares[i],
-              verified: 1
+              verified: 0
             }
             expectedCreators.push(c);
           }
