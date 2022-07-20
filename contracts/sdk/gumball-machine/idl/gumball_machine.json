@@ -621,7 +621,7 @@
                 {
                   "defined": "GumballCreatorAdapter"
                 },
-                5
+                4
               ]
             }
           },
@@ -630,7 +630,7 @@
             "type": {
               "array": [
                 "u8",
-                1
+                3
               ]
             }
           },

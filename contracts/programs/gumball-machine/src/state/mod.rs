@@ -28,7 +28,8 @@ impl EncodeMethod {
     }
 }
 
-pub const NUM_CREATORS: usize = 5;
+// TODO: ideally this could be expressed as: mpl_token_metadata::state::MAX_CREATOR_LIMIT - 1, but this throws an uncaught exception within Anchor
+pub const NUM_CREATORS: usize = 4;
 
 // Adapter Creator class that implements POD
 #[repr(C)]
@@ -85,7 +86,7 @@ pub struct GumballMachineHeader {
     // Secondary sale royalty recipients
     pub creators: [GumballCreatorAdapter; NUM_CREATORS],
     // Used for 8-byte aligning zero copy structs
-    pub _padding: [u8; 1],
+    pub _padding: [u8; 3],
     pub price: u64,
     pub go_live_date: i64,
     // Mint of the Token used to purchase NFTs

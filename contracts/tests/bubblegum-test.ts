@@ -38,9 +38,9 @@ import {
   TOKEN_PROGRAM_ID,
   Token,
 } from "@solana/spl-token";
-import { bufferToArray, execute, num16ToBuffer } from "./utils";
+import { bufferToArray, num16ToBuffer } from "./utils";
 import { TokenProgramVersion, Version, Creator } from "../sdk/bubblegum/src/generated";
-import { CANDY_WRAPPER_PROGRAM_ID } from "../sdk/utils";
+import { CANDY_WRAPPER_PROGRAM_ID, execute } from "../sdk/utils";
 import { getBubblegumAuthorityPDA, getCreateTreeIxs, getNonceCount, getVoucherPDA } from "../sdk/bubblegum/src/convenience";
 
 // @ts-ignore
@@ -124,6 +124,33 @@ describe("bubblegum", () => {
     return [merkleRollKeypair, tree, authority];
   }
 
+  const getMetadata = async (
+    mint: anchor.web3.PublicKey
+  ): Promise<anchor.web3.PublicKey> => {
+    return (
+      await anchor.web3.PublicKey.findProgramAddress(
+        [Buffer.from("metadata"), PROGRAM_ID.toBuffer(), mint.toBuffer()],
+        PROGRAM_ID
+      )
+    )[0];
+  };
+
+  const getMasterEdition = async (
+    mint: anchor.web3.PublicKey
+  ): Promise<anchor.web3.PublicKey> => {
+    return (
+      await anchor.web3.PublicKey.findProgramAddress(
+        [
+          Buffer.from("metadata"),
+          PROGRAM_ID.toBuffer(),
+          mint.toBuffer(),
+          Buffer.from("edition"),
+        ],
+        PROGRAM_ID
+      )
+    )[0];
+  };
+
   describe("Testing bubblegum", () => {
     beforeEach(async () => {
       let [computedMerkleRoll, computedOffChainTree, computedTreeAuthority] =
@@ -132,7 +159,7 @@ describe("bubblegum", () => {
       offChainTree = computedOffChainTree;
       treeAuthority = computedTreeAuthority;
     });
-    it("All operations work, tree without creators", async () => {
+    it("All operations work, metadata without creators", async () => {
       const metadata = {
         name: "test",
         symbol: "test",
@@ -147,6 +174,7 @@ describe("bubblegum", () => {
         uses: null,
         creators: [],
       };
+      console.log(" - Minting to tree");
       const mintIx = createMintV1Instruction(
         {
           mintAuthority: payer.publicKey,
@@ -159,15 +187,9 @@ describe("bubblegum", () => {
         },
         { message: metadata }
       );
-      console.log(" - Minting to tree");
-      const mintTx = await Bubblegum.provider.send(
-        new Transaction().add(mintIx),
-        [payer],
-        {
-          skipPreflight: true,
-          commitment: "confirmed",
-        }
-      );
+      await execute(Bubblegum.provider, [mintIx], [payer]);
+
+      // Compute data hash
       const metadataArgsBuffer = mintIx.data.slice(8)
       const metadataArgsHash = keccak_256.digest(metadataArgsBuffer);
       const sellerFeeBasisPointsNumberArray = bufferToArray(num16ToBuffer(metadata.sellerFeeBasisPoints))
@@ -175,7 +197,10 @@ describe("bubblegum", () => {
       const dataHash = bufferToArray(
         Buffer.from(keccak_256.digest(allDataToHash))
       );
+
+      // Compute creator hash
       const creatorHash = bufferToArray(Buffer.from(keccak_256.digest([])));
+
       let onChainRoot = await getRootOfOnChainMerkleRoot(connection, merkleRollKeypair.publicKey);
 
       console.log(" - Transferring Ownership");
@@ -246,14 +271,7 @@ describe("bubblegum", () => {
         }
       );
       delTransferIx.keys[2].isSigner = true;
-      let delTransferTx = await Bubblegum.provider.send(
-        new Transaction().add(delTransferIx),
-        [delegateKey],
-        {
-          skipPreflight: true,
-          commitment: "confirmed",
-        }
-      );
+      await execute(Bubblegum.provider, [delTransferIx], [delegateKey]);
 
       onChainRoot = await getRootOfOnChainMerkleRoot(connection, merkleRollKeypair.publicKey);
 
@@ -282,14 +300,8 @@ describe("bubblegum", () => {
           index: 0,
         }
       );
-      let redeemTx = await Bubblegum.provider.send(
-        new Transaction().add(redeemIx),
-        [payer],
-        {
-          skipPreflight: true,
-          commitment: "confirmed",
-        }
-      );
+      await execute(Bubblegum.provider, [redeemIx], [payer]);
+
       console.log(" - Cancelling redeem (reinserting to tree)");
 
       const cancelRedeemIx = createCancelRedeemInstruction(
@@ -305,13 +317,7 @@ describe("bubblegum", () => {
           root: bufferToArray(onChainRoot),
         }
       );
-      let cancelRedeemTx = await Bubblegum.provider.send(
-        new Transaction().add(cancelRedeemIx),
-        [payer],
-        {
-          commitment: "confirmed",
-        }
-      );
+      await execute(Bubblegum.provider, [cancelRedeemIx], [payer]);
 
       console.log(" - Decompressing leaf");
 
@@ -333,15 +339,7 @@ describe("bubblegum", () => {
           index: 0,
         }
       );
-      let redeemTx2 = await Bubblegum.provider.send(
-        new Transaction().add(redeemIx),
-        [payer],
-        {
-          commitment: "confirmed",
-        }
-      );
-
-      let voucherData = await Bubblegum.account.voucher.fetch(voucher);
+      await execute(Bubblegum.provider, [redeemIx], [payer]);
 
       let [asset] = await PublicKey.findProgramAddress(
         [
@@ -356,33 +354,6 @@ describe("bubblegum", () => {
         [asset.toBuffer()],
         Bubblegum.programId
       );
-
-      const getMetadata = async (
-        mint: anchor.web3.PublicKey
-      ): Promise<anchor.web3.PublicKey> => {
-        return (
-          await anchor.web3.PublicKey.findProgramAddress(
-            [Buffer.from("metadata"), PROGRAM_ID.toBuffer(), mint.toBuffer()],
-            PROGRAM_ID
-          )
-        )[0];
-      };
-
-      const getMasterEdition = async (
-        mint: anchor.web3.PublicKey
-      ): Promise<anchor.web3.PublicKey> => {
-        return (
-          await anchor.web3.PublicKey.findProgramAddress(
-            [
-              Buffer.from("metadata"),
-              PROGRAM_ID.toBuffer(),
-              mint.toBuffer(),
-              Buffer.from("edition"),
-            ],
-            PROGRAM_ID
-          )
-        )[0];
-      };
 
       let decompressIx = createDecompressV1Instruction(
         {
@@ -406,16 +377,9 @@ describe("bubblegum", () => {
           metadata,
         }
       );
-
-      let decompressTx = await Bubblegum.provider.send(
-        new Transaction().add(decompressIx),
-        [payer],
-        {
-          commitment: "confirmed",
-        }
-      );
+      await execute(Bubblegum.provider, [decompressIx], [payer]);
     });
-    it("Mint to tree", async () => {
+    it("Can mint and decompress with creators", async () => {
       const metadata = {
         name: "test",
         symbol: "test",
@@ -435,6 +399,8 @@ describe("bubblegum", () => {
           { address: Keypair.generate().publicKey, share: 40, verified: false }
         ],
       };
+
+      console.log(" - Minting to tree");
       const mintIx = createMintV1Instruction(
         {
           mintAuthority: payer.publicKey,
@@ -447,15 +413,7 @@ describe("bubblegum", () => {
         },
         { message: metadata }
       );
-      console.log(" - Minting to tree");
-      const mintTx = await Bubblegum.provider.send(
-        new Transaction().add(mintIx),
-        [payer],
-        {
-          skipPreflight: true,
-          commitment: "confirmed",
-        }
-      );
+      await execute(Bubblegum.provider, [mintIx], [payer]);
 
       // Compute data hash
       const metadataArgsBuffer = mintIx.data.slice(8)
@@ -506,15 +464,7 @@ describe("bubblegum", () => {
           index: 0,
         }
       );
-      let redeemTx2 = await Bubblegum.provider.send(
-        new Transaction().add(redeemIx),
-        [payer],
-        {
-          commitment: "confirmed",
-        }
-      );
-
-      let voucherData = await Bubblegum.account.voucher.fetch(voucher);
+      await execute(Bubblegum.provider, [redeemIx], [payer]);
 
       let [asset] = await PublicKey.findProgramAddress(
         [
@@ -529,33 +479,6 @@ describe("bubblegum", () => {
         [asset.toBuffer()],
         Bubblegum.programId
       );
-
-      const getMetadata = async (
-        mint: anchor.web3.PublicKey
-      ): Promise<anchor.web3.PublicKey> => {
-        return (
-          await anchor.web3.PublicKey.findProgramAddress(
-            [Buffer.from("metadata"), PROGRAM_ID.toBuffer(), mint.toBuffer()],
-            PROGRAM_ID
-          )
-        )[0];
-      };
-
-      const getMasterEdition = async (
-        mint: anchor.web3.PublicKey
-      ): Promise<anchor.web3.PublicKey> => {
-        return (
-          await anchor.web3.PublicKey.findProgramAddress(
-            [
-              Buffer.from("metadata"),
-              PROGRAM_ID.toBuffer(),
-              mint.toBuffer(),
-              Buffer.from("edition"),
-            ],
-            PROGRAM_ID
-          )
-        )[0];
-      };
 
       let decompressIx = createDecompressV1Instruction(
         {
@@ -579,14 +502,7 @@ describe("bubblegum", () => {
           metadata,
         }
       );
-
-      let decompressTx = await Bubblegum.provider.send(
-        new Transaction().add(decompressIx),
-        [payer],
-        {
-          commitment: "confirmed",
-        }
-      );
+      await execute(Bubblegum.provider, [decompressIx], [payer]);
     });
   });
 });

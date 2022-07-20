@@ -379,7 +379,6 @@ pub mod gumball_machine {
             Default::default(),
             Default::default(),
             Default::default(),
-            Default::default(),
         ];
         assert_eq!(creator_keys.len(), creator_shares.len());
         assert!(
@@ -412,7 +411,7 @@ pub mod gumball_machine {
                 None => EncodeMethod::UTF8.to_u8(),
             },
             creators,
-            _padding: [0; 1],
+            _padding: [0; 3],
             price,
             go_live_date,
             bot_wallet,
@@ -646,7 +645,6 @@ pub mod gumball_machine {
                     Default::default(),
                     Default::default(),
                     Default::default(),
-                    Default::default(),
                 ];
                 for i in 0..cks.len() {
                     let creator_to_add = GumballCreatorAdapter {
@@ -659,7 +657,7 @@ pub mod gumball_machine {
                 }
                 // Overwrite existing creators array, note all creators must then be re-verified
                 gumball_machine.creators = creators;
-            },
+            }
             None => {}
         }
         Ok(())

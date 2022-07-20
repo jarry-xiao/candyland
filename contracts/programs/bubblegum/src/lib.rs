@@ -3,7 +3,7 @@ use {
     crate::state::metaplex_anchor::MplTokenMetadata,
     crate::state::{
         leaf_schema::{LeafSchema, Version},
-        metaplex_adapter::{MetadataArgs, TokenProgramVersion, Creator},
+        metaplex_adapter::{Creator, MetadataArgs, TokenProgramVersion},
         metaplex_anchor::{MasterEdition, TokenMetadata},
         NFTDecompressionEvent, NewNFTEvent, Nonce, Voucher, ASSET_PREFIX, NONCE_SIZE,
         VOUCHER_PREFIX, VOUCHER_SIZE,
@@ -287,7 +287,11 @@ pub struct Compress<'info> {
 
 pub fn hash_metadata(metadata: &MetadataArgs) -> Result<[u8; 32]> {
     let metadata_args_hash = keccak::hashv(&[metadata.try_to_vec()?.as_slice()]);
-    Ok(keccak::hashv(&[&metadata_args_hash.to_bytes(), &metadata.seller_fee_basis_points.to_le_bytes()]).to_bytes())
+    Ok(keccak::hashv(&[
+        &metadata_args_hash.to_bytes(),
+        &metadata.seller_fee_basis_points.to_le_bytes(),
+    ])
+    .to_bytes())
 }
 
 pub enum InstructionName {
@@ -356,7 +360,10 @@ pub mod bubblegum {
 
         // @dev: seller_fee_basis points is encoded twice so that it can be passed to marketplace instructions, without passing the entire, un-hashed MetadataArgs struct
         let metadata_args_hash = keccak::hashv(&[message.try_to_vec()?.as_slice()]);
-        let data_hash = keccak::hashv(&[&metadata_args_hash.to_bytes(), &message.seller_fee_basis_points.to_le_bytes()]);
+        let data_hash = keccak::hashv(&[
+            &metadata_args_hash.to_bytes(),
+            &message.seller_fee_basis_points.to_le_bytes(),
+        ]);
         let nonce = &mut ctx.accounts.authority;
         let creator_data = message
             .creators
@@ -748,9 +755,18 @@ pub mod bubblegum {
                 metadata.uri.clone(),
                 if metadata.creators.len() > 0 {
                     let mut ammended_metadata_creators = metadata.creators;
-                    ammended_metadata_creators.push(Creator {address: ctx.accounts.mint_authority.key(), verified: true, share: 0});
+                    ammended_metadata_creators.push(Creator {
+                        address: ctx.accounts.mint_authority.key(),
+                        verified: true,
+                        share: 0,
+                    });
                     assert!(ammended_metadata_creators.len() <= mpl_token_metadata::state::MAX_CREATOR_LIMIT, "Supplied metadata can have at most {} creators to leave space for mint_authority PDA creator", mpl_token_metadata::state::MAX_CREATOR_LIMIT-1);
-                    Some(ammended_metadata_creators.iter().map(|c| c.adapt()).collect())
+                    Some(
+                        ammended_metadata_creators
+                            .iter()
+                            .map(|c| c.adapt())
+                            .collect(),
+                    )
                 } else {
                     None
                 },
