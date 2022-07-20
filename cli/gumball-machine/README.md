@@ -68,13 +68,13 @@ Example `init.json` (note the actual example json directory is also included for
     "authority": "5RomdRbiZ3UYwpojr9j3SQptjJQULmx6rpU1Bfbr7mpG",
     "collectionKey": null,
     "extensionLen": 28,
-    "maxMintSize": 10,
-    "maxItems": 250,
+    "maxMintSize": 6,
+    "maxItems": 8,
     "creatorKeys": [
       "H8DWGKyCSaKtgh1GjyqexVcMe8FPyKQoBhKH79QnhDWx",
       "Es1EV724ihL7mYzjEiUV1QgcNdwoTpGByLiWSwKFRsAb"
     ],
-    "creatorShares": [1, 5]
+    "creatorShares": [20, 80]
   },
   "optionals": {
     "canopyDepth": 2
@@ -94,6 +94,8 @@ Created Gumball Machine Pubkey: 4SLVDrLyadq6rDb3sKiDR2nX99BiGvXME51Z8B3sPCrE
 Created Merkle Roll Publickey: FFsMEokRrRNmaWXoXeud42A27UNXq7qzfLCDbrosyoC4
 ```
 
+Something which may be useful, especially for larger gumball machines, is to avoid storing "config lines" in the gumball machine account. To avoid this, one can set `extensionLen`: 0 in the JSON above. When `extensionLen` is zero, you do not need to add any "config lines" to your machine before people are able to mint (all you need to do is `init-indices` and then up to `maxItems` NFTs can be minted from your machine). Note though that the "config data" for each minted NFT will just correspond to the bytes of its numeric index rather than a custom "config line" and so you may need an off-chain mapping of numeric ids -> uri extensions to fetch the appropriate metadata for the NFT. For an example of this, see `./example-input-json/init-no-config-lines.json`.
+
 ### init-indices
 
 Corresponds to `initialize_indices_chunk` EXCEPT that it intializes ALL indices, rather than just one chunk. 
@@ -107,7 +109,7 @@ Example `init-indices.json`:
 ```json
 {
   "args": {
-    "maxItems": 1048576
+    "maxItems": 8
   },
   "optionals": {}
 }
@@ -194,7 +196,13 @@ Example `update-header-metadata.json`:
     "goLiveDate": 1234.0,
     "botWallet": "CwKozhKgAEkxHhJ6AwBn6faFstKWmoFB4JYz18RyxExz",
     "authority": "Es1EV724ihL7mYzjEiUV1QgcNdwoTpGByLiWSwKFRsAb",
-    "maxMintSize": 10
+    "receiver": "CwKozhKgAEkxHhJ6AwBn6faFstKWmoFB4JYz18RyxExz",
+    "maxMintSize": 5,
+    "creatorKeys": [
+      "H8DWGKyCSaKtgh1GjyqexVcMe8FPyKQoBhKH79QnhDWx",
+      "Es1EV724ihL7mYzjEiUV1QgcNdwoTpGByLiWSwKFRsAb"
+    ],
+    "creatorShares": [40, 60]
   },
   "optionals": {}
 }

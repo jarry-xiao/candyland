@@ -15,7 +15,9 @@ import {
   assertInRangeAndReturnNum,
   assertLengthAndConvertByteArray,
   assertNonNegativeAndConvertToBN,
-  assertLengthAndConvertToPublicKey
+  assertLengthAndConvertToPublicKey,
+  deserializeCreatorKeys,
+  deserializeCreatorShares
 } from "./utils";
 
 export function deserializeUpdateHeaderMetadataJson(input): UpdateHeaderMetadataInstructionArgs {
@@ -31,7 +33,10 @@ export function deserializeUpdateHeaderMetadataJson(input): UpdateHeaderMetadata
     goLiveDate: assertNonNegativeAndConvertToBN(input.args.goLiveDate, "goLiveDate"),
     botWallet: assertLengthAndConvertToPublicKey(input.args.botWallet, "botWallet"),
     authority: assertLengthAndConvertToPublicKey(input.args.authority, "authority"),
-    maxMintSize: assertInRangeAndReturnNum(input.args.maxMintSize, "maxMintSize")
+    receiver: assertLengthAndConvertToPublicKey(input.args.receiver, "receiver"),
+    maxMintSize: assertInRangeAndReturnNum(input.args.maxMintSize, "maxMintSize"),
+    creatorKeys: deserializeCreatorKeys(input.args.creatorKeys, input.args.creatorShares),
+    creatorShares: deserializeCreatorShares(input.args.creatorShares)
   }
   return gumballMachineUpdateHeaderMetadataArgs;
 }
