@@ -13,9 +13,11 @@ use solana_program_test::*;
 use solana_sdk::{instruction::Instruction, transaction::Transaction, transport::TransportError};
 use spl_associated_token_account::get_associated_token_address;
 
+const BUBBLEGUM_PROGRAM_ID: Pubkey = pubkey!("BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY");
+
 pub fn bubble_gum_program_test() -> ProgramTest {
-    let mut program = ProgramTest::new("bubblegum", bubblegum::id(), None);
-    program.add_program("bubblegum", bubblegum::id(), None);
+    let mut program = ProgramTest::new("bubblegum", BUBBLEGUM_PROGRAM_ID, None);
+    program.add_program("bubblegum", BUBBLEGUM_PROGRAM_ID, None);
     program
 }
 
@@ -61,34 +63,101 @@ pub fn ingester_setup() -> () {
 }
 
 pub async fn create_and_insert_asset(
-    context: &mut ProgramTestContext,
-
-) -> StdResult<Pubkey, TransportError> {
-    let accounts = bubblegum::accounts::MintV1 {
-  
-    }
-    .to_account_metas(None);
-
-    let data = bubblegum::instruction::MintV1 {
-       
-    }
-    .data();
-
-    let instruction = Instruction {
-        program_id: bubblegum::id(),
-        data,
-        accounts,
+    db: &DatabaseConnection,
+    metadata: MetadataArgs,
+    id: Pubkey,
+    owner: Pubkey,
+) -> i64 {
+    println!("BGUM: MINT");
+    // Printing metadata instruction arguments for debugging
+    println!(
+        "\tMetadata info: {} {} {} {} {}",
+        id.to_string(),
+        &metadata.name,
+        metadata.seller_fee_basis_points,
+        metadata.primary_sale_happened,
+        metadata.is_mutable,
+    );
+    let chain_data = ChainDataV1 {
+        name: metadata.name,
+        symbol: metadata.symbol,
+        edition_nonce: metadata.edition_nonce,
+        primary_sale_happened: metadata.primary_sale_happened,
+        token_standard: metadata
+            .token_standard
+            .and_then(|ts| TokenStandard::from_u8(ts as u8)),
+        uses: None,
     };
 
-    let tx = Transaction::new_signed_with_payer(
-        &[instruction],
-        Some(&payer_wallet.pubkey()),
-        &[payer_wallet],
-        context.last_blockhash,
-    );
+    let chain_data_json = serde_json::to_value(chain_data).unwrap();
 
-    context
-        .banks_client
-        .process_transaction(tx)
-        .await?
+    let chain_mutability = match metadata.is_mutable {
+        true => ChainMutability::Mutable,
+        false => ChainMutability::Immutable,
+    };
+
+    let data = asset_data::ActiveModel {
+        chain_data_mutability: Set(chain_mutability),
+        schema_version: Set(1),
+        chain_data: Set(chain_data_json),
+        metadata_url: Set(metadata.uri),
+        metadata: Set(JsonValue::String("processing".to_string())),
+        metadata_mutability: Set(Mutability::Mutable),
+        ..Default::default()
+    }
+    .insert(txn)
+    .await
+    .unwrap();
+
+    asset::ActiveModel {
+        id: Set(id.to_bytes().to_vec()),
+        owner: Set(owner),
+        owner_type: Set(OwnerType::Single),
+        delegate: Set(None),
+        frozen: Set(false),
+        supply: Set(1),
+        supply_mint: Set(None),
+        compressed: Set(true),
+        compressible: Set(false),
+        tree_id: Set(None),
+        specification_version: Set(1),
+        nonce: Set(0 as i64),
+        leaf: Set(None),
+        /// Get gummy roll seq
+        royalty_target_type: Set(RoyaltyTargetType::Creators),
+        royalty_target: Set(None),
+        royalty_amount: Set(metadata.seller_fee_basis_points as i32), //basis points
+        chain_data_id: Set(Some(data.id)),
+        ..Default::default()
+    }
+    .insert(txn)
+    .await
+    .unwrap();
+
+    if metadata.creators.len() > 0 {
+        let mut creators = Vec::with_capacity(metadata.creators.len());
+        for c in metadata.creators {
+            creators.push(asset_creators::ActiveModel {
+                asset_id: Set(id.to_bytes().to_vec()),
+                creator: Set(c.address.to_bytes().to_vec()),
+                share: Set(c.share as i32),
+                verified: Set(c.verified),
+                ..Default::default()
+            });
+        }
+        asset_creators::Entity::insert_many(creators)
+            .exec(txn)
+            .await
+            .map_err(|txn_err| IngesterError::StorageWriteError(txn_err.to_string()))?;
+    }
+    asset_authority::ActiveModel {
+        asset_id: Set(id.to_bytes().to_vec()),
+        authority: Set(update_authority),
+        ..Default::default()
+    }
+    .insert(txn)
+    .await
+    .unwrap();
+
+    data.id
 }
