@@ -28,8 +28,24 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
+        - name: datadog
+          image: gcr.io/datadoghq/dogstatsd:latest
+          env:
+          - name: "DD_API_KEY"
+            value: "{{ .Values.metrics.data_dog_api_key }}"
+          ports:
+          - containerPort: 8125
+            hostPort: 8125
+            name: dogstatsdport
+            protocol: UDP
         - name: {{ .Chart.Name }}
           env:
+          - name: INGESTER_METRICS_HOST
+            valueFrom:
+              fieldRef:
+                fieldPath: status.hostIP
+          - name: INGESTER_METRICS_PORT
+            value: "8125"
           - name: INGESTER_DATABASE_URL
             valueFrom:
               secretKeyRef:

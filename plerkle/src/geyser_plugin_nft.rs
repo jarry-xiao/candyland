@@ -1,4 +1,4 @@
-use metrics::{increment_counter, Recorder};
+use tokio::time::Instant;
 use {
     figment::{
         Figment,
@@ -35,16 +35,11 @@ use {
     },
     serde::Deserialize,
     messenger::MessengerConfig,
-    metrics_exporter_statsd::{
-        StatsdBuilder,
-        StatsdRecorder,
-    },
-    metrics::{
-        counter,
-        histogram,
-        gauge,
-        describe_counter,
-    },
+    std::net::UdpSocket,
+    cadence::BufferedUdpMetricSink,
+    cadence::QueuingMetricSink,
+    cadence::StatsdClient,
+    cadence_macros::*,
 };
 
 struct SerializedData<'a> {
@@ -59,6 +54,7 @@ pub(crate) struct Plerkle<'a, T: Messenger + Default> {
     transaction_selector: Option<TransactionSelector>,
     messenger: PhantomData<T>,
     sender: Option<Sender<SerializedData<'a>>>,
+    started_at: Option<Instant>,
 }
 
 #[derive(Deserialize, PartialEq, Debug)]
@@ -184,7 +180,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
         let mut file = File::open(config_file)?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
-
+        self.started_at = Some(Instant::now());
         // Setup accounts and transaction selectors based on config file JSON.
         let result = serde_json::from_str(&contents);
         match result {
@@ -196,17 +192,15 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                 if config["enable_metrics"].as_bool().unwrap_or(false) {
                     let uri = config["metrics_uri"].as_str().unwrap().to_string();
                     let port = config["metrics_port"].as_u64().unwrap() as u16;
-                    let recorder = StatsdBuilder::from(uri, port)
-                        .with_queue_size(5000)
-                        .with_buffer_size(256)
-                        .build(Some("plerkle"))
-                        .expect("Could not create StatsdRecorder");
-                    metrics::set_boxed_recorder(Box::new(recorder))
-                        .map_err(|err|
-                            GeyserPluginError::ConfigFileReadError {
-                                msg: format!("Mterics Configuration Error {:?}", err),
-                            })?;
-                    info!("Metrics Enabled");
+                    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+                    socket.set_nonblocking(true).unwrap();
+
+                    let host = (uri, port);
+                    let udp_sink = BufferedUdpMetricSink::from(host, socket).unwrap();
+                    let queuing_sink = QueuingMetricSink::from(udp_sink);
+                    let client = StatsdClient::from_sink("plerkle", queuing_sink);
+                    set_global_default(client);
+                    statsd_count!("plugin.startup", 1);
                 }
             }
             Err(err) => {
@@ -289,7 +283,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                 // Serialize data.
                 let builder = FlatBufferBuilder::new();
                 let builder = serialize_account(builder, &account, slot, is_startup);
-
+                let owner = bs58::encode(account.owner).into_string();
                 // Send account info over channel.
                 runtime.spawn(async move {
                     let data = SerializedData {
@@ -298,9 +292,10 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                     };
                     let _ = sender.send(data).await;
                 });
+                statsd_count!("account_seen_event", 1, "owner" => &owner);
             }
             _ => {
-                info!("Old Transaction Replica Object")
+                error!("Old Transaction Replica Object")
             }
         }
 
@@ -310,8 +305,8 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
     fn notify_end_of_startup(
         &mut self,
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
+        statsd_time!("startup.timer", self.started_at.unwrap().elapsed());
         info!("END OF STARTUP");
-
         Ok(())
     }
 
@@ -375,7 +370,6 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                 let builder = FlatBufferBuilder::new();
                 let builder = serialize_transaction(builder, transaction_info, slot);
                 let slt_idx = format!("{}-{}", slot, transaction_info.index);
-                increment_counter!("transaction_seen_event", "slot-idx" => slt_idx);
                 // Send transaction info over channel.
                 runtime.spawn(async move {
                     let data = SerializedData {
@@ -384,10 +378,10 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                     };
                     let _ = sender.send(data).await;
                 });
-
+                statsd_count!("transaction_seen_event", 1, "slot-idx" => &slt_idx);
             }
             _ => {
-                info!("Old Transaction Replica Object")
+                error!("Old Transaction Replica Object")
             }
         }
 

@@ -84,3 +84,6 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+metrics:
+  data_dog_api_key:

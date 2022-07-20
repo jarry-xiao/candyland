@@ -36,6 +36,8 @@ num-traits = "0.2.15"
 gummyroll = { path = "../contracts/programs/gummyroll", features = ["no-entrypoint"] }
 bubblegum = { path = "../contracts/programs/bubblegum", features = ["no-entrypoint"] }
 figment = { version = "0.10.6", features = ["env"] }
+cadence = "0.29.0"
+cadence-macros = "0.29.0"
 
 [dependencies.num-integer]
 version = "0.1.44"

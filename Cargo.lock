@@ -620,6 +620,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "cadence"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb681a7408f21c9d9dcb6638e340913ea260cc587518b5976510d2341f085a19"
+dependencies = [
+ "crossbeam-channel",
+]
+
+[[package]]
+name = "cadence-macros"
+version = "0.29.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e71b4c708e7d12eefbad3d3f76d380873825741be3fbc20000f9d5c0e51d0d8"
+dependencies = [
+ "cadence",
+]
+
+[[package]]
 name = "candy-wrapper"
 version = "0.1.0"
 dependencies = [
@@ -973,6 +991,8 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "bs58 0.4.0",
+ "cadence",
+ "cadence-macros",
  "digital_asset_types",
  "figment",
  "hyper",
@@ -2357,6 +2377,8 @@ dependencies = [
  "base64 0.13.0",
  "bs58 0.4.0",
  "bubblegum",
+ "cadence",
+ "cadence-macros",
  "chrono",
  "csv",
  "digital_asset_types",

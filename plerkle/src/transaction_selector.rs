@@ -73,7 +73,6 @@ impl TransactionSelector {
             return true;
         }
         for address in mentioned_addresses {
-            info!("ADDRESS {}", address.to_string());
             if self.mentioned_addresses.contains(address.as_ref()) {
                 return true;
             }
