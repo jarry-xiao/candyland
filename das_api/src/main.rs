@@ -4,17 +4,15 @@ mod config;
 mod error;
 mod validation;
 
+use crate::api::RpcApiBuilder;
 use crate::api_impl::DasApi;
 use {
     crate::config::load_config,
     crate::error::DasApiError,
-    jsonrpsee::{
-        http_server::{HttpServerBuilder, RpcModule},
-    },
+    jsonrpsee::http_server::{HttpServerBuilder, RpcModule},
     std::net::SocketAddr,
     tokio,
 };
-use crate::api::RpcApiBuilder;
 
 #[tokio::main]
 async fn main() -> Result<(), DasApiError> {
