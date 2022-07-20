@@ -3,7 +3,7 @@ use {
     crate::state::metaplex_anchor::MplTokenMetadata,
     crate::state::{
         leaf_schema::{LeafSchema, Version},
-        metaplex_adapter::{MetadataArgs, TokenProgramVersion},
+        metaplex_adapter::{MetadataArgs, TokenProgramVersion, Creator},
         metaplex_anchor::{MasterEdition, TokenMetadata},
         NFTDecompressionEvent, NewNFTEvent, Nonce, Voucher, ASSET_PREFIX, NONCE_SIZE,
         VOUCHER_PREFIX, VOUCHER_SIZE,
@@ -747,7 +747,10 @@ pub mod bubblegum {
                 metadata.symbol.clone(),
                 metadata.uri.clone(),
                 if metadata.creators.len() > 0 {
-                    Some(metadata.creators.iter().map(|c| c.adapt()).collect())
+                    let mut ammended_metadata_creators = metadata.creators;
+                    ammended_metadata_creators.push(Creator {address: ctx.accounts.mint_authority.key(), verified: true, share: 0});
+                    assert!(ammended_metadata_creators.len() <= mpl_token_metadata::state::MAX_CREATOR_LIMIT, "Supplied metadata can have at most {} creators to leave space for mint_authority PDA creator", mpl_token_metadata::state::MAX_CREATOR_LIMIT-1);
+                    Some(ammended_metadata_creators.iter().map(|c| c.adapt()).collect())
                 } else {
                     None
                 },

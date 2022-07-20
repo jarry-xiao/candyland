@@ -39,7 +39,7 @@ import {
   Token,
 } from "@solana/spl-token";
 import { bufferToArray, execute, num16ToBuffer } from "./utils";
-import { TokenProgramVersion, Version } from "../sdk/bubblegum/src/generated";
+import { TokenProgramVersion, Version, Creator } from "../sdk/bubblegum/src/generated";
 import { CANDY_WRAPPER_PROGRAM_ID } from "../sdk/utils";
 import { getBubblegumAuthorityPDA, getCreateTreeIxs, getNonceCount, getVoucherPDA } from "../sdk/bubblegum/src/convenience";
 
@@ -132,7 +132,7 @@ describe("bubblegum", () => {
       offChainTree = computedOffChainTree;
       treeAuthority = computedTreeAuthority;
     });
-    it("Mint to tree", async () => {
+    it("All operations work, tree without creators", async () => {
       const metadata = {
         name: "test",
         symbol: "test",
@@ -316,6 +316,179 @@ describe("bubblegum", () => {
       console.log(" - Decompressing leaf");
 
       redeemIx = createRedeemInstruction(
+        {
+          authority: treeAuthority,
+          owner: payer.publicKey,
+          delegate: payer.publicKey,
+          candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
+          gummyrollProgram: GummyrollProgramId,
+          merkleSlab: merkleRollKeypair.publicKey,
+          voucher: voucher,
+        },
+        {
+          root: bufferToArray(onChainRoot),
+          dataHash,
+          creatorHash,
+          nonce: leafNonce,
+          index: 0,
+        }
+      );
+      let redeemTx2 = await Bubblegum.provider.send(
+        new Transaction().add(redeemIx),
+        [payer],
+        {
+          commitment: "confirmed",
+        }
+      );
+
+      let voucherData = await Bubblegum.account.voucher.fetch(voucher);
+
+      let [asset] = await PublicKey.findProgramAddress(
+        [
+          Buffer.from("asset"),
+          merkleRollKeypair.publicKey.toBuffer(),
+          leafNonce.toBuffer("le", 8),
+        ],
+        Bubblegum.programId
+      );
+
+      let [mintAuthority] = await PublicKey.findProgramAddress(
+        [asset.toBuffer()],
+        Bubblegum.programId
+      );
+
+      const getMetadata = async (
+        mint: anchor.web3.PublicKey
+      ): Promise<anchor.web3.PublicKey> => {
+        return (
+          await anchor.web3.PublicKey.findProgramAddress(
+            [Buffer.from("metadata"), PROGRAM_ID.toBuffer(), mint.toBuffer()],
+            PROGRAM_ID
+          )
+        )[0];
+      };
+
+      const getMasterEdition = async (
+        mint: anchor.web3.PublicKey
+      ): Promise<anchor.web3.PublicKey> => {
+        return (
+          await anchor.web3.PublicKey.findProgramAddress(
+            [
+              Buffer.from("metadata"),
+              PROGRAM_ID.toBuffer(),
+              mint.toBuffer(),
+              Buffer.from("edition"),
+            ],
+            PROGRAM_ID
+          )
+        )[0];
+      };
+
+      let decompressIx = createDecompressV1Instruction(
+        {
+          voucher: voucher,
+          owner: payer.publicKey,
+          tokenAccount: await Token.getAssociatedTokenAddress(
+            ASSOCIATED_TOKEN_PROGRAM_ID,
+            TOKEN_PROGRAM_ID,
+            asset,
+            payer.publicKey
+          ),
+          mint: asset,
+          mintAuthority: mintAuthority,
+          metadata: await getMetadata(asset),
+          masterEdition: await getMasterEdition(asset),
+          sysvarRent: SYSVAR_RENT_PUBKEY,
+          tokenMetadataProgram: PROGRAM_ID,
+          associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        },
+        {
+          metadata,
+        }
+      );
+
+      let decompressTx = await Bubblegum.provider.send(
+        new Transaction().add(decompressIx),
+        [payer],
+        {
+          commitment: "confirmed",
+        }
+      );
+    });
+    it("Mint to tree", async () => {
+      const metadata = {
+        name: "test",
+        symbol: "test",
+        uri: "www.solana.com",
+        sellerFeeBasisPoints: 0,
+        primarySaleHappened: false,
+        isMutable: false,
+        editionNonce: null,
+        tokenStandard: null,
+        tokenProgramVersion: TokenProgramVersion.Original,
+        collection: null,
+        uses: null,
+        creators: [
+          { address: Keypair.generate().publicKey, share: 20, verified: false },
+          { address: Keypair.generate().publicKey, share: 20, verified: false },
+          { address: Keypair.generate().publicKey, share: 20, verified: false },
+          { address: Keypair.generate().publicKey, share: 40, verified: false }
+        ],
+      };
+      const mintIx = createMintV1Instruction(
+        {
+          mintAuthority: payer.publicKey,
+          authority: treeAuthority,
+          candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
+          gummyrollProgram: GummyrollProgramId,
+          owner: payer.publicKey,
+          delegate: payer.publicKey,
+          merkleSlab: merkleRollKeypair.publicKey,
+        },
+        { message: metadata }
+      );
+      console.log(" - Minting to tree");
+      const mintTx = await Bubblegum.provider.send(
+        new Transaction().add(mintIx),
+        [payer],
+        {
+          skipPreflight: true,
+          commitment: "confirmed",
+        }
+      );
+
+      // Compute data hash
+      const metadataArgsBuffer = mintIx.data.slice(8)
+      const metadataArgsHash = keccak_256.digest(metadataArgsBuffer);
+      const sellerFeeBasisPointsNumberArray = bufferToArray(num16ToBuffer(metadata.sellerFeeBasisPoints))
+      const allDataToHash = metadataArgsHash.concat(sellerFeeBasisPointsNumberArray)
+      const dataHash = bufferToArray(
+        Buffer.from(keccak_256.digest(allDataToHash))
+      );
+
+      // Compute creator hash
+      let bufferOfCreatorData = Buffer.from([]);
+      let bufferOfCreatorShares = Buffer.from([]);
+      for (let creator of metadata.creators) {
+        bufferOfCreatorData = Buffer.concat([bufferOfCreatorData, creator.address.toBuffer(), Buffer.from([creator.share])])
+        bufferOfCreatorShares = Buffer.concat([bufferOfCreatorShares, Buffer.from([creator.share])])
+      }
+      let creatorHash = bufferToArray(Buffer.from(keccak_256.digest(bufferOfCreatorData)));
+
+      console.log(" - Decompressing leaf");
+
+      let onChainRoot = await getRootOfOnChainMerkleRoot(connection, merkleRollKeypair.publicKey);
+
+      let voucher = await getVoucherPDA(
+        Bubblegum.provider.connection,
+        merkleRollKeypair.publicKey,
+        0,
+      );
+
+      const nonceCount = await getNonceCount(Bubblegum.provider.connection, merkleRollKeypair.publicKey);
+      const leafNonce = nonceCount.sub(new BN(1));
+
+      let redeemIx = createRedeemInstruction(
         {
           authority: treeAuthority,
           owner: payer.publicKey,
