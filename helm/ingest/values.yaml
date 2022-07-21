@@ -1,5 +1,6 @@
 replicaCount: 1
 image: ""
+loadImage: ""
 imagePullPolicy: Always
 imagePullSecrets: []
 nameOverride: ""
