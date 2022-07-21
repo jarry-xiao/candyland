@@ -74,7 +74,7 @@ describe("gummyroll", () => {
       maxDepth,
       canopyDepth,
       payer.publicKey,
-      merkleRollKeypair.publicKey,
+      merkleRollKeypair.publicKey
     );
 
     const ixs = [allocAccountIx];
@@ -121,7 +121,10 @@ describe("gummyroll", () => {
         })
       );
     }
-    let txId = await execute(Gummyroll.provider, ixs, [payer, merkleRollKeypair]);
+    let txId = await execute(Gummyroll.provider, ixs, [
+      payer,
+      merkleRollKeypair,
+    ]);
     if (canopyDepth) {
       await logTx(Gummyroll.provider, txId as string);
     }
@@ -252,7 +255,7 @@ describe("gummyroll", () => {
       try {
         await execute(Gummyroll.provider, [verifyLeafIx], [payer]);
         assert(false, "Proof should have failed to verify");
-      } catch { }
+      } catch {}
 
       // Replace instruction with same proof fails
       const replaceLeafIx = createReplaceIx(
@@ -268,7 +271,7 @@ describe("gummyroll", () => {
       try {
         await execute(Gummyroll.provider, [replaceLeafIx], [payer]);
         assert(false, "Replace should have failed to verify");
-      } catch { }
+      } catch {}
       const merkleRollAccount =
         await Gummyroll.provider.connection.getAccountInfo(
           merkleRollKeypair.publicKey
@@ -383,13 +386,9 @@ describe("gummyroll", () => {
           Gummyroll,
           authority,
           merkleRollKeypair.publicKey,
-          randomSigner.publicKey,
+          randomSigner.publicKey
         );
-        await execute(
-          Gummyroll.provider,
-          [transferAuthorityIx],
-          [authority]
-        );
+        await execute(Gummyroll.provider, [transferAuthorityIx], [authority]);
 
         const merkleRoll = decodeMerkleRoll(
           (
@@ -428,7 +427,7 @@ describe("gummyroll", () => {
             false,
             "Transaction should have failed since incorrect authority cannot execute replaces"
           );
-        } catch { }
+        } catch {}
       });
     });
   });
@@ -571,7 +570,7 @@ describe("gummyroll", () => {
           false,
           "Attacker was able to succesfully write fake existence of a leaf"
         );
-      } catch (e) { }
+      } catch (e) {}
 
       const merkleRoll = decodeMerkleRoll(
         (
@@ -612,7 +611,7 @@ describe("gummyroll", () => {
           false,
           "Attacker was able to succesfully write fake existence of a leaf"
         );
-      } catch (e) { }
+      } catch (e) {}
 
       const merkleRoll = decodeMerkleRoll(
         (
@@ -674,8 +673,10 @@ describe("gummyroll", () => {
       let leafList = Array.from(leaves.entries());
       leafList.sort(() => Math.random() - 0.5);
       let replaces = 0;
+      let newLeaves = {};
       for (const [i, leaf] of leafList) {
         const newLeaf = crypto.randomBytes(32);
+        newLeaves[i] = newLeaf;
         const replaceIx = createReplaceIx(
           Gummyroll,
           payer,
@@ -694,6 +695,19 @@ describe("gummyroll", () => {
           ixs = [];
         }
       }
+
+      const newLeaf = crypto.randomBytes(32);
+      const replaceIx = createReplaceIx(
+        Gummyroll,
+        payer,
+        merkleRollKeypair.publicKey,
+        root.toBuffer(),
+        newLeaves[0],
+        newLeaf,
+        0,
+        [newLeaves[1]]
+      );
+      let tx = await execute(Gummyroll.provider, [replaceIx], [payer], true, true);
     });
   });
 });
