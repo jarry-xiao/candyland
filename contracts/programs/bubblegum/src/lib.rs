@@ -5,7 +5,7 @@ use {
         leaf_schema::{LeafSchema, Version},
         metaplex_adapter::{Creator, MetadataArgs, TokenProgramVersion},
         metaplex_anchor::{MasterEdition, TokenMetadata},
-        request::{MintAuthorityRequest, MINT_AUTHORITY_REQUEST_SIZE},
+        request::{MintRequest, MINT_REQUEST_SIZE},
         NFTDecompressionEvent, NewNFTEvent, TreeAuthority, Voucher, ASSET_PREFIX,
         TREE_AUTHORITY_SIZE, VOUCHER_PREFIX, VOUCHER_SIZE,
     },
@@ -22,6 +22,7 @@ use {
             program_pack::Pack,
             system_instruction,
         },
+        Discriminator,
     },
     gummyroll::{program::Gummyroll, state::CandyWrapper, utils::wrap_event, Node},
     spl_token::state::Mint as SplMint,
@@ -56,36 +57,9 @@ pub struct CreateTree<'info> {
 }
 
 #[derive(Accounts)]
-pub struct MintV1Creator<'info> {
-    #[account(
-        constraint = *mint_authority.key == authority.creator || *mint_authority.key == authority.delegate
-    )]
-    pub mint_authority: Signer<'info>,
-    #[account(
-    mut,
-    seeds = [merkle_slab.key().as_ref()],
-    bump,
-    )]
-    pub authority: Account<'info, TreeAuthority>,
-    pub candy_wrapper: Program<'info, CandyWrapper>,
-    pub gummyroll_program: Program<'info, Gummyroll>,
-    /// CHECK: This account is neither written to nor read from.
-    pub owner: AccountInfo<'info>,
-    /// CHECK: This account is neither written to nor read from.
-    pub delegate: AccountInfo<'info>,
-    #[account(mut)]
-    /// CHECK: unsafe
-    pub merkle_slab: UncheckedAccount<'info>,
-}
-
-#[derive(Accounts)]
 pub struct MintV1<'info> {
-    #[account(
-        mut,
-        seeds = [merkle_slab.key().as_ref(), mint_authority.key().as_ref()],
-        bump,
-    )]
-    pub mint_authority_request: Account<'info, MintAuthorityRequest>,
+    /// CHECK: checked in method call
+    pub mint_authority_request: AccountInfo<'info>,
     pub mint_authority: Signer<'info>,
     #[account(
     mut,
@@ -321,12 +295,12 @@ pub struct Compress<'info> {
 pub struct InitMintAuthorityRequest<'info> {
     #[account(
         init,
-        space=MINT_AUTHORITY_REQUEST_SIZE,
+        space=MINT_REQUEST_SIZE,
         seeds=[merkle_slab.key().as_ref(), mint_authority.key().as_ref()],
         payer=mint_authority,
         bump
     )]
-    pub mint_authority_request: Account<'info, MintAuthorityRequest>,
+    pub mint_authority_request: Account<'info, MintRequest>,
     #[account(mut)]
     pub mint_authority: Signer<'info>,
     #[account(
@@ -347,7 +321,7 @@ pub struct ApproveMintAuthorityRequest<'info> {
         seeds = [merkle_slab.key().as_ref(), mint_authority_request.mint_authority.as_ref()],
         bump
     )]
-    pub mint_authority_request: Account<'info, MintAuthorityRequest>,
+    pub mint_authority_request: Account<'info, MintRequest>,
     #[account(
         constraint= *tree_delegate.key == tree_authority.creator || *tree_delegate.key == tree_authority.delegate
     )]
@@ -402,21 +376,48 @@ pub fn get_instruction_type(full_bytes: &[u8]) -> InstructionName {
     }
 }
 
-fn assert_enough_mints_to_approve(
-    total_mint_capacity: u64,
-    num_mints_approved: u64,
-    num_minted: u64,
+fn assert_enough_mints_to_approve<'info>(
+    authority: &Account<'info, TreeAuthority>,
     to_approve: u64,
 ) -> Result<()> {
-    let remaining_mints_to_approve = total_mint_capacity.saturating_sub(num_mints_approved);
-    let remaining_mints = total_mint_capacity.saturating_sub(num_minted);
-    msg!(&format!(
-        "{} {} {}",
-        remaining_mints_to_approve, remaining_mints, to_approve
-    ));
-    if to_approve > remaining_mints_to_approve || to_approve > remaining_mints {
-        return Err(BubblegumError::NotEnoughMintCapacity.into());
+    if !authority.contains_mint_capacity(to_approve) {
+        return Err(BubblegumError::InsufficientMintCapacity.into());
     }
+    Ok(())
+}
+
+fn process_mint_request<'info>(
+    mint_authority_request_account: &mut AccountInfo<'info>,
+    merkle_slab: &AccountInfo<'info>,
+    mint_authority: &Signer<'info>,
+    program_id: &Pubkey,
+) -> Result<()> {
+    // Address check
+    let (expected_request_key, _bump) = Pubkey::find_program_address(
+        &[merkle_slab.key().as_ref(), mint_authority.key.as_ref()],
+        program_id,
+    );
+    if expected_request_key != mint_authority_request_account.key() {
+        return Err(BubblegumError::MintRequestKeyMismatch.into());
+    }
+
+    // Data check
+    let mut raw_data = mint_authority_request_account.try_borrow_mut_data()?;
+    let (discriminator, mut data_bytes) = raw_data.split_at_mut(8);
+    let expected_discriminant = MintRequest::discriminator();
+    // - check discriminator
+    if discriminator != expected_discriminant {
+        return Err(BubblegumError::MintRequestDiscriminatorMismatch.into());
+    }
+
+    // - check request fields
+    let mut request = MintRequest::try_from_slice(&data_bytes)?;
+    if mint_authority.key() != request.mint_authority {
+        return Err(BubblegumError::MintRequestKeyMismatch.into());
+    }
+    request.process_mint()?;
+
+    request.serialize(&mut data_bytes.deref_mut())?;
     Ok(())
 }
 
@@ -501,6 +502,7 @@ pub mod bubblegum {
 
         let authority = &mut ctx.accounts.authority;
         authority.creator = ctx.accounts.tree_creator.key();
+        authority.delegate = ctx.accounts.tree_creator.key();
         authority.total_mint_capacity = 1 << max_depth;
 
         let authority_pda_signer = &[&seeds[..]];
@@ -520,22 +522,10 @@ pub mod bubblegum {
         ctx: Context<InitMintAuthorityRequest>,
         mint_capacity: u64,
     ) -> Result<()> {
-        let total_mint_capacity = ctx.accounts.tree_authority.total_mint_capacity;
-        let num_mints_approved = ctx.accounts.tree_authority.num_mints_approved;
-        let num_minted = ctx.accounts.tree_authority.num_minted;
-
-        assert_enough_mints_to_approve(
-            total_mint_capacity,
-            num_mints_approved,
-            num_minted,
-            mint_capacity,
-        )?;
-        ctx.accounts.tree_authority.num_mints_approved += mint_capacity;
-
-        ctx.accounts.mint_authority_request.mint_authority = ctx.accounts.mint_authority.key();
-        ctx.accounts.mint_authority_request.mint_capacity = mint_capacity;
-        ctx.accounts.mint_authority_request.num_minted = 0;
-        ctx.accounts.mint_authority_request.approved = 0;
+        assert_enough_mints_to_approve(&ctx.accounts.tree_authority, mint_capacity)?;
+        ctx.accounts
+            .mint_authority_request
+            .init(&ctx.accounts.mint_authority.key(), mint_capacity);
         Ok(())
     }
 
@@ -543,45 +533,12 @@ pub mod bubblegum {
         let authority = &mut ctx.accounts.tree_authority;
         let request = &mut ctx.accounts.mint_authority_request;
 
-        // Current state of the tree
-        let total_mint_capacity = authority.total_mint_capacity;
-        let num_mints_approved = authority.num_mints_approved;
-        let num_minted = authority.num_minted;
-
-        // Request state
-        let mint_capacity_requested = request.mint_capacity;
-
         // Check that there are enough valid mints left in tree to approve
-        assert_enough_mints_to_approve(
-            total_mint_capacity,
-            num_mints_approved,
-            num_minted,
-            mint_capacity_requested,
-        )?;
-        authority.num_mints_approved += mint_capacity_requested;
-        request.approved = 1;
+        assert_enough_mints_to_approve(&authority, request.mint_capacity)?;
+        authority.approve_mint_capacity(request.mint_capacity);
+        request.set_approved();
 
         Ok(())
-    }
-
-    pub fn mint_v1_creator(ctx: Context<MintV1Creator>, message: MetadataArgs) -> Result<()> {
-        let owner = ctx.accounts.owner.key();
-        let delegate = ctx.accounts.delegate.key();
-        let merkle_slab = &ctx.accounts.merkle_slab;
-
-        let mint_authority = &ctx.accounts.mint_authority;
-        let authority = &mut ctx.accounts.authority;
-        process_mint_v1(
-            message,
-            owner,
-            delegate,
-            *ctx.bumps.get("authority").unwrap(),
-            authority,
-            mint_authority,
-            merkle_slab,
-            &ctx.accounts.candy_wrapper,
-            &ctx.accounts.gummyroll_program,
-        )
     }
 
     pub fn mint_v1(ctx: Context<MintV1>, message: MetadataArgs) -> Result<()> {
@@ -593,22 +550,17 @@ pub mod bubblegum {
 
         let mint_authority = &ctx.accounts.mint_authority;
         let authority = &mut ctx.accounts.authority;
-        let mint_authority_request = &mut ctx.accounts.mint_authority_request;
 
-        if mint_authority_request.approved != 1 {
-            return Err(BubblegumError::MintAuthorityRequestNotApproved.into());
+        if *mint_authority.key != authority.creator && *mint_authority.key != authority.delegate {
+            process_mint_request(
+                &mut ctx.accounts.mint_authority_request,
+                merkle_slab,
+                mint_authority,
+                &ctx.program_id,
+            )?;
         }
-        if mint_authority.key() != mint_authority_request.mint_authority {
-            return Err(BubblegumError::MintAuthorityRequestKeyMismatch.into());
-        }
-        let mint_capacity = mint_authority_request.mint_capacity;
-        let num_minted = mint_authority_request.num_minted;
-        if num_minted >= mint_capacity {
-            return Err(BubblegumError::NotEnoughMintCapacity.into());
-        }
-        mint_authority_request.num_minted = mint_authority_request.num_minted.saturating_add(1);
 
-        process_mint_v1(
+        return process_mint_v1(
             message,
             owner,
             delegate,
@@ -618,7 +570,7 @@ pub mod bubblegum {
             merkle_slab,
             &ctx.accounts.candy_wrapper,
             &ctx.accounts.gummyroll_program,
-        )
+        );
     }
 
     pub fn transfer<'info>(

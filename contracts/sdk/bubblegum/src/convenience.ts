@@ -1,7 +1,7 @@
 import { BN } from "@project-serum/anchor";
 import { TransactionInstruction, PublicKey, Connection, AccountInfo } from "@solana/web3.js";
 import { keccak_256 } from "js-sha3";
-import { Creator, TreeAuthority, MintAuthorityRequest, PROGRAM_ID } from './generated';
+import { Creator, TreeAuthority, MintRequest, PROGRAM_ID } from './generated';
 import { CANDY_WRAPPER_PROGRAM_ID, bufferToArray, num16ToBuffer } from "../../utils";
 import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID, createAllocTreeIx } from "../../gummyroll";
 import { createCreateTreeInstruction } from "./generated";
@@ -15,7 +15,7 @@ export async function getBubblegumAuthorityPDA(merkleRollPubKey: PublicKey) {
     return bubblegumAuthorityPDAKey;
 }
 
-export async function getMintAuthorityRequestPDA(merkleRollPubKey: PublicKey, requester: PublicKey) {
+export async function getMintRequestPDA(merkleRollPubKey: PublicKey, requester: PublicKey) {
     const [mintAuthorityRequest] = await PublicKey.findProgramAddress(
         [merkleRollPubKey.toBuffer(), requester.toBuffer()],
         PROGRAM_ID
@@ -23,36 +23,65 @@ export async function getMintAuthorityRequestPDA(merkleRollPubKey: PublicKey, re
     return mintAuthorityRequest;
 }
 
-export async function getMintAuthorityRequest(connection: Connection, merkleRollPubKey: PublicKey, requester: PublicKey): Promise<MintAuthorityRequest> {
-    const requestPda = await getMintAuthorityRequestPDA(merkleRollPubKey, requester);
-    return await MintAuthorityRequest.fromAccountAddress(connection, requestPda);
+export async function getMintRequest(connection: Connection, merkleRollPubKey: PublicKey, requester: PublicKey): Promise<MintRequest> {
+    const requestPda = await getMintRequestPDA(merkleRollPubKey, requester);
+    return await MintRequest.fromAccountAddress(connection, requestPda);
 }
 
-export async function assertOnChainMintAuthorityRequest(
+export async function assertOnChainMintRequest(
     connection: Connection,
-    mintAuthority: PublicKey,
-    mintCapacity: BN,
-    numMinted: BN,
-    approved: boolean,
+    expectedState: MintRequest,
     mintRequestPDA: PublicKey,
 ) {
-    const request = await MintAuthorityRequest.fromAccountAddress(connection, mintRequestPDA);
+    const request = await MintRequest.fromAccountAddress(connection, mintRequestPDA);
+    const { mintAuthority, mintCapacity, approved } = expectedState;
     assert(
         request.mintAuthority.equals(mintAuthority),
         `Request should have mint authority ${mintAuthority.toString()}, but has ${request.mintAuthority.toString()}`
     );
     assert(
         request.approved === (approved ? 1 : 0),
-        `Request should${approved ? '' : 'not'} be approved`
+        `Request should${approved ? '' : ' not'} be approved`
     );
     assert(
-        (new BN(request.mintCapacity)).eq(mintCapacity),
+        (new BN(request.mintCapacity)).eq(new BN(mintCapacity)),
         `Request should have capacity ${mintCapacity}, but has ${request.mintCapacity}`,
     );
+}
+
+export async function assertOnChainTreeAuthority(
+    connection: Connection,
+    expectedState: TreeAuthority,
+    authorityPDA: PublicKey,
+) {
+    const authority = await TreeAuthority.fromAccountAddress(connection, authorityPDA);
+    const {
+        creator,
+        delegate,
+        totalMintCapacity,
+        numMintsApproved,
+        numMinted,
+    } = expectedState;
     assert(
-        (new BN(request.numMinted)).eq(numMinted),
-        `Request should have numMinted ${numMinted}, but has ${request.numMinted}`
-    );
+        authority.creator.equals(creator),
+        `Authority should have creator ${creator.toString()}, but has ${authority.creator.toString()}`
+    )
+    assert(
+        authority.delegate.equals(delegate),
+        `Authority should have delegate ${delegate.toString()}, but has ${authority.delegate.toString()}`
+    )
+    assert(
+        new BN(authority.totalMintCapacity).eq(new BN(totalMintCapacity)),
+        `Authority should have total mint capacity ${totalMintCapacity}, but has ${authority.totalMintCapacity}`
+    )
+    assert(
+        new BN(authority.numMintsApproved).eq(new BN(numMintsApproved)),
+        `Authority should have num mints approved ${numMintsApproved}, but has ${authority.numMintsApproved}`
+    )
+    assert(
+        new BN(authority.numMinted).eq(new BN(numMinted)),
+        `Authority should have num minted ${numMinted}, but has ${authority.numMinted}`
+    )
 }
 
 export async function getNonceCount(connection: Connection, tree: PublicKey): Promise<BN> {

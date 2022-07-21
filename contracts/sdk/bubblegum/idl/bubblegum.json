@@ -115,59 +115,11 @@
       "args": []
     },
     {
-      "name": "mintV1Creator",
-      "accounts": [
-        {
-          "name": "mintAuthority",
-          "isMut": false,
-          "isSigner": true
-        },
-        {
-          "name": "authority",
-          "isMut": true,
-          "isSigner": false
-        },
-        {
-          "name": "candyWrapper",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "gummyrollProgram",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "owner",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "delegate",
-          "isMut": false,
-          "isSigner": false
-        },
-        {
-          "name": "merkleSlab",
-          "isMut": true,
-          "isSigner": false
-        }
-      ],
-      "args": [
-        {
-          "name": "message",
-          "type": {
-            "defined": "MetadataArgs"
-          }
-        }
-      ]
-    },
-    {
       "name": "mintV1",
       "accounts": [
         {
           "name": "mintAuthorityRequest",
-          "isMut": true,
+          "isMut": false,
           "isSigner": false
         },
         {
@@ -721,7 +673,7 @@
   ],
   "accounts": [
     {
-      "name": "MintAuthorityRequest",
+      "name": "MintRequest",
       "type": {
         "kind": "struct",
         "fields": [
@@ -731,10 +683,6 @@
           },
           {
             "name": "mintCapacity",
-            "type": "u64"
-          },
-          {
-            "name": "numMinted",
             "type": "u64"
           },
           {
@@ -1239,23 +1187,23 @@
     },
     {
       "code": 6011,
-      "name": "NotEnoughMintCapacity",
+      "name": "InsufficientMintCapacity",
       "msg": "Not enough unapproved mints left"
     },
     {
       "code": 6012,
-      "name": "MintAuthorityRequestNotApproved",
-      "msg": "Mint authority request not approved"
+      "name": "MintRequestNotApproved",
+      "msg": "Mint request not approved"
     },
     {
       "code": 6013,
-      "name": "MintAuthorityRequestKeyMismatch",
+      "name": "MintRequestKeyMismatch",
       "msg": "Mint authority key does not match request"
     },
     {
       "code": 6014,
-      "name": "MissingRequestAccount",
-      "msg": "Missing the request account, needed to verify mint authority"
+      "name": "MintRequestDiscriminatorMismatch",
+      "msg": "Mint request data has incorrect disciminator"
     }
   ],
   "metadata": {

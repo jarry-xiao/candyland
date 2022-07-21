@@ -10,75 +10,64 @@ import * as beet from '@metaplex-foundation/beet'
 import * as beetSolana from '@metaplex-foundation/beet-solana'
 
 /**
- * Arguments used to create {@link MintAuthorityRequest}
+ * Arguments used to create {@link MintRequest}
  * @category Accounts
  * @category generated
  */
-export type MintAuthorityRequestArgs = {
+export type MintRequestArgs = {
   mintAuthority: web3.PublicKey
   mintCapacity: beet.bignum
-  numMinted: beet.bignum
   approved: number
 }
 
-export const mintAuthorityRequestDiscriminator = [
-  4, 246, 234, 220, 111, 175, 223, 244,
-]
+export const mintRequestDiscriminator = [60, 88, 16, 213, 180, 138, 14, 225]
 /**
- * Holds the data for the {@link MintAuthorityRequest} Account and provides de/serialization
+ * Holds the data for the {@link MintRequest} Account and provides de/serialization
  * functionality for that data
  *
  * @category Accounts
  * @category generated
  */
-export class MintAuthorityRequest implements MintAuthorityRequestArgs {
+export class MintRequest implements MintRequestArgs {
   private constructor(
     readonly mintAuthority: web3.PublicKey,
     readonly mintCapacity: beet.bignum,
-    readonly numMinted: beet.bignum,
     readonly approved: number
   ) {}
 
   /**
-   * Creates a {@link MintAuthorityRequest} instance from the provided args.
+   * Creates a {@link MintRequest} instance from the provided args.
    */
-  static fromArgs(args: MintAuthorityRequestArgs) {
-    return new MintAuthorityRequest(
-      args.mintAuthority,
-      args.mintCapacity,
-      args.numMinted,
-      args.approved
-    )
+  static fromArgs(args: MintRequestArgs) {
+    return new MintRequest(args.mintAuthority, args.mintCapacity, args.approved)
   }
 
   /**
-   * Deserializes the {@link MintAuthorityRequest} from the data of the provided {@link web3.AccountInfo}.
+   * Deserializes the {@link MintRequest} from the data of the provided {@link web3.AccountInfo}.
    * @returns a tuple of the account data and the offset up to which the buffer was read to obtain it.
    */
   static fromAccountInfo(
     accountInfo: web3.AccountInfo<Buffer>,
     offset = 0
-  ): [MintAuthorityRequest, number] {
-    return MintAuthorityRequest.deserialize(accountInfo.data, offset)
+  ): [MintRequest, number] {
+    return MintRequest.deserialize(accountInfo.data, offset)
   }
 
   /**
    * Retrieves the account info from the provided address and deserializes
-   * the {@link MintAuthorityRequest} from its data.
+   * the {@link MintRequest} from its data.
    *
    * @throws Error if no account info is found at the address or if deserialization fails
    */
   static async fromAccountAddress(
     connection: web3.Connection,
     address: web3.PublicKey
-  ): Promise<MintAuthorityRequest> {
+  ): Promise<MintRequest> {
     const accountInfo = await connection.getAccountInfo(address)
     if (accountInfo == null) {
-      throw new Error(
-        `Unable to find MintAuthorityRequest account at ${address}`
-      )
+      throw new Error(`Unable to find MintRequest account at ${address}`)
     }
-    return MintAuthorityRequest.fromAccountInfo(accountInfo, 0)[0]
+    return MintRequest.fromAccountInfo(accountInfo, 0)[0]
   }
 
   /**
@@ -92,39 +81,39 @@ export class MintAuthorityRequest implements MintAuthorityRequestArgs {
       'BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY'
     )
   ) {
-    return beetSolana.GpaBuilder.fromStruct(programId, mintAuthorityRequestBeet)
+    return beetSolana.GpaBuilder.fromStruct(programId, mintRequestBeet)
   }
 
   /**
-   * Deserializes the {@link MintAuthorityRequest} from the provided data Buffer.
+   * Deserializes the {@link MintRequest} from the provided data Buffer.
    * @returns a tuple of the account data and the offset up to which the buffer was read to obtain it.
    */
-  static deserialize(buf: Buffer, offset = 0): [MintAuthorityRequest, number] {
-    return mintAuthorityRequestBeet.deserialize(buf, offset)
+  static deserialize(buf: Buffer, offset = 0): [MintRequest, number] {
+    return mintRequestBeet.deserialize(buf, offset)
   }
 
   /**
-   * Serializes the {@link MintAuthorityRequest} into a Buffer.
+   * Serializes the {@link MintRequest} into a Buffer.
    * @returns a tuple of the created Buffer and the offset up to which the buffer was written to store it.
    */
   serialize(): [Buffer, number] {
-    return mintAuthorityRequestBeet.serialize({
-      accountDiscriminator: mintAuthorityRequestDiscriminator,
+    return mintRequestBeet.serialize({
+      accountDiscriminator: mintRequestDiscriminator,
       ...this,
     })
   }
 
   /**
    * Returns the byteSize of a {@link Buffer} holding the serialized data of
-   * {@link MintAuthorityRequest}
+   * {@link MintRequest}
    */
   static get byteSize() {
-    return mintAuthorityRequestBeet.byteSize
+    return mintRequestBeet.byteSize
   }
 
   /**
    * Fetches the minimum balance needed to exempt an account holding
-   * {@link MintAuthorityRequest} data from rent
+   * {@link MintRequest} data from rent
    *
    * @param connection used to retrieve the rent exemption information
    */
@@ -133,21 +122,21 @@ export class MintAuthorityRequest implements MintAuthorityRequestArgs {
     commitment?: web3.Commitment
   ): Promise<number> {
     return connection.getMinimumBalanceForRentExemption(
-      MintAuthorityRequest.byteSize,
+      MintRequest.byteSize,
       commitment
     )
   }
 
   /**
    * Determines if the provided {@link Buffer} has the correct byte size to
-   * hold {@link MintAuthorityRequest} data.
+   * hold {@link MintRequest} data.
    */
   static hasCorrectByteSize(buf: Buffer, offset = 0) {
-    return buf.byteLength - offset === MintAuthorityRequest.byteSize
+    return buf.byteLength - offset === MintRequest.byteSize
   }
 
   /**
-   * Returns a readable version of {@link MintAuthorityRequest} properties
+   * Returns a readable version of {@link MintRequest} properties
    * and can be used to convert to JSON and/or logging
    */
   pretty() {
@@ -155,17 +144,6 @@ export class MintAuthorityRequest implements MintAuthorityRequestArgs {
       mintAuthority: this.mintAuthority.toBase58(),
       mintCapacity: (() => {
         const x = <{ toNumber: () => number }>this.mintCapacity
-        if (typeof x.toNumber === 'function') {
-          try {
-            return x.toNumber()
-          } catch (_) {
-            return x
-          }
-        }
-        return x
-      })(),
-      numMinted: (() => {
-        const x = <{ toNumber: () => number }>this.numMinted
         if (typeof x.toNumber === 'function') {
           try {
             return x.toNumber()
@@ -184,9 +162,9 @@ export class MintAuthorityRequest implements MintAuthorityRequestArgs {
  * @category Accounts
  * @category generated
  */
-export const mintAuthorityRequestBeet = new beet.BeetStruct<
-  MintAuthorityRequest,
-  MintAuthorityRequestArgs & {
+export const mintRequestBeet = new beet.BeetStruct<
+  MintRequest,
+  MintRequestArgs & {
     accountDiscriminator: number[] /* size: 8 */
   }
 >(
@@ -194,9 +172,8 @@ export const mintAuthorityRequestBeet = new beet.BeetStruct<
     ['accountDiscriminator', beet.uniformFixedSizeArray(beet.u8, 8)],
     ['mintAuthority', beetSolana.publicKey],
     ['mintCapacity', beet.u64],
-    ['numMinted', beet.u64],
     ['approved', beet.u8],
   ],
-  MintAuthorityRequest.fromArgs,
-  'MintAuthorityRequest'
+  MintRequest.fromArgs,
+  'MintRequest'
 )

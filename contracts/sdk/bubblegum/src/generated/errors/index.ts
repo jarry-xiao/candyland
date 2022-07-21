@@ -271,101 +271,98 @@ createErrorFromNameLookup.set(
 )
 
 /**
- * NotEnoughMintCapacity: 'Not enough unapproved mints left'
+ * InsufficientMintCapacity: 'Not enough unapproved mints left'
  *
  * @category Errors
  * @category generated
  */
-export class NotEnoughMintCapacityError extends Error {
+export class InsufficientMintCapacityError extends Error {
   readonly code: number = 0x177b
-  readonly name: string = 'NotEnoughMintCapacity'
+  readonly name: string = 'InsufficientMintCapacity'
   constructor() {
     super('Not enough unapproved mints left')
     if (typeof Error.captureStackTrace === 'function') {
-      Error.captureStackTrace(this, NotEnoughMintCapacityError)
+      Error.captureStackTrace(this, InsufficientMintCapacityError)
     }
   }
 }
 
-createErrorFromCodeLookup.set(0x177b, () => new NotEnoughMintCapacityError())
+createErrorFromCodeLookup.set(0x177b, () => new InsufficientMintCapacityError())
 createErrorFromNameLookup.set(
-  'NotEnoughMintCapacity',
-  () => new NotEnoughMintCapacityError()
+  'InsufficientMintCapacity',
+  () => new InsufficientMintCapacityError()
 )
 
 /**
- * MintAuthorityRequestNotApproved: 'Mint authority request not approved'
+ * MintRequestNotApproved: 'Mint request not approved'
  *
  * @category Errors
  * @category generated
  */
-export class MintAuthorityRequestNotApprovedError extends Error {
+export class MintRequestNotApprovedError extends Error {
   readonly code: number = 0x177c
-  readonly name: string = 'MintAuthorityRequestNotApproved'
+  readonly name: string = 'MintRequestNotApproved'
   constructor() {
-    super('Mint authority request not approved')
+    super('Mint request not approved')
     if (typeof Error.captureStackTrace === 'function') {
-      Error.captureStackTrace(this, MintAuthorityRequestNotApprovedError)
+      Error.captureStackTrace(this, MintRequestNotApprovedError)
     }
   }
 }
 
-createErrorFromCodeLookup.set(
-  0x177c,
-  () => new MintAuthorityRequestNotApprovedError()
-)
+createErrorFromCodeLookup.set(0x177c, () => new MintRequestNotApprovedError())
 createErrorFromNameLookup.set(
-  'MintAuthorityRequestNotApproved',
-  () => new MintAuthorityRequestNotApprovedError()
+  'MintRequestNotApproved',
+  () => new MintRequestNotApprovedError()
 )
 
 /**
- * MintAuthorityRequestKeyMismatch: 'Mint authority key does not match request'
+ * MintRequestKeyMismatch: 'Mint authority key does not match request'
  *
  * @category Errors
  * @category generated
  */
-export class MintAuthorityRequestKeyMismatchError extends Error {
+export class MintRequestKeyMismatchError extends Error {
   readonly code: number = 0x177d
-  readonly name: string = 'MintAuthorityRequestKeyMismatch'
+  readonly name: string = 'MintRequestKeyMismatch'
   constructor() {
     super('Mint authority key does not match request')
     if (typeof Error.captureStackTrace === 'function') {
-      Error.captureStackTrace(this, MintAuthorityRequestKeyMismatchError)
+      Error.captureStackTrace(this, MintRequestKeyMismatchError)
+    }
+  }
+}
+
+createErrorFromCodeLookup.set(0x177d, () => new MintRequestKeyMismatchError())
+createErrorFromNameLookup.set(
+  'MintRequestKeyMismatch',
+  () => new MintRequestKeyMismatchError()
+)
+
+/**
+ * MintRequestDiscriminatorMismatch: 'Mint request data has incorrect disciminator'
+ *
+ * @category Errors
+ * @category generated
+ */
+export class MintRequestDiscriminatorMismatchError extends Error {
+  readonly code: number = 0x177e
+  readonly name: string = 'MintRequestDiscriminatorMismatch'
+  constructor() {
+    super('Mint request data has incorrect disciminator')
+    if (typeof Error.captureStackTrace === 'function') {
+      Error.captureStackTrace(this, MintRequestDiscriminatorMismatchError)
     }
   }
 }
 
 createErrorFromCodeLookup.set(
-  0x177d,
-  () => new MintAuthorityRequestKeyMismatchError()
+  0x177e,
+  () => new MintRequestDiscriminatorMismatchError()
 )
 createErrorFromNameLookup.set(
-  'MintAuthorityRequestKeyMismatch',
-  () => new MintAuthorityRequestKeyMismatchError()
-)
-
-/**
- * MissingRequestAccount: 'Missing the request account, needed to verify mint authority'
- *
- * @category Errors
- * @category generated
- */
-export class MissingRequestAccountError extends Error {
-  readonly code: number = 0x177e
-  readonly name: string = 'MissingRequestAccount'
-  constructor() {
-    super('Missing the request account, needed to verify mint authority')
-    if (typeof Error.captureStackTrace === 'function') {
-      Error.captureStackTrace(this, MissingRequestAccountError)
-    }
-  }
-}
-
-createErrorFromCodeLookup.set(0x177e, () => new MissingRequestAccountError())
-createErrorFromNameLookup.set(
-  'MissingRequestAccount',
-  () => new MissingRequestAccountError()
+  'MintRequestDiscriminatorMismatch',
+  () => new MintRequestDiscriminatorMismatchError()
 )
 
 /**
