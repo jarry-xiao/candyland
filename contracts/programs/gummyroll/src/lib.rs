@@ -199,7 +199,11 @@ fn fill_in_proof_from_canopy(
         }
         node_idx >>= 1;
     }
-    proof.extend(inferred_nodes.iter());
+    // We only want to add inferred canopy nodes such that the proof length
+    // is equal to the tree depth. If the lengh of proof + lengh of canopy nodes is
+    // less than the tree depth, the instruction will fail.
+    let overlap = (proof.len() + inferred_nodes.len()).saturating_sub(max_depth as usize);
+    proof.extend(inferred_nodes.iter().skip(overlap));
     Ok(())
 }
 
