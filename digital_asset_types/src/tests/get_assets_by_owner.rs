@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod starter {
+mod get_assets_by_owner {
     use sea_orm::{
         entity::prelude::*, entity::*, DatabaseBackend, JsonValue, MockDatabase, MockExecResult,
     };
@@ -190,10 +190,88 @@ mod starter {
                 id: 3,
                 scopes: None,
             }]])
-            .append_exec_results(vec![MockExecResult {
-                last_insert_id: 1,
-                rows_affected: 1,
-            }])
+            .append_query_results(vec![vec![
+                (
+                    asset::Model {
+                        id: id_2.to_bytes().to_vec(),
+                        owner: owner_2.to_bytes().to_vec(),
+                        owner_type: OwnerType::Single,
+                        delegate: None,
+                        frozen: false,
+                        supply: 1,
+                        supply_mint: None,
+                        compressed: true,
+                        compressible: false,
+                        tree_id: None,
+                        specification_version: 1,
+                        nonce: (0 as i64),
+                        leaf: None,
+                        royalty_target_type: RoyaltyTargetType::Creators,
+                        royalty_target: None,
+                        royalty_amount: 100, //basis points
+                        chain_data_id: Some(2),
+                        burnt: false,
+                        created_at: None,
+                    },
+                    asset_data::Model {
+                        id: 2,
+                        chain_data_mutability: ChainMutability::Mutable,
+                        schema_version: 1,
+                        chain_data: serde_json::to_value(ChainDataV1 {
+                            name: String::from("Test #2"),
+                            symbol: String::from("BUBBLE"),
+                            edition_nonce: None,
+                            primary_sale_happened: true,
+                            token_standard: Some(TokenStandard::NonFungible),
+                            uses: None,
+                        })
+                        .unwrap(),
+                        metadata_url: uri_2.to_string(),
+                        metadata_mutability: Mutability::Mutable,
+                        metadata: JsonValue::String("processing".to_string()),
+                    },
+                ),
+                (
+                    asset::Model {
+                        id: id_3.to_bytes().to_vec(),
+                        owner: owner_2.to_bytes().to_vec(),
+                        owner_type: OwnerType::Single,
+                        delegate: None,
+                        frozen: false,
+                        supply: 1,
+                        supply_mint: None,
+                        compressed: true,
+                        compressible: false,
+                        tree_id: None,
+                        specification_version: 1,
+                        nonce: (0 as i64),
+                        leaf: None,
+                        royalty_target_type: RoyaltyTargetType::Creators,
+                        royalty_target: None,
+                        royalty_amount: 100, //basis points
+                        chain_data_id: Some(3),
+                        burnt: false,
+                        created_at: None,
+                    },
+                    asset_data::Model {
+                        id: 3,
+                        chain_data_mutability: ChainMutability::Mutable,
+                        schema_version: 1,
+                        chain_data: serde_json::to_value(ChainDataV1 {
+                            name: String::from("Test #3"),
+                            symbol: String::from("BUBBLE"),
+                            edition_nonce: None,
+                            primary_sale_happened: true,
+                            token_standard: Some(TokenStandard::NonFungible),
+                            uses: None,
+                        })
+                        .unwrap(),
+                        metadata_url: uri_3.to_string(),
+                        metadata_mutability: Mutability::Mutable,
+                        metadata: JsonValue::String("processing".to_string()),
+                    },
+                ),
+            ]])
             .into_connection();
 
         let metadata_1 = MetadataArgs {
@@ -313,53 +391,6 @@ mod starter {
             .await?;
         assert_eq!(insert_result.last_insert_id, 1);
 
-        assert_eq!(
-            asset::Entity::find_by_id(id_1.to_bytes().to_vec())
-                .find_also_related(AssetData)
-                .one(&db)
-                .await?,
-            Some((
-                asset::Model {
-                    id: id_1.to_bytes().to_vec(),
-                    owner: owner_1.to_bytes().to_vec(),
-                    owner_type: OwnerType::Single,
-                    delegate: None,
-                    frozen: false,
-                    supply: 1,
-                    supply_mint: None,
-                    compressed: true,
-                    compressible: false,
-                    tree_id: None,
-                    specification_version: 1,
-                    nonce: (0 as i64),
-                    leaf: None,
-                    royalty_target_type: RoyaltyTargetType::Creators,
-                    royalty_target: None,
-                    royalty_amount: 100, //basis points
-                    chain_data_id: Some(1),
-                    burnt: false,
-                    created_at: None,
-                },
-                Some(asset_data::Model {
-                    id: 1,
-                    chain_data_mutability: ChainMutability::Mutable,
-                    schema_version: 1,
-                    chain_data: serde_json::to_value(ChainDataV1 {
-                        name: String::from("Test #1"),
-                        symbol: String::from("BUBBLE"),
-                        edition_nonce: None,
-                        primary_sale_happened: true,
-                        token_standard: Some(TokenStandard::NonFungible),
-                        uses: None,
-                    })
-                    .unwrap(),
-                    metadata_url: uri_1.to_string(),
-                    metadata_mutability: Mutability::Mutable,
-                    metadata: JsonValue::String("processing".to_string()),
-                })
-            ))
-        );
-
         let metadata_2 = MetadataArgs {
             name: String::from("Test #2"),
             symbol: String::from("BUBBLE"),
@@ -476,53 +507,6 @@ mod starter {
             .exec(&db)
             .await?;
         assert_eq!(insert_result.last_insert_id, 2);
-
-        assert_eq!(
-            asset::Entity::find_by_id(id_2.to_bytes().to_vec())
-                .find_also_related(AssetData)
-                .one(&db)
-                .await?,
-            Some((
-                asset::Model {
-                    id: id_2.to_bytes().to_vec(),
-                    owner: owner_2.to_bytes().to_vec(),
-                    owner_type: OwnerType::Single,
-                    delegate: None,
-                    frozen: false,
-                    supply: 1,
-                    supply_mint: None,
-                    compressed: true,
-                    compressible: false,
-                    tree_id: None,
-                    specification_version: 1,
-                    nonce: (0 as i64),
-                    leaf: None,
-                    royalty_target_type: RoyaltyTargetType::Creators,
-                    royalty_target: None,
-                    royalty_amount: 100, //basis points
-                    chain_data_id: Some(2),
-                    burnt: false,
-                    created_at: None,
-                },
-                Some(asset_data::Model {
-                    id: 2,
-                    chain_data_mutability: ChainMutability::Mutable,
-                    schema_version: 1,
-                    chain_data: serde_json::to_value(ChainDataV1 {
-                        name: String::from("Test #2"),
-                        symbol: String::from("BUBBLE"),
-                        edition_nonce: None,
-                        primary_sale_happened: true,
-                        token_standard: Some(TokenStandard::NonFungible),
-                        uses: None,
-                    })
-                    .unwrap(),
-                    metadata_url: uri_2.to_string(),
-                    metadata_mutability: Mutability::Mutable,
-                    metadata: JsonValue::String("processing".to_string()),
-                })
-            ))
-        );
 
         let metadata_3 = MetadataArgs {
             name: String::from("Test #3"),
@@ -642,50 +626,93 @@ mod starter {
         assert_eq!(insert_result.last_insert_id, 3);
 
         assert_eq!(
-            asset::Entity::find_by_id(id_3.to_bytes().to_vec())
+            asset::Entity::find()
+                .filter(asset::Column::Owner.eq(owner_2.to_bytes().to_vec()))
                 .find_also_related(AssetData)
-                .one(&db)
+                .all(&db)
                 .await?,
-            Some((
-                asset::Model {
-                    id: id_3.to_bytes().to_vec(),
-                    owner: owner_2.to_bytes().to_vec(),
-                    owner_type: OwnerType::Single,
-                    delegate: None,
-                    frozen: false,
-                    supply: 1,
-                    supply_mint: None,
-                    compressed: true,
-                    compressible: false,
-                    tree_id: None,
-                    specification_version: 1,
-                    nonce: (0 as i64),
-                    leaf: None,
-                    royalty_target_type: RoyaltyTargetType::Creators,
-                    royalty_target: None,
-                    royalty_amount: 100, //basis points
-                    chain_data_id: Some(3),
-                    burnt: false,
-                    created_at: None,
-                },
-                Some(asset_data::Model {
-                    id: 3,
-                    chain_data_mutability: ChainMutability::Mutable,
-                    schema_version: 1,
-                    chain_data: serde_json::to_value(ChainDataV1 {
-                        name: String::from("Test #3"),
-                        symbol: String::from("BUBBLE"),
-                        edition_nonce: None,
-                        primary_sale_happened: true,
-                        token_standard: Some(TokenStandard::NonFungible),
-                        uses: None,
+            vec![
+                (
+                    asset::Model {
+                        id: id_2.to_bytes().to_vec(),
+                        owner: owner_2.to_bytes().to_vec(),
+                        owner_type: OwnerType::Single,
+                        delegate: None,
+                        frozen: false,
+                        supply: 1,
+                        supply_mint: None,
+                        compressed: true,
+                        compressible: false,
+                        tree_id: None,
+                        specification_version: 1,
+                        nonce: (0 as i64),
+                        leaf: None,
+                        royalty_target_type: RoyaltyTargetType::Creators,
+                        royalty_target: None,
+                        royalty_amount: 100, //basis points
+                        chain_data_id: Some(2),
+                        burnt: false,
+                        created_at: None,
+                    },
+                    Some(asset_data::Model {
+                        id: 2,
+                        chain_data_mutability: ChainMutability::Mutable,
+                        schema_version: 1,
+                        chain_data: serde_json::to_value(ChainDataV1 {
+                            name: String::from("Test #2"),
+                            symbol: String::from("BUBBLE"),
+                            edition_nonce: None,
+                            primary_sale_happened: true,
+                            token_standard: Some(TokenStandard::NonFungible),
+                            uses: None,
+                        })
+                        .unwrap(),
+                        metadata_url: uri_2.to_string(),
+                        metadata_mutability: Mutability::Mutable,
+                        metadata: JsonValue::String("processing".to_string()),
                     })
-                    .unwrap(),
-                    metadata_url: uri_3.to_string(),
-                    metadata_mutability: Mutability::Mutable,
-                    metadata: JsonValue::String("processing".to_string()),
-                })
-            ))
+                ),
+                (
+                    asset::Model {
+                        id: id_3.to_bytes().to_vec(),
+                        owner: owner_2.to_bytes().to_vec(),
+                        owner_type: OwnerType::Single,
+                        delegate: None,
+                        frozen: false,
+                        supply: 1,
+                        supply_mint: None,
+                        compressed: true,
+                        compressible: false,
+                        tree_id: None,
+                        specification_version: 1,
+                        nonce: (0 as i64),
+                        leaf: None,
+                        royalty_target_type: RoyaltyTargetType::Creators,
+                        royalty_target: None,
+                        royalty_amount: 100, //basis points
+                        chain_data_id: Some(3),
+                        burnt: false,
+                        created_at: None,
+                    },
+                    Some(asset_data::Model {
+                        id: 3,
+                        chain_data_mutability: ChainMutability::Mutable,
+                        schema_version: 1,
+                        chain_data: serde_json::to_value(ChainDataV1 {
+                            name: String::from("Test #3"),
+                            symbol: String::from("BUBBLE"),
+                            edition_nonce: None,
+                            primary_sale_happened: true,
+                            token_standard: Some(TokenStandard::NonFungible),
+                            uses: None,
+                        })
+                        .unwrap(),
+                        metadata_url: uri_3.to_string(),
+                        metadata_mutability: Mutability::Mutable,
+                        metadata: JsonValue::String("processing".to_string()),
+                    })
+                )
+            ]
         );
         Ok(())
     }
