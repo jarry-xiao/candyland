@@ -52,7 +52,7 @@ export function deserializeInitJson(input): [InitializeGumballMachineInstruction
     extensionLen: assertNonNegativeAndConvertToBN(input.args.extensionLen, "extensionLen"),
     maxMintSize: assertInRangeAndReturnNum(input.args.maxMintSize, "maxMintSize"),
     maxItems: assertInRangeAndReturnNum(input.args.maxItems, "maxItems"),
-    creatorKeys: deserializeCreatorKeys(input.args.creatorKeys),
+    creatorKeys: deserializeCreatorKeys(input.args.creatorKeys, input.args.creatorShares),
     creatorShares: deserializeCreatorShares(input.args.creatorShares)
   }
 

@@ -35,7 +35,7 @@ export function deserializeUpdateHeaderMetadataJson(input): UpdateHeaderMetadata
     authority: assertLengthAndConvertToPublicKey(input.args.authority, "authority"),
     receiver: assertLengthAndConvertToPublicKey(input.args.receiver, "receiver"),
     maxMintSize: assertInRangeAndReturnNum(input.args.maxMintSize, "maxMintSize"),
-    creatorKeys: deserializeCreatorKeys(input.args.creatorKeys),
+    creatorKeys: deserializeCreatorKeys(input.args.creatorKeys, input.args.creatorShares),
     creatorShares: deserializeCreatorShares(input.args.creatorShares)
   }
   return gumballMachineUpdateHeaderMetadataArgs;
