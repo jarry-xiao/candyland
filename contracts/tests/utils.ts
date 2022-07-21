@@ -29,6 +29,7 @@ export async function execute(
   return txid;
 }
 
+// TODO(sorend): change all test methods to import from sdk utils
 /// Convert a 32 bit number to a buffer of bytes
 export function num32ToBuffer(num: number) {
   const isU32 = (num >= 0 && num < Math.pow(2, 32));

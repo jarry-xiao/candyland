@@ -411,7 +411,6 @@ pub mod gumball_machine {
                 None => EncodeMethod::UTF8.to_u8(),
             },
             creators,
-            _padding: [0; 3],
             price,
             go_live_date,
             bot_wallet,
@@ -425,7 +424,7 @@ pub mod gumball_machine {
             max_items,
             total_items_added: 0,
             smallest_uninitialized_index: 0,
-            _padding_2: [0; 4],
+            _padding: [0; 7],
         };
         let index_array_size = std::mem::size_of::<u32>() * size;
         let config_size = extension_len as usize * size;

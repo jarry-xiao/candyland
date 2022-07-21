@@ -3,7 +3,7 @@ import { keccak_256 } from "js-sha3";
 import { BN, Provider, Program } from "@project-serum/anchor";
 import { Bubblegum } from "../target/types/bubblegum";
 import { Gummyroll } from "../target/types/gummyroll";
-import { PROGRAM_ID } from "@metaplex-foundation/mpl-token-metadata";
+import { PROGRAM_ID as TOKEN_METADATA_PROGRAM_ID } from "@metaplex-foundation/mpl-token-metadata";
 import {
   PublicKey,
   Keypair,
@@ -38,10 +38,9 @@ import {
   TOKEN_PROGRAM_ID,
   Token,
 } from "@solana/spl-token";
-import { bufferToArray, num16ToBuffer } from "./utils";
 import { TokenProgramVersion, Version, Creator } from "../sdk/bubblegum/src/generated";
-import { CANDY_WRAPPER_PROGRAM_ID, execute } from "../sdk/utils";
-import { getBubblegumAuthorityPDA, getCreateTreeIxs, getNonceCount, getVoucherPDA } from "../sdk/bubblegum/src/convenience";
+import { CANDY_WRAPPER_PROGRAM_ID, execute, bufferToArray } from "../sdk/utils";
+import { getBubblegumAuthorityPDA, getCreateTreeIxs, getNonceCount, getVoucherPDA, computeDataHash, computeCreatorHash } from "../sdk/bubblegum/src/convenience";
 
 // @ts-ignore
 let Bubblegum;
@@ -129,8 +128,8 @@ describe("bubblegum", () => {
   ): Promise<anchor.web3.PublicKey> => {
     return (
       await anchor.web3.PublicKey.findProgramAddress(
-        [Buffer.from("metadata"), PROGRAM_ID.toBuffer(), mint.toBuffer()],
-        PROGRAM_ID
+        [Buffer.from("metadata"), TOKEN_METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+        TOKEN_METADATA_PROGRAM_ID
       )
     )[0];
   };
@@ -142,11 +141,11 @@ describe("bubblegum", () => {
       await anchor.web3.PublicKey.findProgramAddress(
         [
           Buffer.from("metadata"),
-          PROGRAM_ID.toBuffer(),
+          TOKEN_METADATA_PROGRAM_ID.toBuffer(),
           mint.toBuffer(),
           Buffer.from("edition"),
         ],
-        PROGRAM_ID
+        TOKEN_METADATA_PROGRAM_ID
       )
     )[0];
   };
@@ -190,16 +189,10 @@ describe("bubblegum", () => {
       await execute(Bubblegum.provider, [mintIx], [payer]);
 
       // Compute data hash
-      const metadataArgsBuffer = mintIx.data.slice(8)
-      const metadataArgsHash = keccak_256.digest(metadataArgsBuffer);
-      const sellerFeeBasisPointsNumberArray = bufferToArray(num16ToBuffer(metadata.sellerFeeBasisPoints))
-      const allDataToHash = metadataArgsHash.concat(sellerFeeBasisPointsNumberArray)
-      const dataHash = bufferToArray(
-        Buffer.from(keccak_256.digest(allDataToHash))
-      );
+      const dataHash = computeDataHash(metadata.sellerFeeBasisPoints, mintIx)
 
       // Compute creator hash
-      const creatorHash = bufferToArray(Buffer.from(keccak_256.digest([])));
+      const creatorHash = computeCreatorHash([]);
 
       let onChainRoot = await getRootOfOnChainMerkleRoot(connection, merkleRollKeypair.publicKey);
 
@@ -370,7 +363,7 @@ describe("bubblegum", () => {
           metadata: await getMetadata(asset),
           masterEdition: await getMasterEdition(asset),
           sysvarRent: SYSVAR_RENT_PUBKEY,
-          tokenMetadataProgram: PROGRAM_ID,
+          tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         },
         {
@@ -415,23 +408,8 @@ describe("bubblegum", () => {
       );
       await execute(Bubblegum.provider, [mintIx], [payer]);
 
-      // Compute data hash
-      const metadataArgsBuffer = mintIx.data.slice(8)
-      const metadataArgsHash = keccak_256.digest(metadataArgsBuffer);
-      const sellerFeeBasisPointsNumberArray = bufferToArray(num16ToBuffer(metadata.sellerFeeBasisPoints))
-      const allDataToHash = metadataArgsHash.concat(sellerFeeBasisPointsNumberArray)
-      const dataHash = bufferToArray(
-        Buffer.from(keccak_256.digest(allDataToHash))
-      );
-
-      // Compute creator hash
-      let bufferOfCreatorData = Buffer.from([]);
-      let bufferOfCreatorShares = Buffer.from([]);
-      for (let creator of metadata.creators) {
-        bufferOfCreatorData = Buffer.concat([bufferOfCreatorData, creator.address.toBuffer(), Buffer.from([creator.share])])
-        bufferOfCreatorShares = Buffer.concat([bufferOfCreatorShares, Buffer.from([creator.share])])
-      }
-      let creatorHash = bufferToArray(Buffer.from(keccak_256.digest(bufferOfCreatorData)));
+      const dataHash = computeDataHash(metadata.sellerFeeBasisPoints, mintIx);
+      const creatorHash = computeCreatorHash(metadata.creators);
 
       console.log(" - Decompressing leaf");
 
@@ -495,7 +473,7 @@ describe("bubblegum", () => {
           metadata: await getMetadata(asset),
           masterEdition: await getMasterEdition(asset),
           sysvarRent: SYSVAR_RENT_PUBKEY,
-          tokenMetadataProgram: PROGRAM_ID,
+          tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
           associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
         },
         {

@@ -35,7 +35,15 @@ import {
   createUpdateHeaderMetadataInstruction,
   createDestroyInstruction,
 } from "../sdk/gumball-machine/src/generated/instructions";
-import { val, strToByteArray, strToByteUint8Array } from "../sdk/utils/index";
+import {
+  val,
+  strToByteArray,
+  strToByteUint8Array,
+  num32ToBuffer,
+  arrayEquals,
+  logTx,
+  execute
+} from "../sdk/utils/index";
 import {
   GumballMachineHeader,
   gumballMachineHeaderBeet,
@@ -49,10 +57,8 @@ import {
   getAccount,
 } from "../../deps/solana-program-library/token/js/src";
 import { NATIVE_MINT } from "@solana/spl-token";
-import { num32ToBuffer, arrayEquals, logTx } from "./utils";
 import { EncodeMethod } from "../sdk/gumball-machine/src/generated/types/EncodeMethod";
 import { getBubblegumAuthorityPDA } from "../sdk/bubblegum/src/convenience";
-import { execute } from "../../contracts/sdk/utils";
 
 // @ts-ignore
 let GumballMachine;
@@ -299,7 +305,6 @@ describe("gumball-machine", () => {
       retainAuthority: gumballMachineInitArgs.retainAuthority ? 1 : 0,
       configLineEncodeMethod: 0,
       creators: expectedCreators,
-      padding: [0, 0, 0],
       price: gumballMachineInitArgs.price,
       goLiveDate: gumballMachineInitArgs.goLiveDate,
       mint,
@@ -313,7 +318,7 @@ describe("gumball-machine", () => {
       maxItems: gumballMachineInitArgs.maxItems,
       totalItemsAdded: 0,
       smallestUninitializedIndex: 0,
-      padding2: [0, 0, 0, 0],
+      padding: [0, 0, 0, 0, 0, 0, 0]
     };
     assertGumballMachineHeaderProperties(gumballMachine, expectedOnChainHeader);
   }
@@ -875,7 +880,6 @@ describe("gumball-machine", () => {
             isMutable: newGumballMachineHeader.isMutable ? 1 : 0,
             retainAuthority: newGumballMachineHeader.retainAuthority ? 1 : 0,
             creators: [],
-            padding: [0, 0, 0],
             price: newGumballMachineHeader.price,
             goLiveDate: newGumballMachineHeader.goLiveDate,
             mint: NATIVE_MINT,
@@ -889,7 +893,7 @@ describe("gumball-machine", () => {
             maxItems: baseGumballMachineInitProps.maxItems,
             totalItemsAdded: 0,
             smallestUninitializedIndex: baseGumballMachineInitProps.maxItems,
-            padding2: [0, 0, 0, 0],
+            padding: [0, 0, 0, 0, 0, 0, 0]
           };
           await updateHeaderMetadata(
             creatorAddress,
@@ -1325,7 +1329,6 @@ describe("gumball-machine", () => {
             isMutable: newGumballMachineHeader.isMutable ? 1 : 0,
             retainAuthority: newGumballMachineHeader.retainAuthority ? 1 : 0,
             creators: expectedCreators,
-            padding: [0, 0, 0],
             price: newGumballMachineHeader.price,
             goLiveDate: newGumballMachineHeader.goLiveDate,
             mint: NATIVE_MINT,
@@ -1339,7 +1342,7 @@ describe("gumball-machine", () => {
             maxItems: baseGumballMachineInitProps.maxItems,
             totalItemsAdded: 0,
             smallestUninitializedIndex: baseGumballMachineInitProps.maxItems,
-            padding2: [0, 0, 0, 0],
+            padding: [0, 0, 0, 0, 0, 0, 0]
           };
           await updateHeaderMetadata(
             creatorAddress,

@@ -30,7 +30,7 @@ import {
   getListingPDAKeyForPrice
 } from "../sdk/sugar-shack";
 import {
-  CANDY_WRAPPER_PROGRAM_ID
+  CANDY_WRAPPER_PROGRAM_ID, bufferToArray
 } from "../sdk/utils/index";
 import {
   MetadataArgs,
@@ -51,10 +51,9 @@ import {
   TreeNode,
 } from "./merkle-tree";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
-import { bufferToArray, num16ToBuffer } from "./utils";
 import { TokenProgramVersion, Version } from "../sdk/bubblegum/src/generated";
 import { SugarShack } from "../target/types/sugar_shack";
-import { getBubblegumAuthorityPDA } from "../sdk/bubblegum/src/convenience";
+import { getBubblegumAuthorityPDA, computeDataHash, computeCreatorHash, computeMetadataArgsHash } from "../sdk/bubblegum/src/convenience";
 
 // @ts-ignore
 let BubblegumProgramId;
@@ -374,23 +373,13 @@ describe("sugar-shack", () => {
           }
         );
 
-        // Compute the creator_hash
-        let bufferOfCreatorData = Buffer.from([]);
-        bufferOfCreatorShares = Buffer.from([]);
-        for (let creator of compressedNFTMetadata.creators) {
-          bufferOfCreatorData = Buffer.concat([bufferOfCreatorData, creator.address.toBuffer(), Buffer.from([creator.share])])
-          bufferOfCreatorShares = Buffer.concat([bufferOfCreatorShares, Buffer.from([creator.share])])
-        }
-        creatorHashOfCompressedNFT = bufferToArray(Buffer.from(keccak_256.digest(bufferOfCreatorData)));
+        // creator hash
+        bufferOfCreatorShares = Buffer.from(compressedNFTMetadata.creators.map(c => c.share));
+        creatorHashOfCompressedNFT = computeCreatorHash(compressedNFTMetadata.creators);
 
-        // Compute the data_hash
-        const metadataArgsBuffer = mintIx.data.slice(8)
-        metadataArgsHash = keccak_256.digest(metadataArgsBuffer);
-        const sellerFeeBasisPointsNumberArray = bufferToArray(num16ToBuffer(compressedNFTMetadata.sellerFeeBasisPoints))
-        const allDataToHash = metadataArgsHash.concat(sellerFeeBasisPointsNumberArray)
-        dataHashOfCompressedNFT = bufferToArray(
-          Buffer.from(keccak_256.digest(allDataToHash))
-        );
+        // data hash
+        metadataArgsHash = computeMetadataArgsHash(mintIx);
+        dataHashOfCompressedNFT = computeDataHash(compressedNFTMetadata.sellerFeeBasisPoints, undefined, metadataArgsHash);
 
         // Get the nonce for the minted leaf
         const nonceInfo = await SugarShack.provider.connection.getAccountInfo(bubblegumAuthority);

@@ -30,9 +30,8 @@ import {
   assertOnChainMerkleRollProperties,
   createAllocTreeIx,
 } from "../sdk/gummyroll";
-import { execute, logTx } from "../sdk/utils";
-import { CANDY_WRAPPER_PROGRAM_ID } from "../sdk/utils";
 import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
+import { CANDY_WRAPPER_PROGRAM_ID, execute, logTx } from "../sdk/utils";
 
 // @ts-ignore
 let Gummyroll;

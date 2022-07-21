@@ -53,3 +53,18 @@ export function assertLengthAndConvertByteArray(s: string, size: number, propert
   }
   return strToByteArray(s, size);
 }
+
+export function deserializeCreatorKeys(keys: string[]): PublicKey[] {
+  if (keys.length > 5) {
+    throw new Error(`❌ creatorKeys is too long! We currently only support at most 5 creators ❌`);
+  } else {
+    return keys.map((key, i) => assertLengthAndConvertToPublicKey(key, `Creator key ${i}`))
+  }
+}
+
+export function deserializeCreatorShares(shares: number[]): Uint8Array {
+  if (shares.reduce((acc, share) => acc + share, 0) != 100) {
+    throw new Error(`❌ creatorShares must sum to exactly 100% ❌`);
+  }
+  return Uint8Array.from(shares);
+}
