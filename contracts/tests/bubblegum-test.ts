@@ -158,8 +158,8 @@ describe("bubblegum", () => {
       assert(trimStringPadding(onChainData.symbol) === expectedData.symbol, "symbols mismatched");
       assert(trimStringPadding(onChainData.uri) === expectedData.uri, "uris mismatched");
       assert(onChainData.sellerFeeBasisPoints === expectedData.sellerFeeBasisPoints)
-      onChainData.creators.forEach((creator, index) => {
-        if (index === onChainData.creators.length-1) {
+      onChainData.creators?.forEach((creator, index) => {
+        if (index === onChainData.creators.length - 1) {
           assert(creator.address.equals(expectedMintAuthority), "Creator address mismatch");
           assert(creator.share === 0, "Creator share mismatch");
           assert(creator.verified === true, "Creator verified mismatch");
@@ -172,14 +172,14 @@ describe("bubblegum", () => {
     };
 
     // Assert that data fields match
-    assertDataMatch(onChainMetadata.data, { name: mintMetadataArgs.name, uri: mintMetadataArgs.uri, symbol: mintMetadataArgs.symbol, creators: mintMetadataArgs.creators, sellerFeeBasisPoints: mintMetadataArgs.sellerFeeBasisPoints})
+    assertDataMatch(onChainMetadata.data, { name: mintMetadataArgs.name, uri: mintMetadataArgs.uri, symbol: mintMetadataArgs.symbol, creators: mintMetadataArgs.creators, sellerFeeBasisPoints: mintMetadataArgs.sellerFeeBasisPoints })
 
     // Assert that collections match
-    assert(!onChainMetadata.collection ? onChainMetadata.collection === null 
-            : onChainMetadata.collection.key.equals(mintMetadataArgs.collection.key) && onChainMetadata.collection.verified === mintMetadataArgs.collection.verified,
-            "Collections did not match"
-          );
-    
+    assert(!onChainMetadata.collection ? onChainMetadata.collection === null
+      : onChainMetadata.collection.key.equals(mintMetadataArgs.collection.key) && onChainMetadata.collection.verified === mintMetadataArgs.collection.verified,
+      "Collections did not match"
+    );
+
     // Assert remaining properties match. TODO: at some point some of these comparrisons may need to be updated to work for non-null values
     assert(onChainMetadata.isMutable === mintMetadataArgs.isMutable, "isMutable did not match");
     assert(onChainMetadata.primarySaleHappened === mintMetadataArgs.primarySaleHappened, "primary sale mismatch");
@@ -409,6 +409,14 @@ describe("bubblegum", () => {
         }
       );
       await execute(Bubblegum.provider, [decompressIx], [payer]);
+
+      // Fetch the token metadata account and deserialize its data
+      const onChainNFTMetadataAccount =
+        await Bubblegum.provider.connection.getAccountInfo(
+          await getMetadata(asset)
+        );
+      const metadataForDecompressedNFT = metadataBeet.deserialize(onChainNFTMetadataAccount.data)[0];
+      assertMetadataMatch(metadataForDecompressedNFT, metadata, mintAuthority);
     });
     it("Can mint and decompress with creators", async () => {
       const metadata: MetadataArgs = {
@@ -527,19 +535,6 @@ describe("bubblegum", () => {
         );
       const metadataForDecompressedNFT = metadataBeet.deserialize(onChainNFTMetadataAccount.data)[0];
       assertMetadataMatch(metadataForDecompressedNFT, metadata, mintAuthority);
-
-      // Assert that the creators are correct
-      /*metadataArgsForDecompressedNFT.data.creators.forEach((creator, index) => {
-        if (index === metadataArgsForDecompressedNFT.data.creators.length-1) {
-          assert(creator.address.equals(mintAuthority), "Creator address mismatch");
-          assert(creator.share === 0, "Creator share mismatch");
-          assert(creator.verified === true, "Creator verified mismatch");
-        } else {
-          assert(creator.address.equals(metadata.creators[index].address), "Creator address mismatch");
-          assert(creator.share === metadata.creators[index].share, "Creator share mismatch");
-          assert(creator.verified === metadata.creators[index].verified, "Creator verified mismatch");
-        }
-      });*/
     });
   });
 });
