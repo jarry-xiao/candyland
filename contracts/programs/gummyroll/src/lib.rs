@@ -69,22 +69,6 @@ pub struct Modify<'info> {
     pub candy_wrapper: Program<'info, CandyWrapper>,
 }
 
-/// Context for appending a new leaf to the tree
-#[derive(Accounts)]
-pub struct Append<'info> {
-    #[account(mut)]
-    /// CHECK: This account is validated in the instruction
-    pub merkle_roll: UncheckedAccount<'info>,
-
-    /// Authority that validates the content of the trees.
-    /// Typically a program, e.g., the Bubblegum contract validates that leaves are valid NFTs.
-    pub authority: Signer<'info>,
-
-    /// Program used to emit changelogs as instruction data.
-    /// See `WRAPYChf58WFCnyjXKJHtrPgzKXgHp6MD9aVDqJBbGh`
-    pub candy_wrapper: Program<'info, CandyWrapper>,
-}
-
 /// Context for validating a provided proof against the Merkle tree.
 /// Throws an error if provided proof is invalid.
 #[derive(Accounts)]
@@ -495,7 +479,7 @@ pub mod gummyroll {
     ///
     /// This is accomplished by using the rightmost_proof of the merkle roll to construct a
     /// valid proof, and then updating the rightmost_proof for the next leaf if possible.
-    pub fn append(ctx: Context<Append>, leaf: [u8; 32]) -> Result<()> {
+    pub fn append(ctx: Context<Modify>, leaf: [u8; 32]) -> Result<()> {
         let mut merkle_roll_bytes = ctx.accounts.merkle_roll.try_borrow_mut_data()?;
         let (header_bytes, rest) = merkle_roll_bytes.split_at_mut(size_of::<MerkleRollHeader>());
 

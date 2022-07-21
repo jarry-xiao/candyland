@@ -50,7 +50,7 @@ pub fn append_leaf<'info>(
     let authority_pda_signer = &[&seeds[..]];
     let cpi_ctx = CpiContext::new_with_signer(
         gummyroll_program.clone(),
-        gummyroll::cpi::accounts::Append {
+        gummyroll::cpi::accounts::Modify {
             authority: authority.clone(),
             merkle_roll: merkle_roll.clone(),
             candy_wrapper: candy_wrapper.clone(),

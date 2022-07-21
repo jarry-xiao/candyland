@@ -32,6 +32,7 @@ import {
 } from "../sdk/gummyroll";
 import { execute, logTx } from "../sdk/utils";
 import { CANDY_WRAPPER_PROGRAM_ID } from "../sdk/utils";
+import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
 
 // @ts-ignore
 let Gummyroll;
@@ -696,18 +697,48 @@ describe("gummyroll", () => {
         }
       }
 
-      const newLeaf = crypto.randomBytes(32);
-      const replaceIx = createReplaceIx(
-        Gummyroll,
-        payer,
-        merkleRollKeypair.publicKey,
-        root.toBuffer(),
-        newLeaves[0],
-        newLeaf,
-        0,
-        [newLeaves[1]]
-      );
-      let tx = await execute(Gummyroll.provider, [replaceIx], [payer], true, true);
+      let newLeafList = []
+      for (let i = 0; i < 32; ++i)  {
+        newLeafList.push(newLeaves[i])
+      }
+
+      let tree = buildTree(newLeafList)
+
+
+      for (let proofSize = 1; proofSize <= 5; ++proofSize) {
+        const newLeaf = crypto.randomBytes(32);
+        let i = Math.floor(Math.random() * 32)
+        const leaf = newLeaves[i];
+        
+        let partialProof = getProofOfLeaf(tree, i).slice(0, proofSize).map((n) => n.node)
+        console.log(`Replacing node ${i}, proof length = ${proofSize}`)
+        for (const [level, node] of Object.entries(partialProof)) {
+          console.log(` ${level}: ${bs58.encode(node)}`)
+        }
+        const replaceIx = createReplaceIx(
+          Gummyroll,
+          payer,
+          merkleRollKeypair.publicKey,
+          root.toBuffer(),
+          newLeaves[i],
+          newLeaf,
+          i,
+          partialProof,
+        );
+        updateTree(tree, newLeaf, i);
+        const replaceBackIx = createReplaceIx(
+          Gummyroll,
+          payer,
+          merkleRollKeypair.publicKey,
+          tree.root,
+          newLeaf,
+          newLeaves[i],
+          i,
+          partialProof,
+        );
+        updateTree(tree, leaf, i);
+        await execute(Gummyroll.provider, [replaceIx, replaceBackIx], [payer], true, true);
+      }
     });
   });
 });
