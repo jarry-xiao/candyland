@@ -3,7 +3,7 @@ import { keccak_256 } from "js-sha3";
 import { BN, Provider, Program } from "@project-serum/anchor";
 import { Bubblegum } from "../target/types/bubblegum";
 import { Gummyroll } from "../target/types/gummyroll";
-import { PROGRAM_ID as TOKEN_METADATA_PROGRAM_ID } from "@metaplex-foundation/mpl-token-metadata";
+import { PROGRAM_ID as TOKEN_METADATA_PROGRAM_ID, metadataBeet, Metadata } from "@metaplex-foundation/mpl-token-metadata";
 import {
   PublicKey,
   Keypair,
@@ -481,6 +481,26 @@ describe("bubblegum", () => {
         }
       );
       await execute(Bubblegum.provider, [decompressIx], [payer]);
+
+      // Fetch the token metadata account and deserialize its data
+      const onChainNFTMetadataAccount =
+        await Bubblegum.provider.connection.getAccountInfo(
+          await getMetadata(asset)
+        );
+      const metadataArgsForDecompressedNFT = metadataBeet.deserialize(onChainNFTMetadataAccount.data)[0];
+
+      // Assert that the creators are correct
+      metadataArgsForDecompressedNFT.data.creators.forEach((creator, index) => {
+        if (index === metadataArgsForDecompressedNFT.data.creators.length-1) {
+          assert(creator.address.equals(mintAuthority), "Creator address mismatch");
+          assert(creator.share === 0, "Creator share mismatch");
+          assert(creator.verified === true, "Creator verified mismatch");
+        } else {
+          assert(creator.address.equals(metadata.creators[index].address), "Creator address mismatch");
+          assert(creator.share === metadata.creators[index].share, "Creator share mismatch");
+          assert(creator.verified === metadata.creators[index].verified, "Creator verified mismatch");
+        }
+      });
     });
   });
 });
