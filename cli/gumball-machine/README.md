@@ -94,7 +94,7 @@ Created Gumball Machine Pubkey: 4SLVDrLyadq6rDb3sKiDR2nX99BiGvXME51Z8B3sPCrE
 Created Merkle Roll Publickey: FFsMEokRrRNmaWXoXeud42A27UNXq7qzfLCDbrosyoC4
 ```
 
-Something which may be useful, especially for larger gumball machines, is to avoid storing "config lines" in the gumball machine account. To avoid this, one can set `extensionLen`: 0 in the JSON above. When `extensionLen` is zero, you do not need to add any config lines to your machine before people are able to mint (all you need to do is `init-indices` and then up to `maxItems` NFTs can be minted from your machine). Note though that the "config data" for each minted NFT will just correspond to the bytes of its numeric index rather than a custom "config line" and so you may need an off-chain mapping of numeric ids -> uri extensions to fetch the appropriate metadata for the NFT.
+Something which may be useful, especially for larger gumball machines, is to avoid storing "config lines" in the gumball machine account. To avoid this, one can set `extensionLen`: 0 in the JSON above. When `extensionLen` is zero, you do not need to add any "config lines" to your machine before people are able to mint (all you need to do is `init-indices` and then up to `maxItems` NFTs can be minted from your machine). Note though that the "config data" for each minted NFT will just correspond to the bytes of its numeric index rather than a custom "config line" and so you may need an off-chain mapping of numeric ids -> uri extensions to fetch the appropriate metadata for the NFT. For an example of this, see `./example-input-json/init-no-config-lines.json`.
 
 ### init-indices
 
