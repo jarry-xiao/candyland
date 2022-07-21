@@ -9,7 +9,8 @@ use {
         VOUCHER_PREFIX, VOUCHER_SIZE,
     },
     crate::utils::{
-        append_leaf, assert_pubkey_equal, cmp_bytes, cmp_pubkeys, get_asset_id, replace_leaf,
+        append_leaf, assert_metadata_is_mpl_compatible, assert_pubkey_equal, cmp_bytes,
+        cmp_pubkeys, get_asset_id, replace_leaf,
     },
     anchor_lang::{
         prelude::*,
@@ -353,7 +354,7 @@ pub mod bubblegum {
     pub fn mint_v1(ctx: Context<MintV1>, message: MetadataArgs) -> Result<()> {
         // TODO -> Pass collection in check collection authority or collection delegate authority signer
         // TODO -> Separate V1 / V1 into seperate instructions
-        //
+        assert_metadata_is_mpl_compatible(&message)?;
         let owner = ctx.accounts.owner.key();
         let delegate = ctx.accounts.delegate.key();
         let merkle_slab = ctx.accounts.merkle_slab.to_account_info();
@@ -760,7 +761,6 @@ pub mod bubblegum {
                         verified: true,
                         share: 0,
                     });
-                    assert!(ammended_metadata_creators.len() <= mpl_token_metadata::state::MAX_CREATOR_LIMIT, "Supplied metadata can have at most {} creators to leave space for mint_authority PDA creator", mpl_token_metadata::state::MAX_CREATOR_LIMIT-1);
                     Some(
                         ammended_metadata_creators
                             .iter()
