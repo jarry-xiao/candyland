@@ -33,7 +33,7 @@ export function deserializeUpdateHeaderMetadataJson(input): UpdateHeaderMetadata
     goLiveDate: assertNonNegativeAndConvertToBN(input.args.goLiveDate, "goLiveDate"),
     botWallet: assertLengthAndConvertToPublicKey(input.args.botWallet, "botWallet"),
     authority: assertLengthAndConvertToPublicKey(input.args.authority, "authority"),
-    receiver: assertLengthAndConvertToPublicKey(input.args.authority, "receiver"),
+    receiver: assertLengthAndConvertToPublicKey(input.args.receiver, "receiver"),
     maxMintSize: assertInRangeAndReturnNum(input.args.maxMintSize, "maxMintSize"),
     creatorKeys: deserializeCreatorKeys(input.args.creatorKeys),
     creatorShares: deserializeCreatorShares(input.args.creatorShares)

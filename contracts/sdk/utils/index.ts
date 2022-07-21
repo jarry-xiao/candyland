@@ -23,7 +23,7 @@ export async function execute(
   signers: Signer[],
   skipPreflight: boolean = false,
   verbose: boolean = false,
-): Promise<String> {
+): Promise<string> {
   let tx = new Transaction();
   instructions.map((ix) => { tx = tx.add(ix) });
 
