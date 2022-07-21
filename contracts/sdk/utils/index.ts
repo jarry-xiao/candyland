@@ -113,3 +113,8 @@ export function bufferToArray(buffer: Buffer): number[] {
   }
   return nums;
 }
+
+/// Remove null characters from a string. Useful for comparring byte-padded on-chain strings with off-chain values
+export const trimStringPadding = (str: string): string => {
+  return str.replace(/\0/g, '')
+}
