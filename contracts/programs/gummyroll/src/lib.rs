@@ -35,7 +35,7 @@ use crate::state::{CandyWrapper, ChangeLogEvent, MerkleRollHeader};
 use crate::utils::{wrap_event, ZeroCopy};
 pub use concurrent_merkle_tree::{error::CMTError, merkle_roll::MerkleRoll, state::Node};
 
-declare_id!("GRoLLMza82AiYN7W9S9KCCtCyyPRAQP2ifBy4v4D5RMD");
+declare_id!("GRoLLzvxpxxu2PGNJMMeZPyMxjAUH9pKqxGXV9DGiceU");
 
 /// Context for initializing a new Merkle tere
 #[derive(Accounts)]
