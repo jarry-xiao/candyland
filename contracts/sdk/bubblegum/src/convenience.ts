@@ -1,10 +1,11 @@
 import { BN } from "@project-serum/anchor";
 import { TransactionInstruction, PublicKey, Connection, AccountInfo } from "@solana/web3.js";
 import { keccak_256 } from "js-sha3";
-import { Creator, TreeAuthority, PROGRAM_ID } from './generated';
+import { Creator, TreeAuthority, MintAuthorityRequest, PROGRAM_ID } from './generated';
 import { CANDY_WRAPPER_PROGRAM_ID, bufferToArray, num16ToBuffer } from "../../utils";
 import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID, createAllocTreeIx } from "../../gummyroll";
 import { createCreateTreeInstruction } from "./generated";
+import { assert } from "chai";
 
 export async function getBubblegumAuthorityPDA(merkleRollPubKey: PublicKey) {
     const [bubblegumAuthorityPDAKey] = await PublicKey.findProgramAddress(
@@ -22,18 +23,43 @@ export async function getMintAuthorityRequestPDA(merkleRollPubKey: PublicKey, re
     return mintAuthorityRequest;
 }
 
+export async function getMintAuthorityRequest(connection: Connection, merkleRollPubKey: PublicKey, requester: PublicKey): Promise<MintAuthorityRequest> {
+    const requestPda = await getMintAuthorityRequestPDA(merkleRollPubKey, requester);
+    return await MintAuthorityRequest.fromAccountAddress(connection, requestPda);
+}
+
+export async function assertOnChainMintAuthorityRequest(
+    connection: Connection,
+    mintAuthority: PublicKey,
+    mintCapacity: BN,
+    numMinted: BN,
+    approved: boolean,
+    mintRequestPDA: PublicKey,
+) {
+    const request = await MintAuthorityRequest.fromAccountAddress(connection, mintRequestPDA);
+    assert(
+        request.mintAuthority.equals(mintAuthority),
+        `Request should have mint authority ${mintAuthority.toString()}, but has ${request.mintAuthority.toString()}`
+    );
+    assert(
+        request.approved === (approved ? 1 : 0),
+        `Request should${approved ? '' : 'not'} be approved`
+    );
+    assert(
+        (new BN(request.mintCapacity)).eq(mintCapacity),
+        `Request should have capacity ${mintCapacity}, but has ${request.mintCapacity}`,
+    );
+    assert(
+        (new BN(request.numMinted)).eq(numMinted),
+        `Request should have numMinted ${numMinted}, but has ${request.numMinted}`
+    );
+}
+
 export async function getNonceCount(connection: Connection, tree: PublicKey): Promise<BN> {
     const treeAuthority = await getBubblegumAuthorityPDA(tree);
     return new BN((await TreeAuthority.fromAccountAddress(connection, treeAuthority)).numMinted);
 }
 
-export async function getMintAuthorityRequest(merkleRollPubKey: PublicKey, requesterPubkey: PublicKey): Promise<PublicKey> {
-    const [requestPubkey] = await PublicKey.findProgramAddress(
-        [merkleRollPubKey.toBuffer(), requesterPubkey.toBuffer()],
-        PROGRAM_ID
-    );
-    return requestPubkey;
-}
 
 export async function getVoucherPDA(connection: Connection, tree: PublicKey, leafIndex: number): Promise<PublicKey> {
     let [voucher] = await PublicKey.findProgramAddress(

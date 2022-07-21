@@ -23,6 +23,9 @@ import {
   createCancelRedeemInstruction,
   createCreateTreeInstruction,
   MetadataArgs,
+  createRequestMintAuthorityInstruction,
+  createMintV1CreatorInstruction,
+  createApproveMintAuthorityRequestInstruction,
 } from "../sdk/bubblegum/src/generated";
 
 import { buildTree, Tree } from "./merkle-tree";
@@ -41,8 +44,11 @@ import {
   Token,
 } from "@solana/spl-token";
 import { TokenProgramVersion, Version, Creator } from "../sdk/bubblegum/src/generated";
-import { CANDY_WRAPPER_PROGRAM_ID, execute, bufferToArray, strToByteArray, arrayEquals, trimStringPadding } from "../sdk/utils";
-import { getBubblegumAuthorityPDA, getCreateTreeIxs, getNonceCount, getVoucherPDA, computeDataHash, computeCreatorHash } from "../sdk/bubblegum/src/convenience";
+import { CANDY_WRAPPER_PROGRAM_ID, execute, bufferToArray, num16ToBuffer, trimStringPadding } from "../sdk/utils";
+import {
+  getBubblegumAuthorityPDA, getCreateTreeIxs, getNonceCount, getVoucherPDA, computeDataHash, computeCreatorHash,
+  assertOnChainMintAuthorityRequest, getMintAuthorityRequestPDA
+} from "../sdk/bubblegum/src/convenience";
 
 // @ts-ignore
 let Bubblegum;
@@ -225,7 +231,7 @@ describe("bubblegum", function () {
       },
       { message: metadata }
     );
-    await execute(Bubblegum.provider, [mintIx], [payer]);
+    await execute(Bubblegum.provider, [mintIx], [payer], true);
 
     // Compute data hash
     const dataHash = computeDataHash(metadata.sellerFeeBasisPoints, mintIx)
@@ -256,7 +262,7 @@ describe("bubblegum", function () {
         index: 0,
       }
     );
-    await execute(Bubblegum.provider, [transferIx], [payer]);
+    await execute(Bubblegum.provider, [transferIx], [payer], true);
 
     onChainRoot = await getRootOfOnChainMerkleRoot(connection, merkleRollKeypair.publicKey);
 
@@ -279,7 +285,7 @@ describe("bubblegum", function () {
         index: 0,
       }
     );
-    await execute(Bubblegum.provider, [delegateIx], [destination]);
+    await execute(Bubblegum.provider, [delegateIx], [destination], true);
 
     onChainRoot = await getRootOfOnChainMerkleRoot(connection, merkleRollKeypair.publicKey);
 
@@ -303,7 +309,7 @@ describe("bubblegum", function () {
       }
     );
     delTransferIx.keys[2].isSigner = true;
-    await execute(Bubblegum.provider, [delTransferIx], [delegateKey]);
+    await execute(Bubblegum.provider, [delTransferIx], [delegateKey], true);
 
     onChainRoot = await getRootOfOnChainMerkleRoot(connection, merkleRollKeypair.publicKey);
 
@@ -332,7 +338,7 @@ describe("bubblegum", function () {
         index: 0,
       }
     );
-    await execute(Bubblegum.provider, [redeemIx], [payer]);
+    await execute(Bubblegum.provider, [redeemIx], [payer], true);
 
     console.log(" - Cancelling redeem (reinserting to tree)");
 
@@ -349,7 +355,7 @@ describe("bubblegum", function () {
         root: bufferToArray(onChainRoot),
       }
     );
-    await execute(Bubblegum.provider, [cancelRedeemIx], [payer]);
+    await execute(Bubblegum.provider, [cancelRedeemIx], [payer], true);
 
     console.log(" - Decompressing leaf");
 
@@ -371,7 +377,7 @@ describe("bubblegum", function () {
         index: 0,
       }
     );
-    await execute(Bubblegum.provider, [redeemIx], [payer]);
+    await execute(Bubblegum.provider, [redeemIx], [payer], true);
 
     let [asset] = await PublicKey.findProgramAddress(
       [
@@ -409,12 +415,16 @@ describe("bubblegum", function () {
         metadata,
       }
     );
-    await execute(Bubblegum.provider, [decompressIx], [payer]);
+    console.log("decompressing");
+    await execute(Bubblegum.provider, [decompressIx], [payer], true);
+    console.log("decompressed");
 
     // Fetch the token metadata account and deserialize its data
+    const metadataKey = await getMetadata(asset)
     const onChainNFTMetadataAccount =
-      await Bubblegum.provider.connection.getAccountInfo(
-        await getMetadata(asset)
+      await connection.getAccountInfo(
+        metadataKey,
+        "confirmed"
       );
     const metadataForDecompressedNFT = metadataBeet.deserialize(onChainNFTMetadataAccount.data)[0];
     assertMetadataMatch(metadataForDecompressedNFT, metadata, mintAuthority);
@@ -454,7 +464,7 @@ describe("bubblegum", function () {
       },
       { message: metadata }
     );
-    await execute(Bubblegum.provider, [mintIx], [payer]);
+    await execute(Bubblegum.provider, [mintIx], [payer], true);
 
     const dataHash = computeDataHash(metadata.sellerFeeBasisPoints, mintIx);
     const creatorHash = computeCreatorHash(metadata.creators);
@@ -490,7 +500,7 @@ describe("bubblegum", function () {
         index: 0,
       }
     );
-    await execute(Bubblegum.provider, [redeemIx], [payer]);
+    await execute(Bubblegum.provider, [redeemIx], [payer], true);
 
     let [asset] = await PublicKey.findProgramAddress(
       [
@@ -538,4 +548,83 @@ describe("bubblegum", function () {
     const metadataForDecompressedNFT = metadataBeet.deserialize(onChainNFTMetadataAccount.data)[0];
     assertMetadataMatch(metadataForDecompressedNFT, metadata, mintAuthority);
   });
+  it("Mint to tree with request", async () => {
+    console.log(" - Create mint authority request for 1");
+    const randomRequester = Keypair.generate();
+    await connection.requestAirdrop(randomRequester.publicKey, 1e9);
+
+    const requestPda = await getMintAuthorityRequestPDA(merkleRollKeypair.publicKey, randomRequester.publicKey);
+    const initRequestIx = createRequestMintAuthorityInstruction({
+      mintAuthority: randomRequester.publicKey,
+      mintAuthorityRequest: requestPda,
+      treeAuthority,
+      merkleSlab: merkleRollKeypair.publicKey
+    }, {
+      mintCapacity: new BN(1),
+    })
+    await execute(Bubblegum.provider, [initRequestIx], [randomRequester], true);
+    await assertOnChainMintAuthorityRequest(
+      connection,
+      randomRequester.publicKey,
+      new BN(1),
+      new BN(0),
+      false,
+      requestPda
+    )
+
+    console.log(" - Approve mint authority request");
+    const approveRequestIx = createApproveMintAuthorityRequestInstruction({
+      mintAuthorityRequest: requestPda,
+      treeDelegate: payer.publicKey,
+      merkleSlab: merkleRollKeypair.publicKey,
+      treeAuthority,
+    });
+    await execute(Bubblegum.provider, [approveRequestIx], [payer], true)
+    await assertOnChainMintAuthorityRequest(
+      connection,
+      randomRequester.publicKey,
+      new BN(1),
+      new BN(0),
+      true,
+      requestPda
+    )
+
+    console.log(" - Mint with request");
+    const metadata = {
+      name: "test",
+      symbol: "test",
+      uri: "www.solana.com",
+      sellerFeeBasisPoints: 0,
+      primarySaleHappened: false,
+      isMutable: false,
+      editionNonce: null,
+      tokenStandard: null,
+      tokenProgramVersion: TokenProgramVersion.Original,
+      collection: null,
+      uses: null,
+      creators: [],
+    };
+    const mintWithRequestIx = createMintV1Instruction({
+      merkleSlab: merkleRollKeypair.publicKey,
+      authority: treeAuthority,
+      candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
+      gummyrollProgram: GummyrollProgramId,
+      mintAuthority: randomRequester.publicKey,
+      owner: randomRequester.publicKey,
+      delegate: randomRequester.publicKey,
+      mintAuthorityRequest: requestPda,
+    }, { message: metadata });
+    await execute(Bubblegum.provider, [mintWithRequestIx], [randomRequester], true);
+    await assertOnChainMintAuthorityRequest(
+      connection,
+      randomRequester.publicKey,
+      new BN(1),
+      new BN(1),
+      true,
+      requestPda
+    )
+
+    console.log(" - (todo) Close mint authority request");
+
+  })
 });

@@ -3,12 +3,15 @@ import { TransactionInstruction, Transaction, Signer } from "@solana/web3.js";
 
 /// Wait for a transaction of a certain id to confirm and optionally log its messages
 export async function logTx(provider: Provider, txId: string, verbose: boolean = true) {
-  await provider.connection.confirmTransaction(txId, "confirmed");
-  if (verbose) {
+  const tx = await provider.connection.confirmTransaction(txId, "confirmed");
+  if (tx.value.err || verbose) {
     console.log(
       (await provider.connection.getConfirmedTransaction(txId, "confirmed")).meta
         .logMessages
     );
+  }
+  if (tx.value.err) {
+    throw new Error(`${txId} failed`);
   }
 };
 
