@@ -89,7 +89,6 @@ impl Messenger for RedisMessenger {
         }
     }
 
-    //impl Future<Output = Result<()>> + 'a {
     async fn send(&mut self, stream_key: &'static str, bytes: &[u8]) -> Result<(), MessengerError> {
         // Check if stream is configured.
         let stream = if let Some(stream) = self.streams.get(stream_key) {
