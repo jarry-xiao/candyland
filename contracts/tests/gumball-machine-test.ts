@@ -68,492 +68,6 @@ let Bubblegum;
 let GummyrollProgramId;
 let BubblegumProgramId;
 
-function assertGumballMachineHeaderProperties(
-  gm: OnChainGumballMachine,
-  expectedHeader: GumballMachineHeader
-) {
-  assert(
-    arrayEquals(gm.header.urlBase, expectedHeader.urlBase),
-    "Gumball Machine has incorrect url base"
-  );
-  assert(
-    arrayEquals(gm.header.nameBase, expectedHeader.nameBase),
-    "Gumball Machine has incorrect name base"
-  );
-  assert(
-    arrayEquals(gm.header.symbol, expectedHeader.symbol),
-    "Gumball Machine has incorrect symbol"
-  );
-  assert(
-    gm.header.sellerFeeBasisPoints === expectedHeader.sellerFeeBasisPoints,
-    "Gumball Machine has seller fee basis points"
-  );
-  assert(
-    gm.header.isMutable === expectedHeader.isMutable,
-    "Gumball Machine has incorrect isMutable"
-  );
-  assert(
-    gm.header.retainAuthority === expectedHeader.retainAuthority,
-    "Gumball Machine has incorrect retainAuthority"
-  );
-  assert(
-    val(gm.header.price).eq(val(expectedHeader.price)),
-    "Gumball Machine has incorrect price"
-  );
-  assert(
-    val(gm.header.goLiveDate).eq(val(expectedHeader.goLiveDate)),
-    "Gumball Machine has incorrect goLiveDate"
-  );
-  assert(
-    gm.header.mint.equals(expectedHeader.mint),
-    "Gumball Machine set with incorrect mint"
-  );
-  assert(
-    gm.header.botWallet.equals(expectedHeader.botWallet),
-    "Gumball Machine set with incorrect botWallet"
-  );
-  assert(
-    gm.header.receiver.equals(expectedHeader.receiver),
-    "Gumball Machine set with incorrect receiver"
-  );
-  assert(
-    gm.header.authority.equals(expectedHeader.authority),
-    "Gumball Machine set with incorrect authority"
-  );
-  assert(
-    gm.header.collectionKey.equals(expectedHeader.collectionKey),
-    "Gumball Machine set with incorrect collectionKey"
-  );
-  assert(
-    gm.header.mint.equals(expectedHeader.mint),
-    "Gumball Machine set with incorrect mint"
-  );
-  assert(
-    val(gm.header.extensionLen).eq(val(expectedHeader.extensionLen)),
-    "Gumball Machine has incorrect extensionLen"
-  );
-  assert(
-    gm.header.maxMintSize === expectedHeader.maxMintSize,
-    "Gumball Machine has incorrect maxMintSize"
-  );
-  assert(
-    gm.header.maxItems === expectedHeader.maxItems,
-    "Gumball Machine has incorrect max items"
-  );
-  for (let i = 0; i < gm.header.creators.length; i++) {
-    // Check that creator matches user specification
-    if (i < expectedHeader.creators.length) {
-      assert(
-        gm.header.creators[i].address.equals(
-          expectedHeader.creators[i].address
-        ),
-        "Gumball Machine creator has mismatching address"
-      );
-      assert(
-        gm.header.creators[i].share === expectedHeader.creators[i].share,
-        "Gumball Machine creator has mismatching share"
-      );
-      assert(
-        gm.header.creators[i].verified ===
-        expectedHeader.creators[i].verified,
-        "Gumball Machine creator has mismatching verified field"
-      );
-    }
-    // Check that non-user specified creators are default
-    else {
-      assert(
-        gm.header.creators[i].address.equals(
-          new PublicKey("11111111111111111111111111111111")
-        ),
-        "Gumball Machine creator has mismatching address"
-      );
-      assert(
-        gm.header.creators[i].share === 0,
-        "Gumball Machine creator has mismatching share"
-      );
-      assert(
-        gm.header.creators[i].verified === 0,
-        "Gumball Machine creator has mismatching verified field"
-      );
-    }
-  }
-}
-
-function assertGumballMachineConfigProperties(
-  gm: OnChainGumballMachine,
-  expectedIndexArray: Buffer,
-  expectedConfigLines: Buffer = null,
-  onChainConfigLinesNumBytes: number = null
-) {
-  assert(
-    gm.configData.indexArray.equals(expectedIndexArray),
-    "Onchain index array doesn't match expectation"
-  );
-
-  if (expectedConfigLines && onChainConfigLinesNumBytes) {
-    // Calculate full-sized on-chain config bytes buffer, we must null pad the buffer up to the end of the account size
-    const numExpectedInitializedBytesInConfig =
-      expectedConfigLines.byteLength;
-    const bufferOfNonInitializedConfigLineBytes = Buffer.from(
-      "\0".repeat(
-        onChainConfigLinesNumBytes - numExpectedInitializedBytesInConfig
-      )
-    );
-    const actualExpectedConfigLinesBuffer = Buffer.concat([
-      expectedConfigLines,
-      bufferOfNonInitializedConfigLineBytes,
-    ]);
-    assert(
-      gm.configData.configLines.equals(actualExpectedConfigLinesBuffer),
-      "Config lines on gumball machine do not match expectation"
-    );
-  }
-}
-
-async function initializeGumballMachine(
-  payer: Keypair,
-  gumballMachineAcctKeypair: Keypair,
-  gumballMachineAcctSize: number,
-  merkleRollKeypair: Keypair,
-  merkleRollAccountSize: number,
-  gumballMachineInitArgs: InitializeGumballMachineInstructionArgs,
-  mint: PublicKey
-) {
-  const bubblegumAuthorityPDAKey = await getBubblegumAuthorityPDA(
-    merkleRollKeypair.publicKey
-  );
-  const initializeGumballMachineInstrs =
-    await createInitializeGumballMachineIxs(
-      payer.publicKey,
-      gumballMachineAcctKeypair.publicKey,
-      gumballMachineAcctSize,
-      merkleRollKeypair.publicKey,
-      merkleRollAccountSize,
-      gumballMachineInitArgs,
-      mint,
-      GumballMachine.provider.connection
-    );
-  const tx = new Transaction();
-  initializeGumballMachineInstrs.forEach((instr) => tx.add(instr));
-  await execute(GumballMachine.provider, initializeGumballMachineInstrs, [payer, gumballMachineAcctKeypair, merkleRollKeypair]);
-  /*await GumballMachine.provider.send(
-    tx,
-    [payer, gumballMachineAcctKeypair, merkleRollKeypair],
-    {
-      commitment: "confirmed",
-    }
-  );*/
-
-  const tree = buildTree(
-    Array(2 ** gumballMachineInitArgs.maxDepth).fill(Buffer.alloc(32))
-  );
-  await assertOnChainMerkleRollProperties(
-    GumballMachine.provider.connection,
-    gumballMachineInitArgs.maxDepth,
-    gumballMachineInitArgs.maxBufferSize,
-    bubblegumAuthorityPDAKey,
-    new PublicKey(tree.root),
-    merkleRollKeypair.publicKey
-  );
-
-  const onChainGumballMachineAccount =
-    await GumballMachine.provider.connection.getAccountInfo(
-      gumballMachineAcctKeypair.publicKey
-    );
-
-  const gumballMachine = decodeGumballMachine(
-    onChainGumballMachineAccount.data,
-    gumballMachineAcctSize
-  );
-
-  let expectedCreators = [];
-  for (let i = 0; i < gumballMachineInitArgs.creatorKeys.length; i++) {
-    let c: GumballCreatorAdapter = {
-      address: gumballMachineInitArgs.creatorKeys[i],
-      share: gumballMachineInitArgs.creatorShares[i],
-      verified: 0,
-    };
-    expectedCreators.push(c);
-  }
-  gumballMachineInitArgs.creatorKeys;
-  let expectedOnChainHeader: GumballMachineHeader = {
-    urlBase: gumballMachineInitArgs.urlBase,
-    nameBase: gumballMachineInitArgs.nameBase,
-    symbol: gumballMachineInitArgs.symbol,
-    sellerFeeBasisPoints: gumballMachineInitArgs.sellerFeeBasisPoints,
-    isMutable: gumballMachineInitArgs.isMutable ? 1 : 0,
-    retainAuthority: gumballMachineInitArgs.retainAuthority ? 1 : 0,
-    configLineEncodeMethod: 0,
-    creators: expectedCreators,
-    price: gumballMachineInitArgs.price,
-    goLiveDate: gumballMachineInitArgs.goLiveDate,
-    mint,
-    botWallet: gumballMachineInitArgs.botWallet,
-    receiver: gumballMachineInitArgs.receiver,
-    authority: gumballMachineInitArgs.authority,
-    collectionKey: gumballMachineInitArgs.collectionKey,
-    extensionLen: gumballMachineInitArgs.extensionLen,
-    maxMintSize: gumballMachineInitArgs.maxMintSize,
-    remaining: 0,
-    maxItems: gumballMachineInitArgs.maxItems,
-    totalItemsAdded: 0,
-    smallestUninitializedIndex: 0,
-    padding: [0, 0, 0, 0, 0, 0, 0]
-  };
-  assertGumballMachineHeaderProperties(gumballMachine, expectedOnChainHeader);
-}
-
-async function initializeIndicesAndAssert(
-  maxItems: number,
-  authority: Keypair,
-  gumballMachine: PublicKey,
-  gumballMachineAcctSize: number
-) {
-  // Initialize all indices
-  await initializeGumballMachineIndices(
-    GumballMachine.provider,
-    maxItems,
-    authority,
-    gumballMachine
-  );
-  const onChainGumballMachineAccount =
-    await GumballMachine.provider.connection.getAccountInfo(gumballMachine);
-  const onChainGumballMachine = decodeGumballMachine(
-    onChainGumballMachineAccount.data,
-    gumballMachineAcctSize
-  );
-
-  // Create the expected buffer for the indices of the account
-  const expectedIndexArrBuffer = [...Array(maxItems).keys()].reduce(
-    (prevVal, curVal) =>
-      Buffer.concat([prevVal, Buffer.from(num32ToBuffer(curVal))]),
-    Buffer.from([])
-  );
-
-  assertGumballMachineConfigProperties(
-    onChainGumballMachine,
-    expectedIndexArrBuffer
-  );
-}
-
-async function addConfigLines(
-  authority: Keypair,
-  gumballMachineAcctKey: PublicKey,
-  gumballMachineAcctSize: number,
-  gumballMachineAcctConfigIndexArrSize: number,
-  gumballMachineAcctConfigLinesSize: number,
-  configLinesToAdd: Uint8Array,
-  allExpectedInitializedConfigLines: Buffer
-) {
-  const addConfigLinesInstr = createAddConfigLinesInstruction(
-    {
-      gumballMachine: gumballMachineAcctKey,
-      authority: authority.publicKey,
-    },
-    {
-      newConfigLinesData: configLinesToAdd,
-    }
-  );
-  const tx = new Transaction().add(addConfigLinesInstr);
-  await GumballMachine.provider.send(tx, [authority], {
-    commitment: "confirmed",
-  });
-  const onChainGumballMachineAccount =
-    await GumballMachine.provider.connection.getAccountInfo(
-      gumballMachineAcctKey
-    );
-  const gumballMachine = decodeGumballMachine(
-    onChainGumballMachineAccount.data,
-    gumballMachineAcctSize
-  );
-
-  // Create the expected buffer for the indices of the account
-  const expectedIndexArrBuffer = [
-    ...Array(gumballMachineAcctConfigIndexArrSize / 4).keys(),
-  ].reduce(
-    (prevVal, curVal) =>
-      Buffer.concat([prevVal, Buffer.from(num32ToBuffer(curVal))]),
-    Buffer.from([])
-  );
-
-  assertGumballMachineConfigProperties(
-    gumballMachine,
-    expectedIndexArrBuffer,
-    allExpectedInitializedConfigLines,
-    gumballMachineAcctConfigLinesSize
-  );
-}
-
-async function updateConfigLines(
-  authority: Keypair,
-  gumballMachineAcctKey: PublicKey,
-  gumballMachineAcctSize,
-  gumballMachineAcctConfigIndexArrSize: number,
-  gumballMachineAcctConfigLinesSize: number,
-  updatedConfigLines: Buffer,
-  allExpectedInitializedConfigLines: Buffer,
-  indexOfFirstLineToUpdate: BN
-) {
-  const args: UpdateConfigLinesInstructionArgs = {
-    startingLine: indexOfFirstLineToUpdate,
-    newConfigLinesData: updatedConfigLines,
-  };
-  const updateConfigLinesInstr = createUpdateConfigLinesInstruction(
-    {
-      authority: authority.publicKey,
-      gumballMachine: gumballMachineAcctKey,
-    },
-    args
-  );
-  const tx = new Transaction().add(updateConfigLinesInstr);
-  await GumballMachine.provider.send(tx, [authority], {
-    commitment: "confirmed",
-  });
-
-  const onChainGumballMachineAccount =
-    await GumballMachine.provider.connection.getAccountInfo(
-      gumballMachineAcctKey
-    );
-  const gumballMachine = decodeGumballMachine(
-    onChainGumballMachineAccount.data,
-    gumballMachineAcctSize
-  );
-
-  // Create the expected buffer for the indices of the account
-  const expectedIndexArrBuffer = [
-    ...Array(gumballMachineAcctConfigIndexArrSize / 4).keys(),
-  ].reduce(
-    (prevVal, curVal) =>
-      Buffer.concat([prevVal, Buffer.from(num32ToBuffer(curVal))]),
-    Buffer.from([])
-  );
-  assertGumballMachineConfigProperties(
-    gumballMachine,
-    expectedIndexArrBuffer,
-    allExpectedInitializedConfigLines,
-    gumballMachineAcctConfigLinesSize
-  );
-}
-
-async function updateHeaderMetadata(
-  authority: Keypair,
-  gumballMachineAcctKey: PublicKey,
-  gumballMachineAcctSize,
-  newHeader: UpdateHeaderMetadataInstructionArgs,
-  resultingExpectedOnChainHeader: GumballMachineHeader
-) {
-  const updateHeaderMetadataInstr = createUpdateHeaderMetadataInstruction(
-    {
-      gumballMachine: gumballMachineAcctKey,
-      authority: authority.publicKey,
-    },
-    newHeader
-  );
-  const tx = new Transaction().add(updateHeaderMetadataInstr);
-  await GumballMachine.provider.send(tx, [authority], {
-    commitment: "confirmed",
-  });
-  const onChainGumballMachineAccount =
-    await GumballMachine.provider.connection.getAccountInfo(
-      gumballMachineAcctKey
-    );
-  const gumballMachine = decodeGumballMachine(
-    onChainGumballMachineAccount.data,
-    gumballMachineAcctSize
-  );
-  assertGumballMachineHeaderProperties(
-    gumballMachine,
-    resultingExpectedOnChainHeader
-  );
-}
-
-async function dispenseCompressedNFTForSol(
-  numNFTs: number,
-  payer: Keypair,
-  receiver: PublicKey,
-  gumballMachineAcctKeypair: Keypair,
-  merkleRollKeypair: Keypair,
-  verbose?: boolean
-) {
-  const requestCU = ComputeBudgetProgram.requestUnits({
-    units: 1.4e6,
-    additionalFee: 0,
-  });
-  const dispenseInstr = await createDispenseNFTForSolIx(
-    { numItems: numNFTs },
-    payer.publicKey,
-    receiver,
-    gumballMachineAcctKeypair.publicKey,
-    merkleRollKeypair.publicKey
-  );
-  await execute(
-    GumballMachine.provider,
-    [requestCU, dispenseInstr],
-    [payer],
-    true
-  );
-}
-
-async function dispenseCompressedNFTForTokens(
-  numNFTs: number,
-  payer: Keypair,
-  payerTokens: PublicKey,
-  receiver: PublicKey,
-  gumballMachineAcctKeypair: Keypair,
-  merkleRollKeypair: Keypair,
-  verbose?: boolean
-) {
-  const dispenseInstr = await createDispenseNFTForTokensIx(
-    { numItems: numNFTs },
-    payer.publicKey,
-    payerTokens,
-    receiver,
-    gumballMachineAcctKeypair.publicKey,
-    merkleRollKeypair.publicKey
-  );
-  const tx = new Transaction().add(dispenseInstr);
-  let txId = await GumballMachine.provider.send(tx, [payer], {
-    commitment: "confirmed",
-  });
-  if (verbose) {
-    await logTx(GumballMachine.provider, txId);
-  }
-}
-
-async function destroyGumballMachine(
-  gumballMachineAcctKeypair: Keypair,
-  authorityKeypair: Keypair,
-  connection: Connection
-) {
-  const originalGumballMachineAcctBalance = await connection.getBalance(
-    gumballMachineAcctKeypair.publicKey
-  );
-  const originalAuthorityAcctBalance = await connection.getBalance(
-    authorityKeypair.publicKey
-  );
-  const destroyInstr = createDestroyInstruction({
-    gumballMachine: gumballMachineAcctKeypair.publicKey,
-    authority: authorityKeypair.publicKey,
-  });
-  const tx = new Transaction().add(destroyInstr);
-  await GumballMachine.provider.send(tx, [authorityKeypair], {
-    commitment: "confirmed",
-  });
-
-  assert(
-    0 === (await connection.getBalance(gumballMachineAcctKeypair.publicKey)),
-    "Failed to remove lamports from gumball machine acct"
-  );
-
-  const expectedAuthorityAcctBalance =
-    originalAuthorityAcctBalance + originalGumballMachineAcctBalance;
-  assert(
-    expectedAuthorityAcctBalance ===
-    (await connection.getBalance(authorityKeypair.publicKey)),
-    "Failed to transfer correct balance to authority"
-  );
-}
-
 describe("gumball-machine", function () {
   // Configure the client to use the local cluster.
   let payer: Keypair;
@@ -566,6 +80,467 @@ describe("gumball-machine", function () {
   let nftBuyer: Keypair;
   let creatorKeys: PublicKey[];
   let creatorShares: Uint8Array;
+
+  function assertGumballMachineHeaderProperties(
+    gm: OnChainGumballMachine,
+    expectedHeader: GumballMachineHeader
+  ) {
+    assert(
+      arrayEquals(gm.header.urlBase, expectedHeader.urlBase),
+      "Gumball Machine has incorrect url base"
+    );
+    assert(
+      arrayEquals(gm.header.nameBase, expectedHeader.nameBase),
+      "Gumball Machine has incorrect name base"
+    );
+    assert(
+      arrayEquals(gm.header.symbol, expectedHeader.symbol),
+      "Gumball Machine has incorrect symbol"
+    );
+    assert(
+      gm.header.sellerFeeBasisPoints === expectedHeader.sellerFeeBasisPoints,
+      "Gumball Machine has seller fee basis points"
+    );
+    assert(
+      gm.header.isMutable === expectedHeader.isMutable,
+      "Gumball Machine has incorrect isMutable"
+    );
+    assert(
+      gm.header.retainAuthority === expectedHeader.retainAuthority,
+      "Gumball Machine has incorrect retainAuthority"
+    );
+    assert(
+      val(gm.header.price).eq(val(expectedHeader.price)),
+      "Gumball Machine has incorrect price"
+    );
+    assert(
+      val(gm.header.goLiveDate).eq(val(expectedHeader.goLiveDate)),
+      "Gumball Machine has incorrect goLiveDate"
+    );
+    assert(
+      gm.header.mint.equals(expectedHeader.mint),
+      "Gumball Machine set with incorrect mint"
+    );
+    assert(
+      gm.header.botWallet.equals(expectedHeader.botWallet),
+      "Gumball Machine set with incorrect botWallet"
+    );
+    assert(
+      gm.header.receiver.equals(expectedHeader.receiver),
+      "Gumball Machine set with incorrect receiver"
+    );
+    assert(
+      gm.header.authority.equals(expectedHeader.authority),
+      "Gumball Machine set with incorrect authority"
+    );
+    assert(
+      gm.header.collectionKey.equals(expectedHeader.collectionKey),
+      "Gumball Machine set with incorrect collectionKey"
+    );
+    assert(
+      gm.header.mint.equals(expectedHeader.mint),
+      "Gumball Machine set with incorrect mint"
+    );
+    assert(
+      val(gm.header.extensionLen).eq(val(expectedHeader.extensionLen)),
+      "Gumball Machine has incorrect extensionLen"
+    );
+    assert(
+      gm.header.maxMintSize === expectedHeader.maxMintSize,
+      "Gumball Machine has incorrect maxMintSize"
+    );
+    assert(
+      gm.header.maxItems === expectedHeader.maxItems,
+      "Gumball Machine has incorrect max items"
+    );
+    for (let i = 0; i < gm.header.creators.length; i++) {
+      // Check that creator matches user specification
+      if (i < expectedHeader.creators.length) {
+        assert(
+          gm.header.creators[i].address.equals(
+            expectedHeader.creators[i].address
+          ),
+          "Gumball Machine creator has mismatching address"
+        );
+        assert(
+          gm.header.creators[i].share === expectedHeader.creators[i].share,
+          "Gumball Machine creator has mismatching share"
+        );
+        assert(
+          gm.header.creators[i].verified ===
+          expectedHeader.creators[i].verified,
+          "Gumball Machine creator has mismatching verified field"
+        );
+      }
+      // Check that non-user specified creators are default
+      else {
+        assert(
+          gm.header.creators[i].address.equals(
+            new PublicKey("11111111111111111111111111111111")
+          ),
+          "Gumball Machine creator has mismatching address"
+        );
+        assert(
+          gm.header.creators[i].share === 0,
+          "Gumball Machine creator has mismatching share"
+        );
+        assert(
+          gm.header.creators[i].verified === 0,
+          "Gumball Machine creator has mismatching verified field"
+        );
+      }
+    }
+  }
+
+  function assertGumballMachineConfigProperties(
+    gm: OnChainGumballMachine,
+    expectedIndexArray: Buffer,
+    expectedConfigLines: Buffer = null,
+    onChainConfigLinesNumBytes: number = null
+  ) {
+    assert(
+      gm.configData.indexArray.equals(expectedIndexArray),
+      "Onchain index array doesn't match expectation"
+    );
+
+    if (expectedConfigLines && onChainConfigLinesNumBytes) {
+      // Calculate full-sized on-chain config bytes buffer, we must null pad the buffer up to the end of the account size
+      const numExpectedInitializedBytesInConfig =
+        expectedConfigLines.byteLength;
+      const bufferOfNonInitializedConfigLineBytes = Buffer.from(
+        "\0".repeat(
+          onChainConfigLinesNumBytes - numExpectedInitializedBytesInConfig
+        )
+      );
+      const actualExpectedConfigLinesBuffer = Buffer.concat([
+        expectedConfigLines,
+        bufferOfNonInitializedConfigLineBytes,
+      ]);
+      assert(
+        gm.configData.configLines.equals(actualExpectedConfigLinesBuffer),
+        "Config lines on gumball machine do not match expectation"
+      );
+    }
+  }
+
+  async function initializeGumballMachine(
+    payer: Keypair,
+    gumballMachineAcctKeypair: Keypair,
+    gumballMachineAcctSize: number,
+    merkleRollKeypair: Keypair,
+    merkleRollAccountSize: number,
+    gumballMachineInitArgs: InitializeGumballMachineInstructionArgs,
+    mint: PublicKey
+  ) {
+    const bubblegumAuthorityPDAKey = await getBubblegumAuthorityPDA(
+      merkleRollKeypair.publicKey
+    );
+    const initializeGumballMachineInstrs =
+      await createInitializeGumballMachineIxs(
+        payer.publicKey,
+        gumballMachineAcctKeypair.publicKey,
+        gumballMachineAcctSize,
+        merkleRollKeypair.publicKey,
+        merkleRollAccountSize,
+        gumballMachineInitArgs,
+        mint,
+        GumballMachine.provider.connection
+      );
+    const tx = new Transaction();
+    initializeGumballMachineInstrs.forEach((instr) => tx.add(instr));
+    await execute(GumballMachine.provider, initializeGumballMachineInstrs, [payer, gumballMachineAcctKeypair, merkleRollKeypair]);
+
+    const tree = buildTree(
+      Array(2 ** gumballMachineInitArgs.maxDepth).fill(Buffer.alloc(32))
+    );
+    await assertOnChainMerkleRollProperties(
+      GumballMachine.provider.connection,
+      gumballMachineInitArgs.maxDepth,
+      gumballMachineInitArgs.maxBufferSize,
+      bubblegumAuthorityPDAKey,
+      new PublicKey(tree.root),
+      merkleRollKeypair.publicKey
+    );
+
+    const onChainGumballMachineAccount =
+      await GumballMachine.provider.connection.getAccountInfo(
+        gumballMachineAcctKeypair.publicKey
+      );
+
+    const gumballMachine = decodeGumballMachine(
+      onChainGumballMachineAccount.data,
+      gumballMachineAcctSize
+    );
+
+    let expectedCreators = [];
+    for (let i = 0; i < gumballMachineInitArgs.creatorKeys.length; i++) {
+      let c: GumballCreatorAdapter = {
+        address: gumballMachineInitArgs.creatorKeys[i],
+        share: gumballMachineInitArgs.creatorShares[i],
+        verified: 0,
+      };
+      expectedCreators.push(c);
+    }
+    gumballMachineInitArgs.creatorKeys;
+    let expectedOnChainHeader: GumballMachineHeader = {
+      urlBase: gumballMachineInitArgs.urlBase,
+      nameBase: gumballMachineInitArgs.nameBase,
+      symbol: gumballMachineInitArgs.symbol,
+      sellerFeeBasisPoints: gumballMachineInitArgs.sellerFeeBasisPoints,
+      isMutable: gumballMachineInitArgs.isMutable ? 1 : 0,
+      retainAuthority: gumballMachineInitArgs.retainAuthority ? 1 : 0,
+      configLineEncodeMethod: 0,
+      creators: expectedCreators,
+      price: gumballMachineInitArgs.price,
+      goLiveDate: gumballMachineInitArgs.goLiveDate,
+      mint,
+      botWallet: gumballMachineInitArgs.botWallet,
+      receiver: gumballMachineInitArgs.receiver,
+      authority: gumballMachineInitArgs.authority,
+      collectionKey: gumballMachineInitArgs.collectionKey,
+      extensionLen: gumballMachineInitArgs.extensionLen,
+      maxMintSize: gumballMachineInitArgs.maxMintSize,
+      remaining: 0,
+      maxItems: gumballMachineInitArgs.maxItems,
+      totalItemsAdded: 0,
+      smallestUninitializedIndex: 0,
+      padding: [0, 0, 0, 0, 0, 0, 0]
+    };
+    assertGumballMachineHeaderProperties(gumballMachine, expectedOnChainHeader);
+  }
+
+  async function initializeIndicesAndAssert(
+    maxItems: number,
+    authority: Keypair,
+    gumballMachine: PublicKey,
+    gumballMachineAcctSize: number
+  ) {
+    // Initialize all indices
+    await initializeGumballMachineIndices(
+      GumballMachine.provider,
+      maxItems,
+      authority,
+      gumballMachine
+    );
+    const onChainGumballMachineAccount =
+      await GumballMachine.provider.connection.getAccountInfo(gumballMachine);
+    const onChainGumballMachine = decodeGumballMachine(
+      onChainGumballMachineAccount.data,
+      gumballMachineAcctSize
+    );
+
+    // Create the expected buffer for the indices of the account
+    const expectedIndexArrBuffer = [...Array(maxItems).keys()].reduce(
+      (prevVal, curVal) =>
+        Buffer.concat([prevVal, Buffer.from(num32ToBuffer(curVal))]),
+      Buffer.from([])
+    );
+
+    assertGumballMachineConfigProperties(
+      onChainGumballMachine,
+      expectedIndexArrBuffer
+    );
+  }
+
+  async function addConfigLines(
+    authority: Keypair,
+    gumballMachineAcctKey: PublicKey,
+    gumballMachineAcctSize: number,
+    gumballMachineAcctConfigIndexArrSize: number,
+    gumballMachineAcctConfigLinesSize: number,
+    configLinesToAdd: Uint8Array,
+    allExpectedInitializedConfigLines: Buffer
+  ) {
+    const addConfigLinesInstr = createAddConfigLinesInstruction(
+      {
+        gumballMachine: gumballMachineAcctKey,
+        authority: authority.publicKey,
+      },
+      {
+        newConfigLinesData: configLinesToAdd,
+      }
+    );
+    await execute(GumballMachine.provider, [addConfigLinesInstr], [authority]);
+    const onChainGumballMachineAccount =
+      await GumballMachine.provider.connection.getAccountInfo(
+        gumballMachineAcctKey
+      );
+    const gumballMachine = decodeGumballMachine(
+      onChainGumballMachineAccount.data,
+      gumballMachineAcctSize
+    );
+
+    // Create the expected buffer for the indices of the account
+    const expectedIndexArrBuffer = [
+      ...Array(gumballMachineAcctConfigIndexArrSize / 4).keys(),
+    ].reduce(
+      (prevVal, curVal) =>
+        Buffer.concat([prevVal, Buffer.from(num32ToBuffer(curVal))]),
+      Buffer.from([])
+    );
+
+    assertGumballMachineConfigProperties(
+      gumballMachine,
+      expectedIndexArrBuffer,
+      allExpectedInitializedConfigLines,
+      gumballMachineAcctConfigLinesSize
+    );
+  }
+
+  async function updateConfigLines(
+    authority: Keypair,
+    gumballMachineAcctKey: PublicKey,
+    gumballMachineAcctSize,
+    gumballMachineAcctConfigIndexArrSize: number,
+    gumballMachineAcctConfigLinesSize: number,
+    updatedConfigLines: Buffer,
+    allExpectedInitializedConfigLines: Buffer,
+    indexOfFirstLineToUpdate: BN
+  ) {
+    const args: UpdateConfigLinesInstructionArgs = {
+      startingLine: indexOfFirstLineToUpdate,
+      newConfigLinesData: updatedConfigLines,
+    };
+    const updateConfigLinesInstr = createUpdateConfigLinesInstruction(
+      {
+        authority: authority.publicKey,
+        gumballMachine: gumballMachineAcctKey,
+      },
+      args
+    );
+    await execute(GumballMachine.provider, [updateConfigLinesInstr], [authority]);
+
+    const onChainGumballMachineAccount =
+      await GumballMachine.provider.connection.getAccountInfo(
+        gumballMachineAcctKey
+      );
+    const gumballMachine = decodeGumballMachine(
+      onChainGumballMachineAccount.data,
+      gumballMachineAcctSize
+    );
+
+    // Create the expected buffer for the indices of the account
+    const expectedIndexArrBuffer = [
+      ...Array(gumballMachineAcctConfigIndexArrSize / 4).keys(),
+    ].reduce(
+      (prevVal, curVal) =>
+        Buffer.concat([prevVal, Buffer.from(num32ToBuffer(curVal))]),
+      Buffer.from([])
+    );
+    assertGumballMachineConfigProperties(
+      gumballMachine,
+      expectedIndexArrBuffer,
+      allExpectedInitializedConfigLines,
+      gumballMachineAcctConfigLinesSize
+    );
+  }
+
+  async function updateHeaderMetadata(
+    authority: Keypair,
+    gumballMachineAcctKey: PublicKey,
+    gumballMachineAcctSize,
+    newHeader: UpdateHeaderMetadataInstructionArgs,
+    resultingExpectedOnChainHeader: GumballMachineHeader
+  ) {
+    const updateHeaderMetadataInstr = createUpdateHeaderMetadataInstruction(
+      {
+        gumballMachine: gumballMachineAcctKey,
+        authority: authority.publicKey,
+      },
+      newHeader
+    );
+    await execute(GumballMachine.provider, [updateHeaderMetadataInstr], [authority]);
+
+    const onChainGumballMachineAccount =
+      await GumballMachine.provider.connection.getAccountInfo(
+        gumballMachineAcctKey
+      );
+    const gumballMachine = decodeGumballMachine(
+      onChainGumballMachineAccount.data,
+      gumballMachineAcctSize
+    );
+    assertGumballMachineHeaderProperties(
+      gumballMachine,
+      resultingExpectedOnChainHeader
+    );
+  }
+
+  async function dispenseCompressedNFTForSol(
+    numNFTs: number,
+    payer: Keypair,
+    receiver: PublicKey,
+    gumballMachineAcctKeypair: Keypair,
+    merkleRollKeypair: Keypair,
+    verbose?: boolean
+  ) {
+    const requestCU = ComputeBudgetProgram.requestUnits({
+      units: 1.4e6,
+      additionalFee: 0,
+    });
+    const dispenseInstr = await createDispenseNFTForSolIx(
+      { numItems: numNFTs },
+      payer.publicKey,
+      receiver,
+      gumballMachineAcctKeypair.publicKey,
+      merkleRollKeypair.publicKey
+    );
+    await execute(
+      GumballMachine.provider,
+      [requestCU, dispenseInstr],
+      [payer],
+      true
+    );
+  }
+
+  async function dispenseCompressedNFTForTokens(
+    numNFTs: number,
+    payer: Keypair,
+    payerTokens: PublicKey,
+    receiver: PublicKey,
+    gumballMachineAcctKeypair: Keypair,
+    merkleRollKeypair: Keypair,
+    verbose?: boolean
+  ) {
+    const dispenseInstr = await createDispenseNFTForTokensIx(
+      { numItems: numNFTs },
+      payer.publicKey,
+      payerTokens,
+      receiver,
+      gumballMachineAcctKeypair.publicKey,
+      merkleRollKeypair.publicKey
+    );
+    await execute(GumballMachine.provider, [dispenseInstr], [payer], true, verbose);
+  }
+
+  async function destroyGumballMachine(
+    gumballMachineAcctKeypair: Keypair,
+    authorityKeypair: Keypair
+  ) {
+    const originalGumballMachineAcctBalance = await connection.getBalance(
+      gumballMachineAcctKeypair.publicKey
+    );
+    const originalAuthorityAcctBalance = await connection.getBalance(
+      authorityKeypair.publicKey
+    );
+    const destroyInstr = createDestroyInstruction({
+      gumballMachine: gumballMachineAcctKeypair.publicKey,
+      authority: authorityKeypair.publicKey,
+    });
+    await execute(GumballMachine.provider, [destroyInstr], [authorityKeypair]);
+
+    assert(
+      0 === (await connection.getBalance(gumballMachineAcctKeypair.publicKey)),
+      "Failed to remove lamports from gumball machine acct"
+    );
+
+    const expectedAuthorityAcctBalance =
+      originalAuthorityAcctBalance + originalGumballMachineAcctBalance;
+    assert(
+      expectedAuthorityAcctBalance ===
+      (await connection.getBalance(authorityKeypair.publicKey)),
+      "Failed to transfer correct balance to authority"
+    );
+  }
 
   before(async function () {
     payer = Keypair.generate();
@@ -594,12 +569,6 @@ describe("gumball-machine", function () {
     );
   });
 
-  function keypairFromString(seed: string) {
-    const spaces = "                                         ";
-    const buffer = Buffer.from(`${seed}${spaces}`.slice(0, 32));;
-    return Keypair.fromSeed(Uint8Array.from(buffer));
-  }
-
   describe("native sol project with config lines", function () {
     let GUMBALL_MACHINE_ACCT_CONFIG_INDEX_ARRAY_SIZE;
     let GUMBALL_MACHINE_ACCT_CONFIG_LINES_SIZE;
@@ -612,7 +581,7 @@ describe("gumball-machine", function () {
     beforeEach(async function () {
       creatorAddress = Keypair.generate();
       creatorPaymentWallet = Keypair.generate();
-      nftBuyer = keypairFromString("hello");
+      nftBuyer = Keypair.generate();
       gumballMachineAcctKeypair = Keypair.generate();
       merkleRollKeypair = Keypair.generate();
       exampleAdditionalSecondarySaleRoyaltyRecipient = Keypair.generate();
@@ -740,18 +709,9 @@ describe("gumball-machine", function () {
         });
 
         it("Cannot dispense NFT for SOL with subsequent instructions in transaction", async function () {
-          const tx = new Transaction()
-            .add(dispenseNFTForSolInstr)
-            .add(dummyInstr);
           let confirmedTxId: string;
           try {
-            confirmedTxId = await GumballMachine.provider.send(
-              tx,
-              [nftBuyer, payer, dummyNewAcctKeypair],
-              {
-                commitment: "confirmed",
-              }
-            );
+            confirmedTxId = await execute(GumballMachine.provider, [dispenseNFTForSolInstr, dummyInstr], [nftBuyer, payer, dummyNewAcctKeypair]);
           } catch (e) { }
 
           if (confirmedTxId)
@@ -762,18 +722,9 @@ describe("gumball-machine", function () {
         });
 
         it("Cannot dispense NFT for SOL with prior instructions in transaction", async function () {
-          const tx = new Transaction()
-            .add(dummyInstr)
-            .add(dispenseNFTForSolInstr);
           let confirmedTxId: string;
           try {
-            confirmedTxId = await GumballMachine.provider.send(
-              tx,
-              [nftBuyer, payer, dummyNewAcctKeypair],
-              {
-                commitment: "confirmed",
-              }
-            );
+            confirmedTxId = await execute(GumballMachine.provider, [dummyInstr, dispenseNFTForSolInstr], [nftBuyer, payer, dummyNewAcctKeypair]);
           } catch (e) { }
 
           if (confirmedTxId)
@@ -912,8 +863,7 @@ describe("gumball-machine", function () {
       it("Can destroy gumball machine and reclaim lamports", async function () {
         await destroyGumballMachine(
           gumballMachineAcctKeypair,
-          creatorAddress,
-          GumballMachine.provider.connection
+          creatorAddress
         );
       });
     });
@@ -1071,17 +1021,8 @@ describe("gumball-machine", function () {
       });
 
       it("Cannot dispense NFT for tokens with subsequent instructions in transaction", async function () {
-        const tx = new Transaction()
-          .add(dispenseNFTForTokensInstr)
-          .add(dummyInstr);
         try {
-          await GumballMachine.provider.send(
-            tx,
-            [nftBuyer, payer, dummyNewAcctKeypair],
-            {
-              commitment: "confirmed",
-            }
-          );
+          await execute(GumballMachine.provider, [dispenseNFTForTokensInstr, dummyInstr], [nftBuyer, payer, dummyNewAcctKeypair]);
           assert(
             false,
             "Dispense should fail when part of transaction with multiple instructions, but it succeeded"
@@ -1090,17 +1031,8 @@ describe("gumball-machine", function () {
       });
 
       it("Cannot dispense NFT for SOL with prior instructions in transaction", async function () {
-        const tx = new Transaction()
-          .add(dummyInstr)
-          .add(dispenseNFTForTokensInstr);
         try {
-          await GumballMachine.provider.send(
-            tx,
-            [nftBuyer, payer, dummyNewAcctKeypair],
-            {
-              commitment: "confirmed",
-            }
-          );
+          await execute(GumballMachine.provider, [dummyInstr, dispenseNFTForTokensInstr], [nftBuyer, payer, dummyNewAcctKeypair]);
           assert(
             false,
             "Dispense should fail when part of transaction with multiple instructions, but it succeeded"
@@ -1369,8 +1301,7 @@ describe("gumball-machine", function () {
       it("Can destroy gumball machine and reclaim lamports", async function () {
         await destroyGumballMachine(
           gumballMachineAcctKeypair,
-          creatorAddress,
-          GumballMachine.provider.connection
+          creatorAddress
         );
       });
     });

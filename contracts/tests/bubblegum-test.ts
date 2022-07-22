@@ -49,124 +49,6 @@ let Bubblegum;
 // @ts-ignore
 let GummyrollProgramId;
 
-const MAX_SIZE = 64;
-const MAX_DEPTH = 20;
-
-async function createTreeOnChain(
-  payer: Keypair,
-  destination: Keypair,
-  delegate: Keypair
-): Promise<[Keypair, Tree, PublicKey]> {
-  const merkleRollKeypair = Keypair.generate();
-
-  await Bubblegum.provider.connection.confirmTransaction(
-    await Bubblegum.provider.connection.requestAirdrop(payer.publicKey, 2e9),
-    "confirmed"
-  );
-  await Bubblegum.provider.connection.confirmTransaction(
-    await Bubblegum.provider.connection.requestAirdrop(
-      destination.publicKey,
-      2e9
-    ),
-    "confirmed"
-  );
-  await Bubblegum.provider.connection.confirmTransaction(
-    await Bubblegum.provider.connection.requestAirdrop(
-      delegate.publicKey,
-      2e9
-    ),
-    "confirmed"
-  );
-  const leaves = Array(2 ** MAX_DEPTH).fill(Buffer.alloc(32));
-  const tree = buildTree(leaves);
-
-  let tx = new Transaction();
-  const ixs = await getCreateTreeIxs(Bubblegum.provider.connection, MAX_DEPTH, MAX_SIZE, 0, payer.publicKey, merkleRollKeypair.publicKey, payer.publicKey);
-  ixs.map((ix) => {
-    tx.add(ix);
-  });
-
-  await Bubblegum.provider.send(tx, [payer, merkleRollKeypair], {
-    commitment: "confirmed",
-  });
-
-  const authority = await getBubblegumAuthorityPDA(merkleRollKeypair.publicKey);
-  await assertOnChainMerkleRollProperties(
-    Bubblegum.provider.connection,
-    MAX_DEPTH,
-    MAX_SIZE,
-    authority,
-    new PublicKey(tree.root),
-    merkleRollKeypair.publicKey
-  );
-
-  return [merkleRollKeypair, tree, authority];
-}
-
-const getMetadata = async (
-  mint: anchor.web3.PublicKey
-): Promise<anchor.web3.PublicKey> => {
-  return (
-    await anchor.web3.PublicKey.findProgramAddress(
-      [Buffer.from("metadata"), TOKEN_METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
-      TOKEN_METADATA_PROGRAM_ID
-    )
-  )[0];
-};
-
-const getMasterEdition = async (
-  mint: anchor.web3.PublicKey
-): Promise<anchor.web3.PublicKey> => {
-  return (
-    await anchor.web3.PublicKey.findProgramAddress(
-      [
-        Buffer.from("metadata"),
-        TOKEN_METADATA_PROGRAM_ID.toBuffer(),
-        mint.toBuffer(),
-        Buffer.from("edition"),
-      ],
-      TOKEN_METADATA_PROGRAM_ID
-    )
-  )[0];
-};
-
-const assertMetadataMatch = (onChainMetadata: Metadata, mintMetadataArgs: MetadataArgs, expectedMintAuthority: PublicKey) => {
-
-  const assertDataMatch = (onChainData: Data, expectedData: Data) => {
-    assert(trimStringPadding(onChainData.name) === expectedData.name, "names mismatched");
-    assert(trimStringPadding(onChainData.symbol) === expectedData.symbol, "symbols mismatched");
-    assert(trimStringPadding(onChainData.uri) === expectedData.uri, "uris mismatched");
-    assert(onChainData.sellerFeeBasisPoints === expectedData.sellerFeeBasisPoints)
-    onChainData.creators?.forEach((creator, index) => {
-      if (index === onChainData.creators.length - 1) {
-        assert(creator.address.equals(expectedMintAuthority), "Creator address mismatch");
-        assert(creator.share === 0, "Creator share mismatch");
-        assert(creator.verified === true, "Creator verified mismatch");
-      } else {
-        assert(creator.address.equals(expectedData.creators[index].address), "Creator address mismatch");
-        assert(creator.share === expectedData.creators[index].share, "Creator share mismatch");
-        assert(creator.verified === expectedData.creators[index].verified, "Creator verified mismatch");
-      }
-    });
-  };
-
-  // Assert that data fields match
-  assertDataMatch(onChainMetadata.data, { name: mintMetadataArgs.name, uri: mintMetadataArgs.uri, symbol: mintMetadataArgs.symbol, creators: mintMetadataArgs.creators, sellerFeeBasisPoints: mintMetadataArgs.sellerFeeBasisPoints })
-
-  // Assert that collections match
-  assert(!onChainMetadata.collection ? onChainMetadata.collection === null
-    : onChainMetadata.collection.key.equals(mintMetadataArgs.collection.key) && onChainMetadata.collection.verified === mintMetadataArgs.collection.verified,
-    "Collections did not match"
-  );
-
-  // Assert remaining properties match. TODO: at some point some of these comparrisons may need to be updated to work for non-null values
-  assert(onChainMetadata.isMutable === mintMetadataArgs.isMutable, "isMutable did not match");
-  assert(onChainMetadata.primarySaleHappened === mintMetadataArgs.primarySaleHappened, "primary sale mismatch");
-  assert(onChainMetadata.tokenStandard === TokenStandard.NonFungible, "token standard mismatch");
-  assert(onChainMetadata.updateAuthority.equals(expectedMintAuthority), "mint authority mismatch");
-  assert(onChainMetadata.uses === mintMetadataArgs.uses, "uses mismatch");
-}
-
 describe("bubblegum", function () {
   // Configure the client to use the local cluster.
   let offChainTree: Tree;
@@ -178,6 +60,116 @@ describe("bubblegum", function () {
   let delegateKey: Keypair;
   let connection: Connection;
   let wallet: NodeWallet;
+
+  const MAX_SIZE = 64;
+  const MAX_DEPTH = 20;
+
+  async function createTreeOnChain(
+    payer: Keypair,
+    destination: Keypair,
+    delegate: Keypair
+  ): Promise<[Keypair, Tree, PublicKey]> {
+    const merkleRollKeypair = Keypair.generate();
+
+    await Bubblegum.provider.connection.confirmTransaction(
+      await Bubblegum.provider.connection.requestAirdrop(payer.publicKey, 2e9),
+      "confirmed"
+    );
+    await Bubblegum.provider.connection.confirmTransaction(
+      await Bubblegum.provider.connection.requestAirdrop(
+        destination.publicKey,
+        2e9
+      ),
+      "confirmed"
+    );
+    await Bubblegum.provider.connection.confirmTransaction(
+      await Bubblegum.provider.connection.requestAirdrop(
+        delegate.publicKey,
+        2e9
+      ),
+      "confirmed"
+    );
+    const leaves = Array(2 ** MAX_DEPTH).fill(Buffer.alloc(32));
+    const tree = buildTree(leaves);
+    const ixs = await getCreateTreeIxs(Bubblegum.provider.connection, MAX_DEPTH, MAX_SIZE, 0, payer.publicKey, merkleRollKeypair.publicKey, payer.publicKey);
+    await execute(Bubblegum.provider, ixs, [payer, merkleRollKeypair]);
+
+    const authority = await getBubblegumAuthorityPDA(merkleRollKeypair.publicKey);
+    await assertOnChainMerkleRollProperties(
+      Bubblegum.provider.connection,
+      MAX_DEPTH,
+      MAX_SIZE,
+      authority,
+      new PublicKey(tree.root),
+      merkleRollKeypair.publicKey
+    );
+
+    return [merkleRollKeypair, tree, authority];
+  }
+
+  const getMetadata = async (
+    mint: anchor.web3.PublicKey
+  ): Promise<anchor.web3.PublicKey> => {
+    return (
+      await anchor.web3.PublicKey.findProgramAddress(
+        [Buffer.from("metadata"), TOKEN_METADATA_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+        TOKEN_METADATA_PROGRAM_ID
+      )
+    )[0];
+  };
+
+  const getMasterEdition = async (
+    mint: anchor.web3.PublicKey
+  ): Promise<anchor.web3.PublicKey> => {
+    return (
+      await anchor.web3.PublicKey.findProgramAddress(
+        [
+          Buffer.from("metadata"),
+          TOKEN_METADATA_PROGRAM_ID.toBuffer(),
+          mint.toBuffer(),
+          Buffer.from("edition"),
+        ],
+        TOKEN_METADATA_PROGRAM_ID
+      )
+    )[0];
+  };
+
+  const assertMetadataMatch = (onChainMetadata: Metadata, mintMetadataArgs: MetadataArgs, expectedMintAuthority: PublicKey) => {
+
+    const assertDataMatch = (onChainData: Data, expectedData: Data) => {
+      assert(trimStringPadding(onChainData.name) === expectedData.name, "names mismatched");
+      assert(trimStringPadding(onChainData.symbol) === expectedData.symbol, "symbols mismatched");
+      assert(trimStringPadding(onChainData.uri) === expectedData.uri, "uris mismatched");
+      assert(onChainData.sellerFeeBasisPoints === expectedData.sellerFeeBasisPoints)
+      onChainData.creators?.forEach((creator, index) => {
+        if (index === onChainData.creators.length - 1) {
+          assert(creator.address.equals(expectedMintAuthority), "Creator address mismatch");
+          assert(creator.share === 0, "Creator share mismatch");
+          assert(creator.verified === true, "Creator verified mismatch");
+        } else {
+          assert(creator.address.equals(expectedData.creators[index].address), "Creator address mismatch");
+          assert(creator.share === expectedData.creators[index].share, "Creator share mismatch");
+          assert(creator.verified === expectedData.creators[index].verified, "Creator verified mismatch");
+        }
+      });
+    };
+
+    // Assert that data fields match
+    assertDataMatch(onChainMetadata.data, { name: mintMetadataArgs.name, uri: mintMetadataArgs.uri, symbol: mintMetadataArgs.symbol, creators: mintMetadataArgs.creators, sellerFeeBasisPoints: mintMetadataArgs.sellerFeeBasisPoints })
+
+    // Assert that collections match
+    assert(!onChainMetadata.collection ? onChainMetadata.collection === null
+      : onChainMetadata.collection.key.equals(mintMetadataArgs.collection.key) && onChainMetadata.collection.verified === mintMetadataArgs.collection.verified,
+      "Collections did not match"
+    );
+
+    // Assert remaining properties match. TODO: at some point some of these comparrisons may need to be updated to work for non-null values
+    assert(onChainMetadata.isMutable === mintMetadataArgs.isMutable, "isMutable did not match");
+    assert(onChainMetadata.primarySaleHappened === mintMetadataArgs.primarySaleHappened, "primary sale mismatch");
+    assert(onChainMetadata.tokenStandard === TokenStandard.NonFungible, "token standard mismatch");
+    assert(onChainMetadata.updateAuthority.equals(expectedMintAuthority), "mint authority mismatch");
+    assert(onChainMetadata.uses === mintMetadataArgs.uses, "uses mismatch");
+  }
 
   beforeEach(async function () {
     payer = Keypair.generate();

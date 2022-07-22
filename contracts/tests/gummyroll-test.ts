@@ -472,12 +472,8 @@ describe("gummyroll", () => {
 
       // Execute all replaces in a "single block"
       ixArray.map((ix) => {
-        const tx = new Transaction().add(ix);
         txList.push(
-          Gummyroll.provider.send(tx, [payer], {
-            commitment: "confirmed",
-            skipPreflight: true,
-          })
+          execute(Gummyroll.provider, [ix], [payer])
         );
       });
       await Promise.all(txList);
@@ -690,7 +686,7 @@ describe("gummyroll", () => {
         ixs.push(replaceIx);
         if (ixs.length == stepSize) {
           replaces++;
-          let tx = await execute(Gummyroll.provider, ixs, [payer]);
+          await execute(Gummyroll.provider, ixs, [payer]);
           console.log("Replaced", replaces * stepSize, "leaves");
           ixs = [];
         }

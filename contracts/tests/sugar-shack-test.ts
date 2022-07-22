@@ -31,7 +31,7 @@ import {
   getListingPDAKeyForPrice
 } from "../sdk/sugar-shack";
 import {
-  CANDY_WRAPPER_PROGRAM_ID, bufferToArray
+  CANDY_WRAPPER_PROGRAM_ID, bufferToArray, execute
 } from "../sdk/utils/index";
 import {
   MetadataArgs,
@@ -114,9 +114,7 @@ describe("sugar-shack", () => {
     if (proofToLeaf) {
       proofToLeaf.forEach(acctMeta => createOrModifyListingIx.keys.push(acctMeta));
     }
-    await SugarShack.provider.send(new Transaction().add(createOrModifyListingIx), [currentNFTOwner], {
-      commitment: "confirmed",
-    });
+    await execute(SugarShack.provider, [createOrModifyListingIx], [currentNFTOwner]);
   }
 
   async function removeListing(
@@ -148,9 +146,7 @@ describe("sugar-shack", () => {
     if (proofToLeaf) {
       proofToLeaf.forEach(acctMeta => removeListIx.keys.push(acctMeta));
     }
-    await SugarShack.provider.send(new Transaction().add(removeListIx), [currentNFTOwner], {
-      commitment: "confirmed",
-    });
+    await execute(SugarShack.provider, [removeListIx], [currentNFTOwner]);
   }
 
   async function withdrawFees(feePayoutRecipient: PublicKey, authority: Keypair, lamportsToWithdraw: BN) {
@@ -165,9 +161,7 @@ describe("sugar-shack", () => {
         lamportsToWithdraw,
       }
     );
-    await SugarShack.provider.send(new Transaction().add(withdrawFeesIx), [authority], {
-      commitment: "confirmed",
-    });
+    await execute(SugarShack.provider, [withdrawFeesIx], [authority]);
   }
 
   async function purchaseNFTFromListing(
@@ -210,14 +204,7 @@ describe("sugar-shack", () => {
     if (proofToLeaf) {
       proofToLeaf.forEach(acctMeta => purchaseIx.keys.push(acctMeta));
     }
-    let tx = new Transaction().add(purchaseIx);
-    await SugarShack.provider.send(tx, [nftPurchaser], {
-      commitment: "confirmed",
-    });
-    // For reference, a tree with depth 20 has a transaction size of 1123 with one creator and a canopy of depth 5
-    //                a tree with depth 24 has a transaction size of 1255 with one creator and a canopy of depth 5
-    let txSize = tx.serialize().length;
-    console.log("Transaction Size", txSize);
+    await execute(SugarShack.provider, [purchaseIx], [nftPurchaser]);
   }
 
   before(async () => {
@@ -238,7 +225,7 @@ describe("sugar-shack", () => {
     SugarShack = anchor.workspace.SugarShack as Program<SugarShack>;
     BubblegumProgramId = anchor.workspace.Bubblegum.programId;
     GummyrollProgramId = anchor.workspace.Gummyroll.programId;
-    
+
     // Fund the payer for the entire suite
     await SugarShack.provider.connection.confirmTransaction(
       await SugarShack.provider.connection.requestAirdrop(payer.publicKey, 75e9),
@@ -263,11 +250,7 @@ describe("sugar-shack", () => {
         authority: marketplaceAuthority.publicKey,
       }
     );
-
-    const initMarketplacePropsTx = new Transaction().add(initMarketplacePropsIx);
-    await SugarShack.provider.send(initMarketplacePropsTx, [payer], {
-      commitment: "confirmed",
-    });
+    await execute(SugarShack.provider, [initMarketplacePropsIx], [payer]);
 
     // Confirm that properties of the onchain marketplace PDA match expectation
     const onChainMarketplaceAccount: MarketplaceProperties = await MarketplaceProperties.fromAccountAddress(SugarShack.provider.connection, marketplaceAccountKey);
@@ -319,10 +302,7 @@ describe("sugar-shack", () => {
           maxBufferSize: MERKLE_ROLL_MAX_BUFFER_SIZE
         }
       );
-      let createCompressedNFTTreeTx = new Transaction().add(allocMerkleRollAcctInstr).add(createCompressedNFTTreeIx);
-      await SugarShack.provider.send(createCompressedNFTTreeTx, [payer, merkleRollKeypair], {
-        commitment: "confirmed",
-      });
+      await execute(SugarShack.provider, [allocMerkleRollAcctInstr, createCompressedNFTTreeIx], [payer, merkleRollKeypair]);
 
       // build a corresponding off-chain tree...this allows us to fetch a proof
       const leaves = Array(2 ** MERKLE_ROLL_MAX_DEPTH).fill(Buffer.alloc(32));
@@ -368,13 +348,7 @@ describe("sugar-shack", () => {
         merkleSlab: merkleRollKeypair.publicKey,
         candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
       }, { message: compressedNFTMetadata });
-
-      await SugarShack.provider.send(new Transaction().add(mintIx), [payer],
-        {
-          skipPreflight: true,
-          commitment: "confirmed",
-        }
-      );
+      await execute(SugarShack.provider, [mintIx], [payer]);
 
       // creator hash
       bufferOfCreatorShares = Buffer.from(compressedNFTMetadata.creators.map(c => c.share));

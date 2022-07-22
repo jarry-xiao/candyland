@@ -42,7 +42,7 @@ import { sleep } from "@metaplex-foundation/amman/dist/utils";
 import { verbose } from "sqlite3";
 import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
 import { CANDY_WRAPPER_PROGRAM_ID, execute, logTx, num16ToBuffer, bufferToArray } from "../sdk/utils";
-// TODO: cleanup this test file using the convenience methods
+// TODO: cleanup this test file using the convenience methods and remove all .send calls
 import { computeDataHash, computeCreatorHash } from "../sdk/bubblegum/src/convenience";
 
 // @ts-ignore
