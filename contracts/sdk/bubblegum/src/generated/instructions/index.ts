@@ -1,6 +1,7 @@
 export * from './approveMintAuthorityRequest'
 export * from './burn'
 export * from './cancelRedeem'
+export * from './closeMintRequest'
 export * from './compress'
 export * from './createTree'
 export * from './decompressV1'

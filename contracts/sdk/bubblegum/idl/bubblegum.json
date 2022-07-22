@@ -115,6 +115,32 @@
       "args": []
     },
     {
+      "name": "closeMintRequest",
+      "accounts": [
+        {
+          "name": "mintAuthorityRequest",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "mintAuthority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "treeAuthority",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "merkleSlab",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "mintV1",
       "accounts": [
         {
@@ -1204,6 +1230,11 @@
       "code": 6014,
       "name": "MintRequestDiscriminatorMismatch",
       "msg": "Mint request data has incorrect disciminator"
+    },
+    {
+      "code": 6015,
+      "name": "CloseMintRequestError",
+      "msg": "Something went wrong closing mint request"
     }
   ],
   "metadata": {

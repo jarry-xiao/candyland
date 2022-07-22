@@ -366,6 +366,29 @@ createErrorFromNameLookup.set(
 )
 
 /**
+ * CloseMintRequestError: 'Something went wrong closing mint request'
+ *
+ * @category Errors
+ * @category generated
+ */
+export class CloseMintRequestErrorError extends Error {
+  readonly code: number = 0x177f
+  readonly name: string = 'CloseMintRequestError'
+  constructor() {
+    super('Something went wrong closing mint request')
+    if (typeof Error.captureStackTrace === 'function') {
+      Error.captureStackTrace(this, CloseMintRequestErrorError)
+    }
+  }
+}
+
+createErrorFromCodeLookup.set(0x177f, () => new CloseMintRequestErrorError())
+createErrorFromNameLookup.set(
+  'CloseMintRequestError',
+  () => new CloseMintRequestErrorError()
+)
+
+/**
  * Attempts to resolve a custom program error from the provided error code.
  * @category Errors
  * @category generated

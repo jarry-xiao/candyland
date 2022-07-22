@@ -38,6 +38,10 @@ impl TreeAuthority {
         let remaining_mints = self.total_mint_capacity.saturating_sub(self.num_minted);
         requested_capacity <= remaining_mints && requested_capacity <= remaining_mints_to_approve
     }
+
+    pub fn restore_mint_capacity(&mut self, capacity: u64) {
+        self.num_mints_approved = self.num_mints_approved.saturating_sub(capacity);
+    }
 }
 
 #[account]

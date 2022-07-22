@@ -292,7 +292,7 @@ pub struct Compress<'info> {
 }
 
 #[derive(Accounts)]
-pub struct InitMintAuthorityRequest<'info> {
+pub struct InitMintRequest<'info> {
     #[account(
         init,
         space=MINT_REQUEST_SIZE,
@@ -315,7 +315,7 @@ pub struct InitMintAuthorityRequest<'info> {
 }
 
 #[derive(Accounts)]
-pub struct ApproveMintAuthorityRequest<'info> {
+pub struct ApproveMintRequest<'info> {
     #[account(
         mut,
         seeds = [merkle_slab.key().as_ref(), mint_authority_request.mint_authority.as_ref()],
@@ -331,6 +331,22 @@ pub struct ApproveMintAuthorityRequest<'info> {
         seeds = [merkle_slab.key().as_ref()],
         bump
     )]
+    pub tree_authority: Account<'info, TreeAuthority>,
+    /// CHECK: this account is neither read from or written to
+    pub merkle_slab: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct CloseMintRequest<'info> {
+    #[account(
+        mut,
+        seeds = [merkle_slab.key().as_ref(), mint_authority.key().as_ref()],
+        bump
+    )]
+    pub mint_authority_request: Account<'info, MintRequest>,
+    #[account(mut)]
+    pub mint_authority: Signer<'info>,
+    #[account(mut)]
     pub tree_authority: Account<'info, TreeAuthority>,
     /// CHECK: this account is neither read from or written to
     pub merkle_slab: UncheckedAccount<'info>,
@@ -427,7 +443,6 @@ fn process_mint_v1<'info>(
     delegate: Pubkey,
     authority_bump: u8,
     authority: &mut Account<'info, TreeAuthority>,
-    mint_authority: &Signer<'info>,
     merkle_slab: &AccountInfo<'info>,
     candy_wrapper: &Program<'info, CandyWrapper>,
     gummyroll_program: &AccountInfo<'info>,
@@ -480,7 +495,6 @@ fn process_mint_v1<'info>(
         authority_bump,
         &gummyroll_program.to_account_info(),
         &authority.to_account_info(),
-        &mint_authority.to_account_info(),
         &merkle_slab.to_account_info(),
         &candy_wrapper.to_account_info(),
         leaf.to_node(),
@@ -518,10 +532,7 @@ pub mod bubblegum {
         gummyroll::cpi::init_empty_gummyroll(cpi_ctx, max_depth, max_buffer_size)
     }
 
-    pub fn request_mint_authority(
-        ctx: Context<InitMintAuthorityRequest>,
-        mint_capacity: u64,
-    ) -> Result<()> {
+    pub fn request_mint_authority(ctx: Context<InitMintRequest>, mint_capacity: u64) -> Result<()> {
         assert_enough_mints_to_approve(&ctx.accounts.tree_authority, mint_capacity)?;
         ctx.accounts
             .mint_authority_request
@@ -529,7 +540,7 @@ pub mod bubblegum {
         Ok(())
     }
 
-    pub fn approve_mint_authority_request(ctx: Context<ApproveMintAuthorityRequest>) -> Result<()> {
+    pub fn approve_mint_authority_request(ctx: Context<ApproveMintRequest>) -> Result<()> {
         let authority = &mut ctx.accounts.tree_authority;
         let request = &mut ctx.accounts.mint_authority_request;
 
@@ -538,6 +549,26 @@ pub mod bubblegum {
         authority.approve_mint_capacity(request.mint_capacity);
         request.set_approved();
 
+        Ok(())
+    }
+
+    pub fn close_mint_request(ctx: Context<CloseMintRequest>) -> Result<()> {
+        let authority = &mut ctx.accounts.tree_authority;
+        let mint_authority = &mut ctx.accounts.mint_authority;
+        let request = &mut ctx.accounts.mint_authority_request;
+        let request_info = request.to_account_info();
+
+        // Transfer remaining mint capacity to authority
+        if request.is_approved() {
+            authority.restore_mint_capacity(request.mint_capacity);
+        }
+
+        // Transfer lamports
+        **mint_authority.lamports.borrow_mut() = mint_authority
+            .lamports()
+            .checked_add(request_info.lamports())
+            .ok_or(BubblegumError::CloseMintRequestError)?;
+        **request_info.lamports.borrow_mut() = 0;
         Ok(())
     }
 
@@ -566,7 +597,6 @@ pub mod bubblegum {
             delegate,
             *ctx.bumps.get("authority").unwrap(),
             authority,
-            mint_authority,
             merkle_slab,
             &ctx.accounts.candy_wrapper,
             &ctx.accounts.gummyroll_program,

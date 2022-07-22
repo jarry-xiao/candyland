@@ -24,6 +24,7 @@ import {
   MetadataArgs,
   createRequestMintAuthorityInstruction,
   createApproveMintAuthorityRequestInstruction,
+  createCloseMintRequestInstruction,
   MintRequest,
   TreeAuthority,
 } from "../sdk/bubblegum/src/generated";
@@ -42,6 +43,7 @@ import {
 import { TokenProgramVersion, Version, Creator } from "../sdk/bubblegum/src/generated";
 import { CANDY_WRAPPER_PROGRAM_ID, execute, bufferToArray, num16ToBuffer, trimStringPadding } from "../sdk/utils";
 import { computeDataHash, computeCreatorHash, getBubblegumAuthorityPDA, getCreateTreeIxs, getMintRequestPDA, getNonceCount, getVoucherPDA, assertOnChainMintRequest, assertOnChainTreeAuthority } from "../sdk/bubblegum/src/convenience";
+// import { getBubblegumAuthorityPDA, getCreateTreeIxs, getMintRequestPDA, getNonceCount, getVoucherPDA, assertOnChainMintRequest, assertOnChainTreeAuthority } from "../sdk/bubblegum/src/convenience";
 
 // @ts-ignore
 let Bubblegum;
@@ -551,12 +553,12 @@ describe("bubblegum", function () {
       treeAuthority,
       merkleSlab: merkleRollKeypair.publicKey
     }, {
-      mintCapacity: new BN(1),
+      mintCapacity: new BN(2),
     })
     await execute(Bubblegum.provider, [initRequestIx], [randomRequester], true);
     let expectedMintRequestState = MintRequest.fromArgs({
       mintAuthority: randomRequester.publicKey,
-      mintCapacity: new BN(1),
+      mintCapacity: new BN(2),
       approved: 0,
     })
     await assertOnChainMintRequest(
@@ -591,7 +593,7 @@ describe("bubblegum", function () {
       expectedMintRequestState,
       requestPda
     )
-    expectedAuthorityState = TreeAuthority.fromArgs({ ...expectedAuthorityState, numMintsApproved: new BN(1) })
+    expectedAuthorityState = TreeAuthority.fromArgs({ ...expectedAuthorityState, numMintsApproved: new BN(2) })
     await assertOnChainTreeAuthority(connection, expectedAuthorityState, treeAuthority);
 
     console.log(" - Mint with request");
@@ -621,7 +623,7 @@ describe("bubblegum", function () {
     }, { message: metadata });
     mintWithRequestIx.keys[0].isWritable = true;
     await execute(Bubblegum.provider, [mintWithRequestIx], [randomRequester], true);
-    expectedMintRequestState = MintRequest.fromArgs({ ...expectedMintRequestState, mintCapacity: new BN(0) });
+    expectedMintRequestState = MintRequest.fromArgs({ ...expectedMintRequestState, mintCapacity: new BN(1) });
     await assertOnChainMintRequest(
       connection,
       expectedMintRequestState,
@@ -630,7 +632,17 @@ describe("bubblegum", function () {
     expectedAuthorityState = TreeAuthority.fromArgs({ ...expectedAuthorityState, numMinted: new BN(1) })
     await assertOnChainTreeAuthority(connection, expectedAuthorityState, treeAuthority);
 
-    console.log(" - (todo) Close mint authority request");
-
+    console.log(" - Close mint authority request");
+    const closeIx = createCloseMintRequestInstruction({
+      mintAuthority: randomRequester.publicKey,
+      treeAuthority,
+      mintAuthorityRequest: requestPda,
+      merkleSlab: merkleRollKeypair.publicKey,
+    })
+    await execute(Bubblegum.provider, [closeIx], [randomRequester], true);
+    const requestInfo = await connection.getAccountInfo(requestPda);
+    assert(!requestInfo, `Request info should have been closed, but is instead ${requestInfo}`)
+    expectedAuthorityState = TreeAuthority.fromArgs({ ...expectedAuthorityState, numMintsApproved: new BN(1) })
+    await assertOnChainTreeAuthority(connection, expectedAuthorityState, treeAuthority);
   });
 });

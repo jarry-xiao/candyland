@@ -32,4 +32,6 @@ pub enum BubblegumError {
     MintRequestKeyMismatch,
     #[msg("Mint request data has incorrect disciminator")]
     MintRequestDiscriminatorMismatch,
+    #[msg("Something went wrong closing mint request")]
+    CloseMintRequestError,
 }
