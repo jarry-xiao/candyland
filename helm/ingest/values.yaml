@@ -5,7 +5,7 @@ imagePullPolicy: Always
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
-
+loadSeed: ""
 ingest:
   db_url:
   redis_url:
