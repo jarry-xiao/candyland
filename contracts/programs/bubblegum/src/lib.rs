@@ -346,10 +346,29 @@ pub struct CloseMintRequest<'info> {
     pub mint_authority_request: Account<'info, MintRequest>,
     #[account(mut)]
     pub mint_authority: Signer<'info>,
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [merkle_slab.key().as_ref()],
+        bump
+    )]
     pub tree_authority: Account<'info, TreeAuthority>,
     /// CHECK: this account is neither read from or written to
     pub merkle_slab: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct SetTreeDelegate<'info> {
+    pub creator: Signer<'info>,
+    /// CHECK: this account is neither read from or written to
+    pub new_delegate: UncheckedAccount<'info>,
+    /// CHECK: this account is neither read from or written to
+    pub merkle_slab: UncheckedAccount<'info>,
+    #[account(
+        mut,
+        seeds = [merkle_slab.key().as_ref()],
+        bump
+    )]
+    pub tree_authority: Account<'info, TreeAuthority>,
 }
 
 pub fn hash_metadata(metadata: &MetadataArgs) -> Result<[u8; 32]> {
@@ -569,6 +588,11 @@ pub mod bubblegum {
             .checked_add(request_info.lamports())
             .ok_or(BubblegumError::CloseMintRequestError)?;
         **request_info.lamports.borrow_mut() = 0;
+        Ok(())
+    }
+
+    pub fn set_tree_delegate(ctx: Context<SetTreeDelegate>) -> Result<()> {
+        ctx.accounts.tree_authority.delegate = ctx.accounts.new_delegate.key();
         Ok(())
     }
 

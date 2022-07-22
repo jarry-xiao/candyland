@@ -35,7 +35,6 @@ export async function execute(
   } catch (e) { error = e; }
 
   if (error) {
-    console.log("Tx error!");
     throw error;
   }
   await logTx(provider, txid, verbose);

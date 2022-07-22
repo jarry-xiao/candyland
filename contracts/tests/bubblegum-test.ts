@@ -12,6 +12,7 @@ import {
   Connection as web3Connection,
   SYSVAR_RENT_PUBKEY,
   Connection,
+  LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import { assert } from "chai";
 import {
@@ -27,6 +28,7 @@ import {
   createCloseMintRequestInstruction,
   MintRequest,
   TreeAuthority,
+  createSetTreeDelegateInstruction,
 } from "../sdk/bubblegum/src/generated";
 
 import { buildTree, Tree } from "./merkle-tree";
@@ -541,6 +543,83 @@ describe("bubblegum", function () {
     const metadataForDecompressedNFT = metadataBeet.deserialize(onChainNFTMetadataAccount.data)[0];
     assertMetadataMatch(metadataForDecompressedNFT, metadata, mintAuthority);
   });
+  it("Mint to tree with delegate", async () => {
+    console.log(" - Set tree delegate");
+    const randomDelegate = Keypair.generate();
+    await connection.requestAirdrop(randomDelegate.publicKey, LAMPORTS_PER_SOL);
+
+    const setDelegateIx = createSetTreeDelegateInstruction({
+      newDelegate: randomDelegate.publicKey,
+      treeAuthority,
+      merkleSlab: merkleRollKeypair.publicKey,
+      creator: payer.publicKey
+    })
+    await execute(Bubblegum.provider, [setDelegateIx], [payer], true);
+    let expectedAuthorityState = TreeAuthority.fromArgs({
+      creator: payer.publicKey,
+      delegate: randomDelegate.publicKey,
+      totalMintCapacity: new BN(1 << MAX_DEPTH),
+      numMintsApproved: new BN(0),
+      numMinted: new BN(0)
+    })
+    await assertOnChainTreeAuthority(
+      connection,
+      expectedAuthorityState,
+      treeAuthority
+    )
+
+    console.log(" - Mint with delegate");
+    const metadata = {
+      name: "test",
+      symbol: "test",
+      uri: "www.solana.com",
+      sellerFeeBasisPoints: 0,
+      primarySaleHappened: false,
+      isMutable: false,
+      editionNonce: null,
+      tokenStandard: null,
+      tokenProgramVersion: TokenProgramVersion.Original,
+      collection: null,
+      uses: null,
+      creators: [],
+    };
+    const mintWithDelegateIx = createMintV1Instruction({
+      merkleSlab: merkleRollKeypair.publicKey,
+      authority: treeAuthority,
+      candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
+      gummyrollProgram: GummyrollProgramId,
+      mintAuthority: randomDelegate.publicKey,
+      owner: randomDelegate.publicKey,
+      delegate: randomDelegate.publicKey,
+      mintAuthorityRequest: SystemProgram.programId,
+    }, { message: metadata });
+    mintWithDelegateIx.keys[0].isWritable = true;
+    await execute(Bubblegum.provider, [mintWithDelegateIx], [randomDelegate], true);
+    expectedAuthorityState = TreeAuthority.fromArgs({ ...expectedAuthorityState, numMinted: new BN(1) })
+    await assertOnChainTreeAuthority(connection, expectedAuthorityState, treeAuthority);
+
+    console.log(" - Fail mint with random requester");
+    const randomHacker = Keypair.generate();
+    const mintWithHackerIx = createMintV1Instruction({
+      merkleSlab: merkleRollKeypair.publicKey,
+      authority: treeAuthority,
+      candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
+      gummyrollProgram: GummyrollProgramId,
+      mintAuthority: randomHacker.publicKey,
+      owner: randomHacker.publicKey,
+      delegate: randomHacker.publicKey,
+      mintAuthorityRequest: SystemProgram.programId,
+    }, { message: metadata });
+    mintWithHackerIx.keys[0].isWritable = true;
+    let error = null;
+    try {
+      await execute(Bubblegum.provider, [mintWithHackerIx], [randomHacker], true, true);
+    } catch (e) { error = e; }
+    if (!error) {
+      throw new Error("Failed to prevent random signer from minting")
+    }
+  });
+
   it("Mint to tree with request", async () => {
     console.log(" - Create mint authority request for 1");
     const randomRequester = Keypair.generate();
