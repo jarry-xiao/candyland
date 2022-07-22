@@ -169,21 +169,17 @@ pub async fn gummyroll_change_log_event_to_database(
     // into `cl_items` due to an error, a gap will be created for the tree and the backfiller will
     // fix it.
     if i - 1 == depth as i64 {
-        //See if the tree already exists in the `backfill_items` table.
-        let query = backfill_items::Entity::find()
+        // See if the tree already exists in the `backfill_items` table.
+        let rows = backfill_items::Entity::find()
             .filter(backfill_items::Column::Tree.eq(tree_id))
             .limit(1)
-            .build(DbBackend::Postgres);
-
-        let query_result = txn
-            .query_all(query)
-            .await
-            .map_err(|db_err| IngesterError::StorageWriteError(db_err.to_string()))?;
+            .all(txn)
+            .await?;
 
         // If the tree does not exist in `backfill_items` and the sequence number is greater than 1,
         // then we know we will need to backfill the tree from sequence number 1 up to the current
         // sequence number.  So in this case we set at flag to force checking the tree.
-        let force_chk = query_result.len() == 0 && change_log_event.seq > 1;
+        let force_chk = rows.len() == 0 && change_log_event.seq > 1;
 
         println!("Adding to backfill_items table at level {}", i - 1);
         let item = backfill_items::ActiveModel {
@@ -195,11 +191,7 @@ pub async fn gummyroll_change_log_event_to_database(
             ..Default::default()
         };
 
-        let query = backfill_items::Entity::insert(item).build(DbBackend::Postgres);
-
-        txn.execute(query)
-            .await
-            .map_err(|db_err| IngesterError::StorageWriteError(db_err.to_string()))?;
+        backfill_items::Entity::insert(item).exec(txn).await?;
     }
 
     Ok(())

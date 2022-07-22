@@ -76,7 +76,7 @@ impl BackfillTree {
 /// Struct used when querying the max sequence number of a tree.
 #[derive(Debug, FromQueryResult, Clone)]
 struct MaxSeqItem {
-    max: i64,
+    seq: i64,
 }
 
 /// Struct used when querying for items to backfill.
@@ -341,14 +341,17 @@ impl<T: Messenger> Backfiller<T> {
     }
 
     async fn get_max_seq(&self, tree: &[u8]) -> Result<Option<i64>, DbErr> {
-        let rows = backfill_items::Entity::find()
+        let query = backfill_items::Entity::find()
+            .select_only()
+            .column(backfill_items::Column::Seq)
             .filter(backfill_items::Column::Tree.eq(tree))
             .order_by_desc(backfill_items::Column::Seq)
             .limit(1)
-            .all(&self.db)
-            .await?;
+            .build(DbBackend::Postgres);
 
-        Ok(rows.last().map(|row| row.seq))
+        let start_seq_vec = MaxSeqItem::find_by_statement(query).all(&self.db).await?;
+
+        Ok(start_seq_vec.last().map(|row| row.seq))
     }
 
     async fn clear_force_chk_flag(&self, tree: &[u8]) -> Result<UpdateResult, DbErr> {
@@ -376,22 +379,18 @@ impl<T: Messenger> Backfiller<T> {
     async fn get_missing_data(&self, tree: &[u8]) -> Result<(Option<i64>, Vec<GapInfo>), DbErr> {
         // Get the maximum sequence number that has been backfilled, and use
         // that for the starting sequence number for backfilling.
-        let mut query = backfill_items::Entity::find()
+        let query = backfill_items::Entity::find()
             .select_only()
             .column(backfill_items::Column::Seq)
-            .filter(backfill_items::Column::Backfilled.eq(true))
             .filter(backfill_items::Column::Tree.eq(tree))
-            .group_by(backfill_items::Column::Tree)
+            .filter(backfill_items::Column::Backfilled.eq(true))
+            .order_by_desc(backfill_items::Column::Seq)
+            .limit(1)
             .build(DbBackend::Postgres);
 
-        query.sql = query.sql.replace(
-            "SELECT \"backfill_items\".\"seq\"",
-            "SELECT MAX (\"backfill_items\".\"seq\")",
-        );
-
         let start_seq_vec = MaxSeqItem::find_by_statement(query).all(&self.db).await?;
-        let start_seq = if start_seq_vec.len() > 0 {
-            start_seq_vec[0].max
+        let start_seq = if let Some(seq) = start_seq_vec.last().map(|row| row.seq) {
+            seq
         } else {
             0
         };
