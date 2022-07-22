@@ -371,6 +371,12 @@ pub mod gumball_machine {
         let (mut header_bytes, config_data) =
             gumball_machine_data.split_at_mut(std::mem::size_of::<GumballMachineHeader>());
         let gumball_header = GumballMachineHeader::load_mut_bytes(&mut header_bytes)?;
+
+        assert!(
+            max_items <= 1 << max_depth,
+            "Max items must fit into tree of depth {}",
+            max_depth
+        );
         let size = max_items as usize;
 
         // Construct creators array

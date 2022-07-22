@@ -68,13 +68,13 @@ Example `init.json` (note the actual example json directory is also included for
     "authority": "5RomdRbiZ3UYwpojr9j3SQptjJQULmx6rpU1Bfbr7mpG",
     "collectionKey": null,
     "extensionLen": 28,
-    "maxMintSize": 10,
-    "maxItems": 250,
+    "maxMintSize": 6,
+    "maxItems": 8,
     "creatorKeys": [
       "H8DWGKyCSaKtgh1GjyqexVcMe8FPyKQoBhKH79QnhDWx",
       "Es1EV724ihL7mYzjEiUV1QgcNdwoTpGByLiWSwKFRsAb"
     ],
-    "creatorShares": [1, 5]
+    "creatorShares": [20, 80]
   },
   "optionals": {
     "canopyDepth": 2
@@ -197,7 +197,7 @@ Example `update-header-metadata.json`:
     "botWallet": "CwKozhKgAEkxHhJ6AwBn6faFstKWmoFB4JYz18RyxExz",
     "authority": "Es1EV724ihL7mYzjEiUV1QgcNdwoTpGByLiWSwKFRsAb",
     "receiver": "CwKozhKgAEkxHhJ6AwBn6faFstKWmoFB4JYz18RyxExz",
-    "maxMintSize": 10,
+    "maxMintSize": 5,
     "creatorKeys": [
       "H8DWGKyCSaKtgh1GjyqexVcMe8FPyKQoBhKH79QnhDWx",
       "Es1EV724ihL7mYzjEiUV1QgcNdwoTpGByLiWSwKFRsAb"
