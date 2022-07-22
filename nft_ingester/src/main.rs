@@ -182,7 +182,7 @@ async fn _handle_account(manager: &ProgramHandlerManager<'static>, data: Vec<(i6
 
 async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<(i64, &[u8])>) {
     for (message_id, data) in data {
-        println!("RECV");
+        println!("RECV, data size: {}", data.len());
         //TODO -> Dedupe the stream, the stream could have duplicates as a way of ensuring fault tolerance if one validator node goes down.
         //  Possible solution is dedup on the plerkle side but this doesnt follow our principle of getting messages out of the validator asd fast as possible.
         //  Consider a Messenger Implementation detail the deduping of whats in this stream so that
