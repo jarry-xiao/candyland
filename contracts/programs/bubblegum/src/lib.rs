@@ -755,14 +755,14 @@ pub mod bubblegum {
                 metadata.symbol.clone(),
                 metadata.uri.clone(),
                 if metadata.creators.len() > 0 {
-                    let mut ammended_metadata_creators = metadata.creators;
-                    ammended_metadata_creators.push(Creator {
+                    let mut amended_metadata_creators = metadata.creators;
+                    amended_metadata_creators.push(Creator {
                         address: ctx.accounts.mint_authority.key(),
                         verified: true,
                         share: 0,
                     });
                     Some(
-                        ammended_metadata_creators
+                        amended_metadata_creators
                             .iter()
                             .map(|c| c.adapt())
                             .collect(),

@@ -109,7 +109,7 @@ Example `init-indices.json`:
 ```json
 {
   "args": {
-    "maxItems": 1048576
+    "maxItems": 8
   },
   "optionals": {}
 }
