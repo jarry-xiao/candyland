@@ -10,4 +10,28 @@ pub enum BubblegumError {
     HashingMismatch,
     #[msg("Unsupported Schema Version")]
     UnsupportedSchemaVersion,
+    #[msg("Creator shares must sum to 100")]
+    CreatorShareTotalMustBe100,
+    #[msg("No duplicate creator addresses in metadata")]
+    DuplicateCreatorAddress,
+    #[msg("Creators list too long")]
+    CreatorsTooLong,
+    #[msg("Name in metadata is too long")]
+    MetadataNameTooLong,
+    #[msg("Symbol in metadata is too long")]
+    MetadataSymbolTooLong,
+    #[msg("Uri in metadata is too long")]
+    MetadataUriTooLong,
+    #[msg("Basis points in metadata cannot exceed 10000")]
+    MetadataBasisPointsTooHigh,
+    #[msg("Not enough unapproved mints left")]
+    InsufficientMintCapacity,
+    #[msg("Mint request not approved")]
+    MintRequestNotApproved,
+    #[msg("Mint authority key does not match request")]
+    MintRequestKeyMismatch,
+    #[msg("Mint request data has incorrect disciminator")]
+    MintRequestDiscriminatorMismatch,
+    #[msg("Something went wrong closing mint request")]
+    CloseMintRequestError,
 }

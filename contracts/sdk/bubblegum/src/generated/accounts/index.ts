@@ -1,7 +1,9 @@
-export * from './Nonce'
+export * from './MintRequest'
+export * from './TreeAuthority'
 export * from './Voucher'
 
-import { Nonce } from './Nonce'
+import { MintRequest } from './MintRequest'
+import { TreeAuthority } from './TreeAuthority'
 import { Voucher } from './Voucher'
 
-export const accountProviders = { Nonce, Voucher }
+export const accountProviders = { MintRequest, TreeAuthority, Voucher }

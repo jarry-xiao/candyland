@@ -18,8 +18,7 @@
     "extensionLen": 0,
     "maxMintSize": 100,
     "maxItems": 50000,
-    "creatorKeys": [
-    ],
+    "creatorKeys": [],
     "creatorShares": []
   },
   "optionals": {

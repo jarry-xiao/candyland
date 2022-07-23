@@ -7,12 +7,16 @@ export const CANDY_WRAPPER_PROGRAM_ID = new PublicKey("WRAPYChf58WFCnyjXKJHtrPgz
 
 /// Wait for a transaction of a certain id to confirm and optionally log its messages
 export async function logTx(provider: Provider, txId: string, verbose: boolean = true) {
-  await provider.connection.confirmTransaction(txId, "confirmed");
-  if (verbose) {
+  const tx = await provider.connection.confirmTransaction(txId, "confirmed");
+  if (tx.value.err || verbose) {
     console.log(
       (await provider.connection.getConfirmedTransaction(txId, "confirmed")).meta
         .logMessages
     );
+  }
+  if (tx.value.err) {
+    console.log("Transaction failed");
+    throw new Error(JSON.stringify(tx.value.err));
   }
 };
 
@@ -23,14 +27,29 @@ export async function execute(
   signers: Signer[],
   skipPreflight: boolean = false,
   verbose: boolean = false,
-): Promise<String> {
+): Promise<string> {
   let tx = new Transaction();
   instructions.map((ix) => { tx = tx.add(ix) });
+
+  // Manually sign the transaction with the Anchor wallet so we can use sendRawTransaction and get on-chain logs on failures
+  // via sendRawTransaction
+  tx.feePayer = provider.wallet.publicKey;
+  tx.recentBlockhash = (
+    await provider.connection.getRecentBlockhash("confirmed")
+  ).blockhash;
+  tx = await provider.wallet.signTransaction(tx);
+
+  // We need to manually sign the transaction with each signer to use sendRawTransaction
+  (signers ?? []).forEach((kp) => {
+    tx.partialSign(kp);
+  });
+
+  const rawTx = tx.serialize();
 
   let txid = null;
   let error = null;
   try {
-    txid = await provider.connection.sendTransaction(tx, signers, {
+    txid = await provider.connection.sendRawTransaction(rawTx, {
       skipPreflight,
     })
   } catch (e) { error = e; }
@@ -44,10 +63,12 @@ export async function execute(
   return txid;
 }
 
+/// Read in a public key from a BinaryReader
 export function readPublicKey(reader: borsh.BinaryReader): PublicKey {
   return new PublicKey(reader.readFixedArray(32));
 }
 
+/// Extract the value of a Metaplex Bignum
 export function val(num: bignum): BN {
   if (BN.isBN(num)) {
     return num;
@@ -55,6 +76,7 @@ export function val(num: bignum): BN {
   return new BN(num);
 }
 
+/// Convert a string to a byte array, stored as an array of numbers
 export function strToByteArray(str: string, padTo?: number): number[] {
   let buf: Buffer = Buffer.from(
     [...str].reduce((acc, c, ind) => acc.concat([str.charCodeAt(ind)]), [])
@@ -65,8 +87,53 @@ export function strToByteArray(str: string, padTo?: number): number[] {
   return [...buf];
 }
 
+/// Convert a string to a byte array, stored in a Uint8Array
 export function strToByteUint8Array(str: string): Uint8Array {
   return Uint8Array.from(
     [...str].reduce((acc, c, ind) => acc.concat([str.charCodeAt(ind)]), [])
   );
+}
+
+/// Convert a 32 bit number to a buffer of bytes
+export function num32ToBuffer(num: number) {
+  const isU32 = (num >= 0 && num < Math.pow(2, 32));
+  if (!isU32) {
+    throw new Error("Attempted to convert non 32 bit integer to byte array")
+  }
+  const b = Buffer.alloc(4);
+  b.writeInt32LE(num);
+  return b;
+}
+
+/// Convert a 16 bit number to a buffer of bytes
+export function num16ToBuffer(num: number) {
+  const isU16 = (num >= 0 && num < Math.pow(2, 16));
+  if (!isU16) {
+    throw new Error("Attempted to convert non 16 bit integer to byte array")
+  }
+  const b = Buffer.alloc(2);
+  b.writeUInt16LE(num);
+  return b;
+}
+
+/// Check if two Array types contain the same values in order
+export function arrayEquals(a, b) {
+  return Array.isArray(a) &&
+    Array.isArray(b) &&
+    a.length === b.length &&
+    a.every((val, index) => val === b[index]);
+}
+
+/// Convert Buffer to Uint8Array
+export function bufferToArray(buffer: Buffer): number[] {
+  const nums = [];
+  for (let i = 0; i < buffer.length; i++) {
+    nums.push(buffer[i]);
+  }
+  return nums;
+}
+
+/// Remove null characters from a string. Useful for comparring byte-padded on-chain strings with off-chain values
+export const trimStringPadding = (str: string): string => {
+  return str.replace(/\0/g, '')
 }

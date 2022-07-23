@@ -126,7 +126,7 @@ createCommand("init")
                 mintPublicKey,
                 provider.connection
             );
-        const txId = await execute(provider, initializeGumballMachineInstrs, [creatorKeypair, gumballMachineKeypair, merkleRollKeypair], false, true);
+        const txId = await execute(provider, initializeGumballMachineInstrs, [creatorKeypair, gumballMachineKeypair, merkleRollKeypair], true, true);
         log.info(`TX Completed Successfully: ${txId}`);
     });
 
@@ -193,7 +193,7 @@ createCommand("add-config-lines")
                 },
                 configLinesToAdd
             );
-        const txId = await execute(provider, [addConfigLinesInstr], [authorityKeypair], false, true);
+        const txId = await execute(provider, [addConfigLinesInstr], [authorityKeypair], true, true);
         log.info(`TX Completed Successfully: ${txId}`);
     });
 
@@ -231,7 +231,7 @@ createCommand("update-config-lines")
                 },
                 updateConfigLinesArgs
             );
-        const txId = await execute(provider, [updateConfigLinesInstr], [authorityKeypair], false, true);
+        const txId = await execute(provider, [updateConfigLinesInstr], [authorityKeypair], true, true);
         log.info(`TX Completed Successfully: ${txId}`);
     });
 
@@ -269,7 +269,7 @@ createCommand("update-header-metadata")
                 },
                 updateGumballMachineHeaderArgs
             );
-        const txId = await execute(provider, [updateHeaderMetadataInstr], [authorityKeypair], false, true);
+        const txId = await execute(provider, [updateHeaderMetadataInstr], [authorityKeypair], true, true);
         log.info(`TX Completed Successfully: ${txId}`);
     });
 
@@ -299,7 +299,7 @@ createCommand("destroy")
                     authority: authorityKeypair.publicKey,
                 }
             );
-        const txId = await execute(provider, [destroyInstr], [authorityKeypair], false, true);
+        const txId = await execute(provider, [destroyInstr], [authorityKeypair], true, true);
         log.info(`TX Completed Successfully: ${txId}`);
     });
 
@@ -342,7 +342,7 @@ createCommand("dispense-nft-sol")
                 gumballMachinePublicKey,
                 merkleRollPublicKey
             );
-        const txId = await execute(provider, [dispenseNFTForSolIx], [payerKeypair], false, true);
+        const txId = await execute(provider, [dispenseNFTForSolIx], [payerKeypair], true, true);
         log.info(`TX Completed Successfully: ${txId}`);
     });
 
@@ -391,7 +391,7 @@ createCommand("dispense-nft-token")
                 gumballMachinePublicKey,
                 merkleRollPublicKey
             );
-        const txId = await execute(provider, [dispenseNFTForTokensIx], [payerKeypair], false, true);
+        const txId = await execute(provider, [dispenseNFTForTokensIx], [payerKeypair], true, true);
         log.info(`TX Completed Successfully: ${txId}`);
     });
 

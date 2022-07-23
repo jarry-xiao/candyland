@@ -53,8 +53,127 @@
       ]
     },
     {
+      "name": "requestMintAuthority",
+      "accounts": [
+        {
+          "name": "mintAuthorityRequest",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "mintAuthority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "treeAuthority",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "merkleSlab",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "mintCapacity",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "approveMintAuthorityRequest",
+      "accounts": [
+        {
+          "name": "mintAuthorityRequest",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "treeDelegate",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "treeAuthority",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "merkleSlab",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "closeMintRequest",
+      "accounts": [
+        {
+          "name": "mintAuthorityRequest",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "mintAuthority",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "treeAuthority",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "merkleSlab",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "setTreeDelegate",
+      "accounts": [
+        {
+          "name": "creator",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "newDelegate",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "merkleSlab",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "treeAuthority",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "mintV1",
       "accounts": [
+        {
+          "name": "mintAuthorityRequest",
+          "isMut": false,
+          "isSigner": false
+        },
         {
           "name": "mintAuthority",
           "isMut": false,
@@ -606,12 +725,48 @@
   ],
   "accounts": [
     {
-      "name": "Nonce",
+      "name": "MintRequest",
       "type": {
         "kind": "struct",
         "fields": [
           {
-            "name": "count",
+            "name": "mintAuthority",
+            "type": "publicKey"
+          },
+          {
+            "name": "mintCapacity",
+            "type": "u64"
+          },
+          {
+            "name": "approved",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TreeAuthority",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "creator",
+            "type": "publicKey"
+          },
+          {
+            "name": "delegate",
+            "type": "publicKey"
+          },
+          {
+            "name": "totalMintCapacity",
+            "type": "u64"
+          },
+          {
+            "name": "numMintsApproved",
+            "type": "u64"
+          },
+          {
+            "name": "numMinted",
             "type": "u64"
           }
         ]
@@ -1046,6 +1201,66 @@
       "code": 6003,
       "name": "UnsupportedSchemaVersion",
       "msg": "Unsupported Schema Version"
+    },
+    {
+      "code": 6004,
+      "name": "CreatorShareTotalMustBe100",
+      "msg": "Creator shares must sum to 100"
+    },
+    {
+      "code": 6005,
+      "name": "DuplicateCreatorAddress",
+      "msg": "No duplicate creator addresses in metadata"
+    },
+    {
+      "code": 6006,
+      "name": "CreatorsTooLong",
+      "msg": "Creators list too long"
+    },
+    {
+      "code": 6007,
+      "name": "MetadataNameTooLong",
+      "msg": "Name in metadata is too long"
+    },
+    {
+      "code": 6008,
+      "name": "MetadataSymbolTooLong",
+      "msg": "Symbol in metadata is too long"
+    },
+    {
+      "code": 6009,
+      "name": "MetadataUriTooLong",
+      "msg": "Uri in metadata is too long"
+    },
+    {
+      "code": 6010,
+      "name": "MetadataBasisPointsTooHigh",
+      "msg": "Basis points in metadata cannot exceed 10000"
+    },
+    {
+      "code": 6011,
+      "name": "InsufficientMintCapacity",
+      "msg": "Not enough unapproved mints left"
+    },
+    {
+      "code": 6012,
+      "name": "MintRequestNotApproved",
+      "msg": "Mint request not approved"
+    },
+    {
+      "code": 6013,
+      "name": "MintRequestKeyMismatch",
+      "msg": "Mint authority key does not match request"
+    },
+    {
+      "code": 6014,
+      "name": "MintRequestDiscriminatorMismatch",
+      "msg": "Mint request data has incorrect disciminator"
+    },
+    {
+      "code": 6015,
+      "name": "CloseMintRequestError",
+      "msg": "Something went wrong closing mint request"
     }
   ],
   "metadata": {
