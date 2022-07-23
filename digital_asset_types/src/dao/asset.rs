@@ -35,7 +35,12 @@ pub struct Model {
     pub chain_data_id: Option<i64>,
     pub created_at: Option<DateTimeWithTimeZone>,
     pub burnt: bool,
-    pub seq: i64,
+    pub bgum_tx_seq: Option<i64>,
+    pub bgum_burn_seq: Option<i64>,
+    pub bgum_delegate_seq: Option<i64>,
+    pub bgum_mint_seq: Option<i64>,
+    pub bgum_redeem_seq: Option<i64>,
+    pub bgum_cx_redeem_seq: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveColumn)]
@@ -59,7 +64,12 @@ pub enum Column {
     ChainDataId,
     CreatedAt,
     Burnt,
-    Seq,
+    BgumTxSeq,
+    BgumBurnSeq,
+    BgumDelegateSeq,
+    BgumMintSeq,
+    BgumRedeemSeq,
+    BgumCxRedeemSeq,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DerivePrimaryKey)]
@@ -105,7 +115,12 @@ impl ColumnTrait for Column {
             Self::ChainDataId => ColumnType::BigInteger.def().null(),
             Self::CreatedAt => ColumnType::TimestampWithTimeZone.def().null(),
             Self::Burnt => ColumnType::Boolean.def(),
-            Self::Seq => ColumnType::BigInteger.def(),
+            Self::BgumTxSeq => ColumnType::BigInteger.def().null(),
+            Self::BgumBurnSeq => ColumnType::BigInteger.def().null(),
+            Self::BgumDelegateSeq => ColumnType::BigInteger.def().null(),
+            Self::BgumMintSeq => ColumnType::BigInteger.def().null(),
+            Self::BgumRedeemSeq => ColumnType::BigInteger.def().null(),
+            Self::BgumCxRedeemSeq => ColumnType::BigInteger.def().null(),
         }
     }
 }

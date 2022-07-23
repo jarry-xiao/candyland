@@ -19,7 +19,12 @@ pub struct Model {
     pub creator: Vec<u8>,
     pub share: i32,
     pub verified: bool,
-    pub seq: i64,
+    pub bgum_tx_seq: Option<i64>,
+    pub bgum_burn_seq: Option<i64>,
+    pub bgum_delegate_seq: Option<i64>,
+    pub bgum_mint_seq: Option<i64>,
+    pub bgum_redeem_seq: Option<i64>,
+    pub bgum_cx_redeem_seq: Option<i64>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveColumn)]
@@ -29,7 +34,12 @@ pub enum Column {
     Creator,
     Share,
     Verified,
-    Seq,
+    BgumTxSeq,
+    BgumBurnSeq,
+    BgumDelegateSeq,
+    BgumMintSeq,
+    BgumRedeemSeq,
+    BgumCxRedeemSeq,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DerivePrimaryKey)]
@@ -58,7 +68,12 @@ impl ColumnTrait for Column {
             Self::Creator => ColumnType::Binary.def(),
             Self::Share => ColumnType::Integer.def(),
             Self::Verified => ColumnType::Boolean.def(),
-            Self::Seq => ColumnType::BigInteger.def(),
+            Self::BgumTxSeq => ColumnType::BigInteger.def().null(),
+            Self::BgumBurnSeq => ColumnType::BigInteger.def().null(),
+            Self::BgumDelegateSeq => ColumnType::BigInteger.def().null(),
+            Self::BgumMintSeq => ColumnType::BigInteger.def().null(),
+            Self::BgumRedeemSeq => ColumnType::BigInteger.def().null(),
+            Self::BgumCxRedeemSeq => ColumnType::BigInteger.def().null(),
         }
     }
 }

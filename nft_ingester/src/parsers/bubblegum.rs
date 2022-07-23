@@ -182,15 +182,17 @@ async fn tree_change_only<'a>(
 }
 
 async fn update_asset(
-    txn: &DatabaseTransaction,
+    db_txn: &DatabaseTransaction,
     id: Vec<u8>,
+    seq_col: asset::Column,
     seq: u64,
     model: asset::ActiveModel,
 ) -> Result<asset::Model, IngesterError> {
+
     asset::Entity::update(model)
         .filter(asset::Column::Id.eq(id))
-        .filter(asset::Column::Seq.lt(seq))
-        .exec(txn)
+        .filter(seq_col.is_null().or(seq_col.lte(seq)))
+        .exec(db_txn)
         .await
         .map_err(Into::into)
 }
@@ -203,15 +205,15 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
     db: &DatabaseConnection,
     task_manager: &UnboundedSender<Box<dyn BgTask>>,
 ) -> Result<(), IngesterError> {
-    let ix_type = bubblegum::get_instruction_type(instruction.data().unwrap());
-    match ix_type {
+    let ix_name = bubblegum::get_instruction_type(instruction.data().unwrap());
+    match ix_name {
         bubblegum::InstructionName::Transfer => {
             println!("BGUM: Transfer");
             let gummy_roll_events = get_gummy_roll_events(logs)?;
             let leaf_event = get_leaf_event(logs)?;
-            db.transaction::<_, _, IngesterError>(|txn| {
+            db.transaction::<_, _, IngesterError>(|db_txn| {
                 Box::pin(async move {
-                    let seq = save_changelog_events(gummy_roll_events, slot, txn)
+                    let seq = save_changelog_events(gummy_roll_events, slot, db_txn)
                         .await?
                         .ok_or(IngesterError::ChangeLogEventMalformed)?;
                     match leaf_event.schema {
@@ -228,10 +230,10 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                                 leaf: Set(Some(leaf_event.schema.to_node().to_vec())),
                                 delegate: Set(None),
                                 owner: Set(owner_bytes),
-                                seq: Set(seq as i64), // gummyroll seq
+                                bgum_tx_seq: Set(Some(seq as i64)), // gummyroll seq
                                 ..Default::default()
                             };
-                            update_asset(txn, id_bytes, seq, asset_to_update).await
+                            update_asset(db_txn, id_bytes, asset::Column::BgumTxSeq, seq, asset_to_update).await
                         }
                         _ => Err(IngesterError::NotImplemented)
                     }
@@ -242,9 +244,9 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
             println!("BGUM: Burn");
             let gummy_roll_events = get_gummy_roll_events(logs)?;
             let leaf_event = get_leaf_event(logs)?;
-            db.transaction::<_, _, IngesterError>(|txn| {
+            db.transaction::<_, _, IngesterError>(|db_txn| {
                 Box::pin(async move {
-                    let seq = save_changelog_events(gummy_roll_events, slot, txn)
+                    let seq = save_changelog_events(gummy_roll_events, slot, db_txn)
                         .await?
                         .ok_or(IngesterError::ChangeLogEventMalformed)?;
                     match leaf_event.schema {
@@ -258,10 +260,10 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                             let asset_to_update = asset::ActiveModel {
                                 id: Unchanged(id_bytes.clone()),
                                 burnt: Set(true),
-                                seq: Set(seq as i64), // gummyroll seq
+                                bgum_burn_seq: Set(Some(seq as i64)), // gummyroll seq
                                 ..Default::default()
                             };
-                            update_asset(txn, id_bytes, seq, asset_to_update).await
+                            update_asset(db_txn, id_bytes, asset::Column::BgumBurnSeq, seq, asset_to_update).await
                         }
                         _ => Err(IngesterError::NotImplemented)
                     }
@@ -272,9 +274,9 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
             println!("BGUM: Delegate");
             let gummy_roll_events = get_gummy_roll_events(logs)?;
             let leaf_event = get_leaf_event(logs)?;
-            db.transaction::<_, _, IngesterError>(|txn| {
+            db.transaction::<_, _, IngesterError>(|db_txn| {
                 Box::pin(async move {
-                    let seq = save_changelog_events(gummy_roll_events, slot, txn)
+                    let seq = save_changelog_events(gummy_roll_events, slot, db_txn)
                         .await?
                         .ok_or(IngesterError::ChangeLogEventMalformed)?;
                     match leaf_event.schema {
@@ -289,10 +291,10 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                                 id: Unchanged(id_bytes.clone()),
                                 leaf: Set(Some(leaf_event.schema.to_node().to_vec())),
                                 delegate: Set(Some(delegate_bytes)),
-                                seq: Set(seq as i64), // gummyroll seq
+                                bgum_delegate_seq: Set(Some(seq as i64)), // gummyroll seq
                                 ..Default::default()
                             };
-                            update_asset(txn, id_bytes, seq, asset_to_update).await
+                            update_asset(db_txn, id_bytes, asset::Column::BgumDelegateSeq, seq, asset_to_update).await
                         }
                         _ => Err(IngesterError::NotImplemented)
                     }
@@ -313,9 +315,9 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
             let delegate = bytes_from_fb_table(keys, accounts[5] as usize);
             let merkle_slab = bytes_from_fb_table(keys, accounts[6] as usize);
             let metadata = ix.message.clone();
-            let asset_data_id = db.transaction::<_, i64, IngesterError>(|txn| {
+            let asset_data_id = db.transaction::<_, i64, IngesterError>(|db_txn| {
                 Box::pin(async move {
-                    let seq = save_changelog_events(gummy_roll_events, slot, txn)
+                    let seq = save_changelog_events(gummy_roll_events, slot, db_txn)
                         .await?
                         .ok_or(IngesterError::ChangeLogEventMalformed)?;
 
@@ -370,7 +372,7 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                                 metadata: Set(JsonValue::String("processing".to_string())),
                                 metadata_mutability: Set(Mutability::Mutable),
                                 ..Default::default()
-                            }.insert(txn).await?;
+                            }.insert(db_txn).await?;
 
                             // Insert into `asset` table.
                             let delegate = if owner == delegate {
@@ -396,7 +398,7 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                                 royalty_target: Set(None),
                                 royalty_amount: Set(metadata.seller_fee_basis_points as i32), //basis points
                                 chain_data_id: Set(Some(data.id)),
-                                seq: Set(seq as i64), // gummyroll seq
+                                bgum_mint_seq: Set(Some(seq as i64)), // gummyroll seq
                                 ..Default::default()
                             };
 
@@ -423,13 +425,14 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                                             asset::Column::RoyaltyTarget,
                                             asset::Column::RoyaltyAmount,
                                             asset::Column::ChainDataId,
-                                            asset::Column::Seq,
+                                            asset::Column::BgumMintSeq,
                                         ])
                                         .to_owned(),
                                 )
                                 .build(DbBackend::Postgres);
                             query.sql =
-                                format!("{} WHERE excluded.seq >= asset.seq", query.sql);
+                                format!("{} WHERE asset.bgum_mint_seq IS NULL OR\n\
+                                excluded.bgum_mint_seq >= asset.bgum_mint_seq", query.sql);
 
                             // Other method: do NOT attempt to modify any values: `ON CONFLICT DO NOTHING`.
                             // let query = asset::Entity::insert(model)
@@ -440,7 +443,7 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                             //     )
                             //     .build(DbBackend::Postgres);
 
-                            txn.execute(query).await?;
+                            db_txn.execute(query).await?;
 
                             // Insert into `asset_creators` table.
                             if metadata.creators.len() > 0 {
@@ -451,57 +454,59 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                                         creator: Set(c.address.to_bytes().to_vec()),
                                         share: Set(c.share as i32),
                                         verified: Set(c.verified),
-                                        seq: Set(seq as i64), // gummyroll seq
+                                        bgum_mint_seq: Set(Some(seq as i64)), // gummyroll seq
                                         ..Default::default()
                                     });
                                 }
 
                                 let mut query = asset_creators::Entity::insert_many(creators)
                                     .on_conflict(
-                                        OnConflict::columns([asset_creators::Column::Id])
+                                        OnConflict::columns([asset_creators::Column::AssetId])
                                             .update_columns([
                                                 asset_creators::Column::AssetId,
                                                 asset_creators::Column::Creator,
                                                 asset_creators::Column::Share,
                                                 asset_creators::Column::Verified,
-                                                asset_creators::Column::Seq,
+                                                asset_creators::Column::BgumMintSeq,
                                             ])
                                             .to_owned(),
                                     )
                                     .build(DbBackend::Postgres);
                                 query.sql = format!(
-                                    "{} WHERE excluded.seq >= asset_creators.seq",
+                                    "{} WHERE asset_creators.bgum_mint_seq IS NULL OR\n\
+                                    excluded.bgum_mint_seq >= asset_creators.bgum_mint_seq",
                                     query.sql
                                 );
 
-                                txn.execute(query).await?;
+                                db_txn.execute(query).await?;
 
                                 // Insert into `asset_authority` table.
                                 let model = asset_authority::ActiveModel {
                                     asset_id: Set(id.to_bytes().to_vec()),
                                     authority: Set(update_authority),
-                                    seq: Set(seq as i64), // gummyroll seq
+                                    bgum_mint_seq: Set(Some(seq as i64)), // gummyroll seq
                                     ..Default::default()
                                 };
 
                                 let mut query = asset_authority::Entity::insert(model)
                                     .on_conflict(
-                                        OnConflict::columns([asset_authority::Column::Id])
+                                        OnConflict::columns([asset_authority::Column::AssetId])
                                             .update_columns([
                                                 asset_authority::Column::AssetId,
                                                 asset_authority::Column::Scopes,
                                                 asset_authority::Column::Authority,
-                                                asset_authority::Column::Seq,
+                                                asset_authority::Column::BgumMintSeq,
                                             ])
                                             .to_owned(),
                                     )
                                     .build(DbBackend::Postgres);
                                 query.sql = format!(
-                                    "{} WHERE excluded.seq >= asset_authority.seq",
+                                    "{} WHERE asset_authority.bgum_mint_seq IS NULL OR\n\
+                                    excluded.bgum_mint_seq >= asset_authority.bgum_mint_seq",
                                     query.sql
                                 );
 
-                                txn.execute(query).await?;
+                                db_txn.execute(query).await?;
 
                                 // Insert into `asset_grouping` table.
                                 if let Some(c) = metadata.collection {
@@ -510,28 +515,29 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                                             asset_id: Set(id.to_bytes().to_vec()),
                                             group_key: Set("collection".to_string()),
                                             group_value: Set(c.key.to_string()),
-                                            seq: Set(seq as i64), // gummyroll seq
+                                            bgum_mint_seq: Set(Some(seq as i64)), // gummyroll seq
                                             ..Default::default()
                                         };
 
                                         let mut query = asset_grouping::Entity::insert(model)
                                             .on_conflict(
-                                                OnConflict::columns([asset_grouping::Column::Id])
+                                                OnConflict::columns([asset_grouping::Column::AssetId])
                                                     .update_columns([
                                                         asset_grouping::Column::AssetId,
                                                         asset_grouping::Column::GroupKey,
                                                         asset_grouping::Column::GroupValue,
-                                                        asset_grouping::Column::Seq,
+                                                        asset_grouping::Column::BgumMintSeq,
                                                     ])
                                                     .to_owned(),
                                             )
                                             .build(DbBackend::Postgres);
                                         query.sql = format!(
-                                            "{} WHERE excluded.seq >= asset_grouping.seq",
+                                            "{} WHERE asset_grouping.bgum_mint_seq IS NULL OR\n\
+                                            excluded.bgum_mint_seq >= asset_grouping.bgum_mint_seq",
                                             query.sql
                                         );
 
-                                        txn.execute(query).await?;
+                                        db_txn.execute(query).await?;
                                     }
                                 }
                             }
@@ -550,12 +556,12 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
             task_manager.send(Box::new(task.unwrap()))?;
         }
         bubblegum::InstructionName::Redeem => {
-            println!("Bubblegum: Redeem");
+            println!("BGUM: Redeem");
             let gummy_roll_events = get_gummy_roll_events(logs)?;
             let leaf_event = get_leaf_event(logs)?;
-            db.transaction::<_, _, IngesterError>(|txn| {
+            db.transaction::<_, _, IngesterError>(|db_txn| {
                 Box::pin(async move {
-                    let seq = save_changelog_events(gummy_roll_events, slot, txn)
+                    let seq = save_changelog_events(gummy_roll_events, slot, db_txn)
                         .await?
                         .ok_or(IngesterError::ChangeLogEventMalformed)?;
                     match leaf_event.schema {
@@ -567,10 +573,10 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                             let asset_to_update = asset::ActiveModel {
                                 id: Unchanged(id_bytes.clone()),
                                 leaf: Set(Some(vec![0; 32])),
-                                seq: Set(seq as i64), // gummyroll seq
+                                bgum_redeem_seq: Set(Some(seq as i64)), // gummyroll seq
                                 ..Default::default()
                             };
-                            update_asset(txn, id_bytes, seq, asset_to_update).await
+                            update_asset(db_txn, id_bytes, asset::Column::BgumRedeemSeq, seq, asset_to_update).await
                         }
                         _ => Err(IngesterError::NotImplemented)
                     }
@@ -578,11 +584,12 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
             }).await?;
         }
         bubblegum::InstructionName::CancelRedeem => {
+            println!("BGUM: Cancel Redeem");
             let gummy_roll_events = get_gummy_roll_events(logs)?;
             let leaf_event = get_leaf_event(logs)?;
-            db.transaction::<_, _, IngesterError>(|txn| {
+            db.transaction::<_, _, IngesterError>(|db_txn| {
                 Box::pin(async move {
-                    let seq = save_changelog_events(gummy_roll_events, slot, txn)
+                    let seq = save_changelog_events(gummy_roll_events, slot, db_txn)
                         .await?
                         .ok_or(IngesterError::ChangeLogEventMalformed)?;
                     match leaf_event.schema {
@@ -594,10 +601,10 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                             let asset_to_update = asset::ActiveModel {
                                 id: Unchanged(id_bytes.clone()),
                                 leaf: Set(Some(leaf_event.schema.to_node().to_vec())),
-                                seq: Set(seq as i64), // gummyroll seq
+                                bgum_cx_redeem_seq: Set(Some(seq as i64)), // gummyroll seq
                                 ..Default::default()
                             };
-                            update_asset(txn, id_bytes, seq, asset_to_update).await
+                            update_asset(db_txn, id_bytes, asset::Column::BgumCxRedeemSeq, seq, asset_to_update).await
                         }
                         _ => Err(IngesterError::NotImplemented)
                     }
@@ -607,7 +614,7 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
         bubblegum::InstructionName::DecompressV1 => {
             println!("BGUM: Decompress");
             let decompress_event = get_decompress_event(logs)?;
-            db.transaction::<_, _, IngesterError>(|txn| {
+            db.transaction::<_, _, IngesterError>(|db_txn| {
                 Box::pin(async move {
                     match decompress_event.version {
                         Version::V1 => {
@@ -625,11 +632,14 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                             // With this particular bubblegum instruction, there is no associated
                             // gummyroll instruction, so there is no update to sequence number.
                             // Therefore the method used with other bubblegum instructions, which is
-                            // to only do the update if `<this instruction's seq> >= asset.seq`,
-                            // is not available.  Because the decompress instruction either clears
-                            // column values or sets them to safe values that would be the same
-                            // even if other instructions occurred afterwards, it is safe to replay
-                            // this command even if the table has been updated by later instructions.
+                            // to only do the update if:
+                            // `<this instruction's seq> >= <seq num in table for same instruction>`
+                            // is not available.
+                            //
+                            // After the decompress instruction runs, the asset is no longer managed
+                            // by Bubblegum and Gummyroll, so there will not be any other instructions
+                            // after this one.
+                            //
                             // Note we do not run this command if the asset is already marked as
                             // not compressed.
                             let query = asset::Entity::update(model)
@@ -637,7 +647,7 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                                 .filter(asset::Column::Compressed.eq(true))
                                 .build(DbBackend::Postgres);
 
-                            txn.execute(query).await.map(|_| ()).map_err(Into::into)
+                            db_txn.execute(query).await.map(|_| ()).map_err(Into::into)
                         }
                         _ => Err(IngesterError::NotImplemented)
                     }
