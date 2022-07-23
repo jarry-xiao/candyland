@@ -109,7 +109,13 @@ create table asset
     chain_data_id         bigint references asset_data (id),
     -- visibility
     created_at            timestamp with time zone     default (now() at time zone 'utc'),
-    burnt                 bool                not null default false
+    burnt                 bool                not null default false,
+    bgum_tx_seq           bigint,
+    bgum_burn_seq         bigint,
+    bgum_delegate_seq     bigint,
+    bgum_mint_seq         bigint,
+    bgum_redeem_seq       bigint,
+    bgum_cx_redeem_seq    bigint
 );
 
 create index asset_tree on asset (tree_id);
@@ -122,10 +128,16 @@ create index asset_delegate on asset (delegate);
 -- grouping
 create table asset_grouping
 (
-    id          bigserial PRIMARY KEY,
-    asset_id    bytea references asset (id) not null,
-    group_key   text                        not null,
-    group_value text                        not null
+    id                    bigserial PRIMARY KEY,
+    asset_id              bytea references asset (id) not null,
+    group_key             text                        not null,
+    group_value           text                        not null,
+    bgum_tx_seq           bigint,
+    bgum_burn_seq         bigint,
+    bgum_delegate_seq     bigint,
+    bgum_mint_seq         bigint,
+    bgum_redeem_seq       bigint,
+    bgum_cx_redeem_seq    bigint
 );
 -- Limit indexable grouping keys, meaning only create on specific keys, but index the ones we allow
 create index asset_grouping_key on asset_grouping (group_key, group_value);
@@ -134,23 +146,34 @@ create index asset_grouping_value on asset_grouping (group_key, asset_id);
 -- authority
 create table asset_authority
 (
-    id        bigserial PRIMARY KEY,
-    asset_id  bytea references asset (id) not null,
-    scopes    text[],
-    authority bytea                       not null
+    id                    bigserial PRIMARY KEY,
+    asset_id              bytea references asset (id) not null,
+    scopes                text[],
+    authority             bytea                       not null,
+    bgum_tx_seq           bigint,
+    bgum_burn_seq         bigint,
+    bgum_delegate_seq     bigint,
+    bgum_mint_seq         bigint,
+    bgum_redeem_seq       bigint,
+    bgum_cx_redeem_seq    bigint
 );
 create index asset_authority_idx on asset_authority (asset_id, authority);
 
 -- creators
 create table asset_creators
 (
-    id       bigserial PRIMARY KEY,
-    asset_id bytea references asset (id) not null,
-    creator  bytea                       not null,
-    share    int                         not null default 0,
-    verified bool                        not null default false
+    id                    bigserial PRIMARY KEY,
+    asset_id              bytea references asset (id) not null,
+    creator               bytea                       not null,
+    share                 int                 not null default 0,
+    verified              bool                not null default false,
+    bgum_tx_seq           bigint,
+    bgum_burn_seq         bigint,
+    bgum_delegate_seq     bigint,
+    bgum_mint_seq         bigint,
+    bgum_redeem_seq       bigint,
+    bgum_cx_redeem_seq    bigint
 );
-
 
 create index asset_creator on asset_creators (asset_id, creator);
 create index asset_verified_creator on asset_creators (asset_id, verified);
