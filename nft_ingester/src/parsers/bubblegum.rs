@@ -21,6 +21,7 @@ use {
         sea_query::OnConflict,
         DbBackend,
         ExecResult,
+        DbErr
     },
     solana_sdk::pubkeys,
     digital_asset_types::{
@@ -173,8 +174,7 @@ async fn tree_change_only<'a>(
     let gummy_roll_events = get_gummy_roll_events(logs)?;
     db.transaction::<_, _, IngesterError>(|txn| {
         Box::pin(async move {
-            let _seq = save_changelog_events(gummy_roll_events, slot, txn).await?;
-            Ok(())
+            save_changelog_events(gummy_roll_events, slot, txn).await.map(|_| ())
         })
     })
         .await
@@ -184,15 +184,33 @@ async fn tree_change_only<'a>(
 async fn update_asset(
     txn: &DatabaseTransaction,
     id: Vec<u8>,
-    seq: u64,
+    seq: Option<u64>,
     model: asset::ActiveModel,
-) -> Result<asset::Model, IngesterError> {
-    asset::Entity::update(model)
-        .filter(asset::Column::Id.eq(id))
-        .filter(asset::Column::Seq.lte(seq))
-        .exec(txn)
-        .await
-        .map_err(Into::into)
+) -> Result<(), IngesterError> {
+    let update_one = if let Some(seq) = seq {
+        asset::Entity::update(model)
+            .filter(asset::Column::Id.eq(id))
+            .filter(asset::Column::Seq.lte(seq))
+    } else {
+        asset::Entity::update(model)
+            .filter(asset::Column::Id.eq(id))
+    };
+
+    match update_one.exec(txn).await {
+        Ok(_) => Ok(()),
+        Err(err) => {
+            match err {
+                DbErr::RecordNotFound(ref s) => {
+                    if s.find("None of the database rows are affected") != None {
+                        Ok(())
+                    } else {
+                        Err(IngesterError::from(err))
+                    }
+                },
+                _ => Err(IngesterError::from(err))
+            }
+        }
+    }
 }
 
 async fn handle_bubblegum_instruction<'a, 'b, 't>(
@@ -216,22 +234,27 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                         .ok_or(IngesterError::ChangeLogEventMalformed)?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
-                            nonce: _,
                             id,
+                            delegate,
                             owner,
                             ..
                         } => {
-                            let owner_bytes = owner.to_bytes().to_vec();
                             let id_bytes = id.to_bytes().to_vec();
+                            let delegate = if owner == delegate {
+                                None
+                            } else {
+                                Some(delegate.to_bytes().to_vec())
+                            };
+                            let owner_bytes = owner.to_bytes().to_vec();
                             let asset_to_update = asset::ActiveModel {
                                 id: Unchanged(id_bytes.clone()),
                                 leaf: Set(Some(leaf_event.schema.to_node().to_vec())),
-                                delegate: Set(None),
+                                delegate: Set(delegate),
                                 owner: Set(owner_bytes),
                                 seq: Set(seq as i64), // gummyroll seq
                                 ..Default::default()
                             };
-                            update_asset(txn, id_bytes, seq, asset_to_update).await
+                            update_asset(txn, id_bytes, Some(seq), asset_to_update).await
                         }
                         _ => Err(IngesterError::NotImplemented)
                     }
@@ -250,18 +273,17 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                     match leaf_event.schema {
                         LeafSchema::V1 {
                             id,
-                            delegate,
                             ..
                         } => {
-                            let _delegate_bytes = delegate.to_bytes().to_vec();
                             let id_bytes = id.to_bytes().to_vec();
                             let asset_to_update = asset::ActiveModel {
                                 id: Unchanged(id_bytes.clone()),
                                 burnt: Set(true),
-                                seq: Set(seq as i64), // gummyroll seq
                                 ..Default::default()
                             };
-                            update_asset(txn, id_bytes, seq, asset_to_update).await
+                            // Don't send sequence number with this update, because we will always
+                            // run this update even if it's from a backfill/replay.
+                            update_asset(txn, id_bytes, None, asset_to_update).await
                         }
                         _ => Err(IngesterError::NotImplemented)
                     }
@@ -281,18 +303,25 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                         LeafSchema::V1 {
                             id,
                             delegate,
+                            owner,
                             ..
                         } => {
-                            let delegate_bytes = delegate.to_bytes().to_vec();
                             let id_bytes = id.to_bytes().to_vec();
+                            let delegate = if owner == delegate {
+                                None
+                            } else {
+                                Some(delegate.to_bytes().to_vec())
+                            };
+                            let owner_bytes = owner.to_bytes().to_vec();
                             let asset_to_update = asset::ActiveModel {
                                 id: Unchanged(id_bytes.clone()),
                                 leaf: Set(Some(leaf_event.schema.to_node().to_vec())),
-                                delegate: Set(Some(delegate_bytes)),
+                                delegate: Set(delegate),
+                                owner: Set(owner_bytes),
                                 seq: Set(seq as i64), // gummyroll seq
                                 ..Default::default()
                             };
-                            update_asset(txn, id_bytes, seq, asset_to_update).await
+                            update_asset(txn, id_bytes, Some(seq), asset_to_update).await
                         }
                         _ => Err(IngesterError::NotImplemented)
                     }
@@ -561,16 +590,26 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                     match leaf_event.schema {
                         LeafSchema::V1 {
                             id,
+                            delegate,
+                            owner,
                             ..
                         } => {
                             let id_bytes = id.to_bytes().to_vec();
+                            let delegate = if owner == delegate {
+                                None
+                            } else {
+                                Some(delegate.to_bytes().to_vec())
+                            };
+                            let owner_bytes = owner.to_bytes().to_vec();
                             let asset_to_update = asset::ActiveModel {
                                 id: Unchanged(id_bytes.clone()),
                                 leaf: Set(Some(vec![0; 32])),
+                                delegate: Set(delegate),
+                                owner: Set(owner_bytes),
                                 seq: Set(seq as i64), // gummyroll seq
                                 ..Default::default()
                             };
-                            update_asset(txn, id_bytes, seq, asset_to_update).await
+                            update_asset(txn, id_bytes, Some(seq), asset_to_update).await
                         }
                         _ => Err(IngesterError::NotImplemented)
                     }
@@ -589,16 +628,26 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                     match leaf_event.schema {
                         LeafSchema::V1 {
                             id,
+                            delegate,
+                            owner,
                             ..
                         } => {
                             let id_bytes = id.to_bytes().to_vec();
+                            let delegate = if owner == delegate {
+                                None
+                            } else {
+                                Some(delegate.to_bytes().to_vec())
+                            };
+                            let owner_bytes = owner.to_bytes().to_vec();
                             let asset_to_update = asset::ActiveModel {
                                 id: Unchanged(id_bytes.clone()),
                                 leaf: Set(Some(leaf_event.schema.to_node().to_vec())),
+                                delegate: Set(delegate),
+                                owner: Set(owner_bytes),
                                 seq: Set(seq as i64), // gummyroll seq
                                 ..Default::default()
                             };
-                            update_asset(txn, id_bytes, seq, asset_to_update).await
+                            update_asset(txn, id_bytes, Some(seq), asset_to_update).await
                         }
                         _ => Err(IngesterError::NotImplemented)
                     }
@@ -623,18 +672,12 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                                 ..Default::default()
                             };
 
-                            // With this particular bubblegum instruction, there is no associated
-                            // gummyroll instruction, so there is no update to tree sequence number.
-                            // Therefore the method used with other bubblegum instructions, which is
-                            // to only do the update if
-                            // `<this instruction's seq> >= <seq num in table>` is not available.
-                            //
                             // After the decompress instruction runs, the asset is no longer managed
                             // by Bubblegum and Gummyroll, so there will not be any other instructions
                             // after this one.
                             //
-                            // Note we do not run this command if the asset is already marked as
-                            // not compressed.
+                            // Do not run this command if the asset is already marked as
+                            // decompressed.
                             let query = asset::Entity::update(model)
                                 .filter(asset::Column::Id.eq(id_bytes))
                                 .filter(asset::Column::Compressed.eq(true))
