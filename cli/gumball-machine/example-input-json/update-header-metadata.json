@@ -11,7 +11,13 @@
     "goLiveDate": 1234.0,
     "botWallet": "CwKozhKgAEkxHhJ6AwBn6faFstKWmoFB4JYz18RyxExz",
     "authority": "Es1EV724ihL7mYzjEiUV1QgcNdwoTpGByLiWSwKFRsAb",
-    "maxMintSize": 10
+    "receiver": "CwKozhKgAEkxHhJ6AwBn6faFstKWmoFB4JYz18RyxExz",
+    "maxMintSize": 5,
+    "creatorKeys": [
+      "H8DWGKyCSaKtgh1GjyqexVcMe8FPyKQoBhKH79QnhDWx",
+      "Es1EV724ihL7mYzjEiUV1QgcNdwoTpGByLiWSwKFRsAb"
+    ],
+    "creatorShares": [40, 60]
   },
   "optionals": {}
 }
