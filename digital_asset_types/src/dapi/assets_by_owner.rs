@@ -1,18 +1,9 @@
-use std::cmp;
-
 use crate::dao::prelude::{Asset, AssetData};
-use crate::dao::{asset, asset_authority, asset_creators, asset_data, asset_grouping, cl_items};
+use crate::dao::{asset, asset_authority, asset_creators, asset_grouping};
 use crate::dapi::asset::{get_content, to_authority, to_creators, to_grouping};
-use crate::dapi::utils::asset_grouping;
 use crate::rpc::filter::AssetSorting;
 use crate::rpc::response::AssetList;
-use crate::rpc::{
-    Asset as RpcAsset, Authority, Compression, Content, Creator, File, Group, Interface, Links,
-    Ownership, Royalty, Scope,
-};
-use futures::future::join_all;
-use jsonpath_lib::JsonPathError;
-use mime_guess::Mime;
+use crate::rpc::{Asset as RpcAsset, Compression, Interface, Ownership, Royalty};
 use sea_orm::DatabaseConnection;
 use sea_orm::{entity::*, query::*, DbErr};
 
