@@ -94,6 +94,8 @@ export function computeDataHash(sellerFeeBasisPoints: number, mintIx?: Transacti
 
     if (typeof mintIx !== 'undefined') {
         metadataArgsHash = computeMetadataArgsHash(mintIx);
+    } else {
+        metadataArgsHash = [];
     }
 
     const sellerFeeBasisPointsNumberArray = bufferToArray(num16ToBuffer(sellerFeeBasisPoints))

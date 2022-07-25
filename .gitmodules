@@ -7,9 +7,6 @@
 [submodule "deps/accountsdb-postgres"]
 	path = deps/accountsdb-postgres
 	url = https://github.com/solana-labs/solana-accountsdb-plugin-postgres.git
-[submodule "deps/solana"]
-	path = deps/solana
-	url = https://github.com/solana-labs/solana.git
 [submodule "deps/anchor"]
 	path = deps/anchor
 	url = https://github.com/ngundotra/anchor

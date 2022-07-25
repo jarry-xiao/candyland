@@ -24,7 +24,7 @@ export class OnChainMerkleRoll {
       let idx = (this.roll.activeIndex - j) & mask;
       let changeLog = this.roll.changeLogs[idx];
       let pathLen = changeLog.pathNodes.length;
-      for (const [lvl, key] of changeLog.pathNodes.entries()) {
+      for (const [lvl, key] of Array.from(changeLog.pathNodes.entries())) {
         let nodeIdx = (1 << (pathLen - lvl)) + (changeLog.index >> lvl);
         pathNodes.push({
           node: key,
@@ -164,6 +164,9 @@ export async function assertOnChainMerkleRollProperties(
   merkleRollPubkey: PublicKey
 ) {
   const merkleRoll = await connection.getAccountInfo(merkleRollPubkey);
+  if (!merkleRoll) {
+    throw new Error("On-chain merkle roll account is null");
+  }
   const merkleRollAcct = decodeMerkleRoll(merkleRoll.data);
 
   assert(
