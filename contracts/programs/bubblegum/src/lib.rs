@@ -3,13 +3,14 @@ use {
     crate::state::metaplex_anchor::MplTokenMetadata,
     crate::state::{
         leaf_schema::{LeafSchema, Version},
-        metaplex_adapter::{MetadataArgs, TokenProgramVersion},
+        metaplex_adapter::{Creator, MetadataArgs, TokenProgramVersion},
         metaplex_anchor::{MasterEdition, TokenMetadata},
         NFTDecompressionEvent, NewNFTEvent, Nonce, Voucher, ASSET_PREFIX, NONCE_SIZE,
         VOUCHER_PREFIX, VOUCHER_SIZE,
     },
     crate::utils::{
-        append_leaf, assert_pubkey_equal, cmp_bytes, cmp_pubkeys, get_asset_id, replace_leaf,
+        append_leaf, assert_metadata_is_mpl_compatible, assert_pubkey_equal, cmp_bytes,
+        cmp_pubkeys, get_asset_id, replace_leaf,
     },
     anchor_lang::{
         prelude::*,
@@ -286,7 +287,12 @@ pub struct Compress<'info> {
 }
 
 pub fn hash_metadata(metadata: &MetadataArgs) -> Result<[u8; 32]> {
-    Ok(keccak::hashv(&[metadata.try_to_vec()?.as_slice()]).to_bytes())
+    let metadata_args_hash = keccak::hashv(&[metadata.try_to_vec()?.as_slice()]);
+    Ok(keccak::hashv(&[
+        &metadata_args_hash.to_bytes(),
+        &metadata.seller_fee_basis_points.to_le_bytes(),
+    ])
+    .to_bytes())
 }
 
 pub enum InstructionName {
@@ -337,7 +343,6 @@ pub mod bubblegum {
             ctx.accounts.gummyroll_program.to_account_info(),
             gummyroll::cpi::accounts::Initialize {
                 authority: ctx.accounts.authority.to_account_info(),
-                append_authority: ctx.accounts.tree_creator.to_account_info(),
                 merkle_roll: merkle_slab,
                 candy_wrapper: ctx.accounts.candy_wrapper.to_account_info(),
             },
@@ -349,11 +354,17 @@ pub mod bubblegum {
     pub fn mint_v1(ctx: Context<MintV1>, message: MetadataArgs) -> Result<()> {
         // TODO -> Pass collection in check collection authority or collection delegate authority signer
         // TODO -> Separate V1 / V1 into seperate instructions
-        //
+        assert_metadata_is_mpl_compatible(&message)?;
         let owner = ctx.accounts.owner.key();
         let delegate = ctx.accounts.delegate.key();
         let merkle_slab = ctx.accounts.merkle_slab.to_account_info();
-        let data_hash = keccak::hashv(&[message.try_to_vec()?.as_slice()]);
+
+        // @dev: seller_fee_basis points is encoded twice so that it can be passed to marketplace instructions, without passing the entire, un-hashed MetadataArgs struct
+        let metadata_args_hash = keccak::hashv(&[message.try_to_vec()?.as_slice()]);
+        let data_hash = keccak::hashv(&[
+            &metadata_args_hash.to_bytes(),
+            &message.seller_fee_basis_points.to_le_bytes(),
+        ]);
         let nonce = &mut ctx.accounts.authority;
         let creator_data = message
             .creators
@@ -744,7 +755,18 @@ pub mod bubblegum {
                 metadata.symbol.clone(),
                 metadata.uri.clone(),
                 if metadata.creators.len() > 0 {
-                    Some(metadata.creators.iter().map(|c| c.adapt()).collect())
+                    let mut amended_metadata_creators = metadata.creators;
+                    amended_metadata_creators.push(Creator {
+                        address: ctx.accounts.mint_authority.key(),
+                        verified: true,
+                        share: 0,
+                    });
+                    Some(
+                        amended_metadata_creators
+                            .iter()
+                            .map(|c| c.adapt())
+                            .collect(),
+                    )
                 } else {
                     None
                 },
