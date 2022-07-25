@@ -7,7 +7,7 @@ use crate::rpc::{Asset as RpcAsset, Compression, Interface, Ownership, Royalty};
 use sea_orm::DatabaseConnection;
 use sea_orm::{entity::*, query::*, DbErr};
 
-pub async fn get_assets_by_owner(
+pub async fn get_assets_by_creator(
     db: &DatabaseConnection,
     owner_address: Vec<u8>,
     sort_by: AssetSorting,
@@ -21,6 +21,8 @@ pub async fn get_assets_by_owner(
         .find_also_related(AssetData)
         .order_by_asc(asset::Column::CreatedAt)
         .paginate(db, limit.try_into().unwrap());
+
+    let num_pages = paginator.num_pages().await.unwrap();
 
     let assets = paginator.fetch_page((page - 1).try_into().unwrap()).await?;
 
