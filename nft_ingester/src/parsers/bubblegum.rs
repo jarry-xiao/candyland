@@ -432,43 +432,44 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                             // Using `INSERT` with `ON CONFLICT` and using `>= asset.seq` to allow for replaying
                             // finalized transactions to repair entries, but not updating to a previous sequence
                             // numbered state.
-                            let mut query = asset::Entity::insert(model)
-                                .on_conflict(
-                                    OnConflict::columns([asset::Column::Id])
-                                        .update_columns([
-                                            asset::Column::Owner,
-                                            asset::Column::OwnerType,
-                                            asset::Column::Delegate,
-                                            asset::Column::Frozen,
-                                            asset::Column::Supply,
-                                            asset::Column::SupplyMint,
-                                            asset::Column::Compressed,
-                                            asset::Column::Compressible,
-                                            asset::Column::TreeId,
-                                            asset::Column::SpecificationVersion,
-                                            asset::Column::Nonce,
-                                            asset::Column::Leaf,
-                                            asset::Column::RoyaltyTargetType,
-                                            asset::Column::RoyaltyTarget,
-                                            asset::Column::RoyaltyAmount,
-                                            asset::Column::ChainDataId,
-                                            asset::Column::Seq,
-                                        ])
-                                        .to_owned(),
-                                )
-                                .build(DbBackend::Postgres);
-                            query.sql =
-                                format!("{} WHERE excluded.seq >= asset.seq", query.sql);
-
-                            // Other method: do NOT attempt to modify any values: `ON CONFLICT DO NOTHING`.
-                            // let query = asset::Entity::insert(model)
+                            // let mut query = asset::Entity::insert(model)
                             //     .on_conflict(
                             //         OnConflict::columns([asset::Column::Id])
-                            //             .do_nothing()
+                            //             .update_columns([
+                            //                 asset::Column::Owner,
+                            //                 asset::Column::OwnerType,
+                            //                 asset::Column::Delegate,
+                            //                 asset::Column::Frozen,
+                            //                 asset::Column::Supply,
+                            //                 asset::Column::SupplyMint,
+                            //                 asset::Column::Compressed,
+                            //                 asset::Column::Compressible,
+                            //                 asset::Column::TreeId,
+                            //                 asset::Column::SpecificationVersion,
+                            //                 asset::Column::Nonce,
+                            //                 asset::Column::Leaf,
+                            //                 asset::Column::RoyaltyTargetType,
+                            //                 asset::Column::RoyaltyTarget,
+                            //                 asset::Column::RoyaltyAmount,
+                            //                 asset::Column::ChainDataId,
+                            //                 asset::Column::Seq,
+                            //             ])
                             //             .to_owned(),
                             //     )
                             //     .build(DbBackend::Postgres);
+                            // query.sql =
+                            //     format!("{} WHERE excluded.seq >= asset.seq", query.sql);
+                            // txn.execute(query).await?;
 
+                            // Do not attempt to modify any existing values:
+                            // `ON CONFLICT ('id') DO NOTHING`.
+                            let query = asset::Entity::insert(model)
+                                .on_conflict(
+                                    OnConflict::columns([asset::Column::Id])
+                                        .do_nothing()
+                                        .to_owned(),
+                                )
+                               .build(DbBackend::Postgres);
                             txn.execute(query).await?;
 
                             // Insert into `asset_creators` table.
@@ -485,24 +486,35 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                                     });
                                 }
 
-                                let mut query = asset_creators::Entity::insert_many(creators)
+                                // Upsert way.
+                                // let mut query = asset_creators::Entity::insert_many(creators)
+                                //     .on_conflict(
+                                //         OnConflict::columns([asset_creators::Column::AssetId])
+                                //             .update_columns([
+                                //                 asset_creators::Column::AssetId,
+                                //                 asset_creators::Column::Creator,
+                                //                 asset_creators::Column::Share,
+                                //                 asset_creators::Column::Verified,
+                                //                 asset_creators::Column::Seq,
+                                //             ])
+                                //             .to_owned(),
+                                //     )
+                                //     .build(DbBackend::Postgres);
+                                // query.sql = format!(
+                                //     "{} WHERE excluded.seq >= asset_creators.seq",
+                                //     query.sql
+                                // );
+                                // txn.execute(query).await?;
+
+                                // Do not attempt to modify any existing values:
+                                // `ON CONFLICT ('asset_id') DO NOTHING`.
+                                let query = asset_creators::Entity::insert_many(creators)
                                     .on_conflict(
                                         OnConflict::columns([asset_creators::Column::AssetId])
-                                            .update_columns([
-                                                asset_creators::Column::AssetId,
-                                                asset_creators::Column::Creator,
-                                                asset_creators::Column::Share,
-                                                asset_creators::Column::Verified,
-                                                asset_creators::Column::Seq,
-                                            ])
+                                            .do_nothing()
                                             .to_owned(),
                                     )
                                     .build(DbBackend::Postgres);
-                                query.sql = format!(
-                                    "{} WHERE excluded.seq >= asset_creators.seq",
-                                    query.sql
-                                );
-
                                 txn.execute(query).await?;
 
                                 // Insert into `asset_authority` table.
@@ -513,23 +525,34 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                                     ..Default::default()
                                 };
 
-                                let mut query = asset_authority::Entity::insert(model)
+                                // Upsert way.
+                                // let mut query = asset_authority::Entity::insert(model)
+                                //     .on_conflict(
+                                //         OnConflict::columns([asset_authority::Column::AssetId])
+                                //             .update_columns([
+                                //                 asset_authority::Column::AssetId,
+                                //                 asset_authority::Column::Scopes,
+                                //                 asset_authority::Column::Authority,
+                                //                 asset_authority::Column::Seq,
+                                //             ])
+                                //             .to_owned(),
+                                //     )
+                                //     .build(DbBackend::Postgres);
+                                // query.sql = format!(
+                                //     "{} WHERE excluded.seq >= asset_authority.seq",
+                                //     query.sql
+                                // );
+                                // txn.execute(query).await?;
+
+                                // Do not attempt to modify any existing values:
+                                // `ON CONFLICT ('asset_id') DO NOTHING`.
+                                let query = asset_authority::Entity::insert(model)
                                     .on_conflict(
                                         OnConflict::columns([asset_authority::Column::AssetId])
-                                            .update_columns([
-                                                asset_authority::Column::AssetId,
-                                                asset_authority::Column::Scopes,
-                                                asset_authority::Column::Authority,
-                                                asset_authority::Column::Seq,
-                                            ])
+                                            .do_nothing()
                                             .to_owned(),
                                     )
                                     .build(DbBackend::Postgres);
-                                query.sql = format!(
-                                    "{} WHERE excluded.seq >= asset_authority.seq",
-                                    query.sql
-                                );
-
                                 txn.execute(query).await?;
 
                                 // Insert into `asset_grouping` table.
@@ -543,23 +566,34 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                                             ..Default::default()
                                         };
 
-                                        let mut query = asset_grouping::Entity::insert(model)
+                                        // Upsert way.
+                                        // let mut query = asset_grouping::Entity::insert(model)
+                                        //     .on_conflict(
+                                        //         OnConflict::columns([asset_grouping::Column::AssetId])
+                                        //             .update_columns([
+                                        //                 asset_grouping::Column::AssetId,
+                                        //                 asset_grouping::Column::GroupKey,
+                                        //                 asset_grouping::Column::GroupValue,
+                                        //                 asset_grouping::Column::Seq,
+                                        //             ])
+                                        //             .to_owned(),
+                                        //     )
+                                        //     .build(DbBackend::Postgres);
+                                        // query.sql = format!(
+                                        //     "{} WHERE excluded.seq >= asset_grouping.seq",
+                                        //     query.sql
+                                        // );
+                                        // txn.execute(query).await?;
+
+                                    // Do not attempt to modify any existing values:
+                                    // `ON CONFLICT ('asset_id') DO NOTHING`.
+                                        let query = asset_grouping::Entity::insert(model)
                                             .on_conflict(
                                                 OnConflict::columns([asset_grouping::Column::AssetId])
-                                                    .update_columns([
-                                                        asset_grouping::Column::AssetId,
-                                                        asset_grouping::Column::GroupKey,
-                                                        asset_grouping::Column::GroupValue,
-                                                        asset_grouping::Column::Seq,
-                                                    ])
+                                                    .do_nothing()
                                                     .to_owned(),
                                             )
                                             .build(DbBackend::Postgres);
-                                        query.sql = format!(
-                                            "{} WHERE excluded.seq >= asset_grouping.seq",
-                                            query.sql
-                                        );
-
                                         txn.execute(query).await?;
                                     }
                                 }
