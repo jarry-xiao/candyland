@@ -61,7 +61,7 @@ impl ApiContract for DasApi {
         let id_bytes = id.to_bytes().to_vec();
         get_asset(&self.db_connection, id_bytes)
             .await
-            .map_err(Into::into)
+            .map_err(self.into())
     }
 
     async fn get_assets_by_owner(

@@ -1,0 +1,44 @@
+POST http://localhost:9090 HTTP/1.1
+content-type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "method": "get_assets_by_owner",
+  "params": [
+    "5EE23hoVKhwrCpmS6cTMFuBrtHbrRCN5oZskxCgxRAXB",
+    "created",
+    50,
+    1,
+    "",
+    ""
+  ],
+  "id": 0
+}
+
+###
+
+POST http://localhost:9090 HTTP/1.1
+content-type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": "stupid",
+  "method": "get_asset_proof",
+  "params": [
+    "3EFw4bC2SxsbDZyCvdmaW8pDiEoWbdt1mXwzNoBy8afZ"
+  ]
+}
+
+###
+
+POST http://localhost:9090 HTTP/1.1
+content-type: application/json
+
+{
+  "jsonrpc": "2.0",
+  "id": "stupid",
+  "method": "get_asset",
+  "params": [
+    "3EFw4bC2SxsbDZyCvdmaW8pDiEoWbdt1mXwzNoBy8afZ"
+  ]
+}

@@ -11,7 +11,7 @@ sql_types = ["sea-orm"]
 mock = []
 
 [dependencies]
-sea-orm = { optional = true, git = "https://github.com/liberwang1013/sea-orm", branch = "insert-on-conflict", features = [ "macros", "runtime-tokio-rustls", "sqlx-postgres", "with-chrono", "mock"] }
+sea-orm = { optional = true, version="0.9.0", features = [ "macros", "runtime-tokio-rustls", "sqlx-postgres", "with-chrono", "mock"] }
 sea-query = {version="0.25.0", features = ["postgres-array"]}
 serde = { version = "1.0.137", optional = true }
 serde_json = { version = "1.0.81", optional = true }
