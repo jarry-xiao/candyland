@@ -23,7 +23,7 @@ export function addProof(
 }
 
 export function createReplaceIx(
-    gummyroll: Program<Gummyroll>,
+    gummyroll: any,
     authority: Keypair,
     merkleRoll: PublicKey,
     treeRoot: Buffer,
@@ -49,7 +49,7 @@ export function createReplaceIx(
 }
 
 export function createAppendIx(
-    gummyroll: Program<Gummyroll>,
+    gummyroll: any,
     newLeaf: Buffer | ArrayLike<number>,
     authority: Keypair,
     merkleRoll: PublicKey,
@@ -68,7 +68,7 @@ export function createAppendIx(
 }
 
 export function createTransferAuthorityIx(
-    gummyroll: Program<Gummyroll>,
+    gummyroll: any,
     authority: Keypair,
     merkleRoll: PublicKey,
     newAuthority: PublicKey,
@@ -86,7 +86,7 @@ export function createTransferAuthorityIx(
 }
 
 export function createVerifyLeafIx(
-    gummyroll: Program<Gummyroll>,
+    gummyroll: any,
     merkleRoll: PublicKey,
     root: Buffer,
     leaf: Buffer,
