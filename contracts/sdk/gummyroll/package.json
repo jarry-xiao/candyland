@@ -5,6 +5,7 @@
   "license": "MIT",
   "dependencies": {
     "@project-serum/anchor": "0.24",
+    "@solana/buffer-layout": "4.0.0",
     "@solana/web3.js": "^1.50.1",
     "borsh": "^0.7.0",
     "chai": "^4.3.6"
