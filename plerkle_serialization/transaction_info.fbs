@@ -9,6 +9,8 @@ table TransactionInfo {
   inner_instructions:[InnerInstructions];
   outer_instructions:[CompiledInstruction];
   slot: uint64;
+  slot_index: string;
+  seen_at: int64;
 }
 
 table Pubkey {
