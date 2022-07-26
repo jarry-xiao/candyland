@@ -75,10 +75,17 @@ impl ApiContract for DasApi {
     ) -> Result<AssetList, DasApiError> {
         let owner_address = validate_pubkey(owner_address.clone())?;
         let owner_address_bytes = owner_address.to_bytes().to_vec();
-        let before = validate_pubkey(before.clone())?;
-        let before_bytes = before.to_bytes().to_vec();
-        let after = validate_pubkey(after.clone())?;
-        let after_bytes = after.to_bytes().to_vec();
+        let before = if !before.is_empty() {
+            validate_pubkey(before.clone())?.to_bytes().to_vec()
+        } else {
+            before.as_bytes().to_vec()
+        };
+
+        let after = if !after.is_empty() {
+            validate_pubkey(after.clone())?.to_bytes().to_vec()
+        } else {
+            after.as_bytes().to_vec()
+        };
 
         get_assets_by_owner(
             &self.db_connection,
@@ -86,8 +93,8 @@ impl ApiContract for DasApi {
             sort_by,
             limit,
             page,
-            before_bytes,
-            after_bytes,
+            before,
+            after,
         )
         .await
         .map_err(Into::into)

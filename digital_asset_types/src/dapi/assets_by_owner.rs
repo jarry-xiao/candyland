@@ -33,8 +33,9 @@ pub async fn get_assets_by_owner(
     } else if !before.is_empty() {
         let rows = asset::Entity::find()
             .filter(asset::Column::Owner.eq(owner_address.clone()))
+            .order_by_asc(sort_column)
             .cursor_by(asset::Column::Id)
-            .after(after)
+            .before(before)
             .first(limit.into())
             .all(db)
             .await?
@@ -50,6 +51,7 @@ pub async fn get_assets_by_owner(
     } else {
         let rows = asset::Entity::find()
             .filter(asset::Column::Owner.eq(owner_address.clone()))
+            .order_by_asc(sort_column)
             .cursor_by(asset::Column::Id)
             .after(after)
             .first(limit.into())
