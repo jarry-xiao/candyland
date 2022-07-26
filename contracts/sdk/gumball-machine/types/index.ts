@@ -1,1 +1,1 @@
-export type { GumballMachine } from "../idl/gumball_machine.json";
+export { default as GumballMachine } from '../idl/gumball_machine.json';
