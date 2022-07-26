@@ -64,48 +64,31 @@ describe("bubblegum", function () {
   const MAX_SIZE = 64;
   const MAX_DEPTH = 20;
 
-  let payer = Keypair.generate();
-  let destination = Keypair.generate();
-  let delegateKey = Keypair.generate();
-  let connection = new web3Connection("https://liquid.testnet.rpcpool.com/{token}", {
-    commitment: "confirmed",
-  });
-  let wallet = new NodeWallet(payer);
-  anchor.setProvider(
-    new Provider(connection, wallet, {
-      commitment: connection.commitment,
-      skipPreflight: true,
-    })
-  );
-  Bubblegum = anchor.workspace.Bubblegum as Program<Bubblegum>;
-  GummyrollProgramId = anchor.workspace.Gummyroll.programId;
-
   async function createTreeOnChain(
     payer: Keypair,
     destination: Keypair,
     delegate: Keypair
   ): Promise<[Keypair, Tree, PublicKey]> {
     const merkleRollKeypair = Keypair.generate();
-    console.log(payer.publicKey.toBase58())
+
     await Bubblegum.provider.connection.confirmTransaction(
-      await Bubblegum.provider.connection.requestAirdrop(payer.publicKey, 1e9),
+      await Bubblegum.provider.connection.requestAirdrop(payer.publicKey, 2e9),
       "confirmed"
     );
     await Bubblegum.provider.connection.confirmTransaction(
       await Bubblegum.provider.connection.requestAirdrop(
         destination.publicKey,
-        1e9
+        2e9
       ),
       "confirmed"
     );
     await Bubblegum.provider.connection.confirmTransaction(
       await Bubblegum.provider.connection.requestAirdrop(
         delegate.publicKey,
-        1e9
+        2e9
       ),
       "confirmed"
     );
-    console.log(":airdrop done");
     const leaves = Array(2 ** MAX_DEPTH).fill(Buffer.alloc(32));
     const tree = buildTree(leaves);
     const ixs = await getCreateTreeIxs(Bubblegum.provider.connection, MAX_DEPTH, MAX_SIZE, 0, payer.publicKey, merkleRollKeypair.publicKey, payer.publicKey);

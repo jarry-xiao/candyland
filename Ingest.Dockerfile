@@ -25,7 +25,7 @@ COPY nft_ingester .
 # Build application
 RUN cargo build --release
 
-FROM rust:1.60-slim-bullseye
+FROM rust:1.61-slim-bullseye
 ARG APP=/usr/src/app
 RUN apt update \
     && apt install -y curl ca-certificates tzdata \
