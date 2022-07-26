@@ -27,23 +27,23 @@ export async function execute(
   instructions.map((ix) => { tx = tx.add(ix) });
 
   let txid = null;
-  try {
-    txid = await provider.sendAndConfirm(tx, signers, {
-      skipPreflight,
-    })
-  } catch (e) {
-    console.log("Tx error!", e.logs)
-    throw e;
-  }
+  // try {
+  //   txid = await provider!.send(tx, signers, {
+  //     skipPreflight,
+  //   })
+  // } catch (e) {
+  //   console.log("Tx error!", e.logs)
+  //   throw e;
+  // }
 
-  if (verbose) {
-    console.log(
-      (await provider.connection.getConfirmedTransaction(txid, "confirmed")).meta
-        .logMessages
-    );
-  }
+  // if (verbose) {
+  //   console.log(
+  //     (await provider.connection.getConfirmedTransaction(txid, "confirmed")).meta
+  //       .logMessages
+  //   );
+  // }
 
-  return txid;
+  return "";
 }
 
 /// Read in a public key from a BinaryReader
