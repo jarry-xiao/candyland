@@ -130,6 +130,7 @@ create table asset_grouping
     seq         bigint                      not null
 );
 -- Limit indexable grouping keys, meaning only create on specific keys, but index the ones we allow
+create unique index asset_grouping_asset_id on asset_grouping (asset_id);
 create index asset_grouping_key on asset_grouping (group_key, group_value);
 create index asset_grouping_value on asset_grouping (group_key, asset_id);
 
@@ -142,6 +143,7 @@ create table asset_authority
     authority bytea                       not null,
     seq       bigint                      not null
 );
+create unique index asset_authority_asset_id on asset_authority (asset_id);
 create index asset_authority_idx on asset_authority (asset_id, authority);
 
 -- creators
@@ -154,6 +156,6 @@ create table asset_creators
     verified bool                        not null default false,
     seq      bigint                      not null
 );
-
+create unique index asset_creators_asset_id on asset_creators (asset_id);
 create index asset_creator on asset_creators (asset_id, creator);
 create index asset_verified_creator on asset_creators (asset_id, verified);
