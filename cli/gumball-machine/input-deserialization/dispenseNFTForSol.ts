@@ -1,7 +1,6 @@
-import { BN } from "@project-serum/anchor";
 import {
     DispenseNftSolInstructionArgs
-} from "../../../contracts/sdk/gumball-machine";
+} from "@sorend-solana/gumball-machine";
 import {
   assertInRangeAndReturnNum
 } from "./utils";

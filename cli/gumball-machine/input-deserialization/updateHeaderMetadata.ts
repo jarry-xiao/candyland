@@ -1,16 +1,7 @@
-import { BN } from "@project-serum/anchor";
-import {
-  PublicKey,
-  Keypair,
-  SystemProgram,
-  Transaction,
-  Connection as web3Connection,
-  LAMPORTS_PER_SOL,
-} from "@solana/web3.js";
 import {
     UpdateHeaderMetadataInstructionArgs,
     EncodeMethod
-} from "../../../contracts/sdk/gumball-machine";
+} from "@sorend-solana/gumball-machine";
 import {
   assertInRangeAndReturnNum,
   assertLengthAndConvertByteArray,

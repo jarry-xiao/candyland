@@ -14,6 +14,7 @@ node_modules
 target
 *.so
 .vscode
-
+dist
+test-ledger
 *.swp
 *error.log
