@@ -15,23 +15,23 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 log = "0.4.11"
 async-trait = "0.1.53"
-solana-sdk = { version = "=1.10.10" }
-solana-transaction-status = { version = "=1.10.10" }
+solana-sdk = { version = "=1.11.3" }
+solana-transaction-status = { version = "=1.11.3" }
 thiserror = "1.0.30"
-regex = "1.5.5"
 base64 = "0.13.0"
 lazy_static = "1.4.0"
-solana-geyser-plugin-interface  = { version = "=1.10.10" }
-solana-logger = { version = "=1.10.10" }
-solana-measure = { version = "=1.10.10" }
-solana-metrics = { version = "=1.10.10" }
-solana-runtime = { version = "=1.10.10" }
-anchor-client = { path="../deps/anchor/client" }
+solana-geyser-plugin-interface  = { version = "=1.11.3" }
+solana-logger = { version = "=1.11.3" }
 bs58 = "0.4.0"
 bytemuck = "1.7.2"
 serde = "1.0.133"
 serde_derive = "1.0.103"
 serde_json = "1.0.74"
+cadence = "0.29.0"
+cadence-macros = "0.29.0"
+chrono = "0.4.19" # did anyone say leftpad ?
+solana-runtime = "1.11.3"
+tracing = "0.1.35"
 hex = "0.4.3"
 messenger={path= "../messenger"}
 flatbuffers = "2.1.2"

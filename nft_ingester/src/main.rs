@@ -1,31 +1,41 @@
-mod backfiller;
-mod error;
-mod events;
-mod parsers;
-mod tasks;
-mod utils;
+pub mod error;
+pub mod events;
+pub mod parsers;
+pub mod tasks;
+pub mod utils;
 
-use crate::error::IngesterError;
-use crate::tasks::{BgTask, TaskManager};
-use messenger::MessengerConfig;
+use cadence_macros::statsd_time;
+use chrono::Utc;
 use {
     crate::{
-        backfiller::backfiller,
         parsers::*,
         utils::{order_instructions, parse_logs},
     },
+    cadence::{BufferedUdpMetricSink, QueuingMetricSink, StatsdClient},
+    cadence_macros::{set_global_default, statsd_count},
+    digital_asset_types::dao::backfill_items::{self, Model},
     figment::{providers::Env, Figment},
     futures_util::TryFutureExt,
+    hex::ToHex,
     messenger::{Messenger, RedisMessenger, ACCOUNT_STREAM, TRANSACTION_STREAM},
-    plerkle_serialization::{
-        account_info_generated::account_info::root_as_account_info,
-        transaction_info_generated::transaction_info::root_as_transaction_info,
+    plerkle_serialization::account_info_generated::account_info::root_as_account_info,
+    plerkle_serialization::transaction_info_generated::transaction_info::root_as_transaction_info,
+    sea_orm::{
+        entity::*,
+        query::*,
+        sea_query::{Expr, Query},
+        DatabaseConnection, DbBackend, DbErr, FromQueryResult, SqlxPostgresConnector,
     },
     serde::Deserialize,
     solana_sdk::pubkey::Pubkey,
     sqlx::{self, postgres::PgPoolOptions, Pool, Postgres},
+    std::net::UdpSocket,
     tokio::sync::mpsc::UnboundedSender,
 };
+
+use crate::error::IngesterError;
+use crate::tasks::{BgTask, TaskManager};
+use messenger::MessengerConfig;
 
 async fn setup_manager<'a, 'b>(
     mut manager: ProgramHandlerManager<'a>,
@@ -40,25 +50,29 @@ async fn setup_manager<'a, 'b>(
     manager
 }
 
-// Types and constants used for Figment configuration items.
-pub type DatabaseConfig = figment::value::Dict;
-pub const DATABASE_URL_KEY: &str = "url";
-pub const DATABASE_LISTENER_CHANNEL_KEY: &str = "listener_channel";
-pub type RpcConfig = figment::value::Dict;
-pub const RPC_URL_KEY: &str = "url";
-pub const RPC_COMMITMENT_KEY: &str = "commitment";
-
-// Struct used for Figment configuration items.
-#[derive(Deserialize, PartialEq, Debug, Clone)]
+#[derive(Deserialize, PartialEq, Debug)]
 pub struct IngesterConfig {
-    database_config: DatabaseConfig,
-    messenger_config: MessengerConfig,
-    rpc_config: RpcConfig,
+    pub messenger_config: MessengerConfig,
+    pub database_url: String,
+    pub metrics_port: u16,
+    pub metrics_host: String,
+}
+
+fn setup_metrics(config: &IngesterConfig) {
+    let uri = config.metrics_host.clone();
+    let port = config.metrics_port.clone();
+    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    socket.set_nonblocking(true).unwrap();
+    let host = (uri, port);
+    let udp_sink = BufferedUdpMetricSink::from(host, socket).unwrap();
+    let queuing_sink = QueuingMetricSink::from(udp_sink);
+    let client = StatsdClient::from_sink("das_ingester", queuing_sink);
+    set_global_default(client);
 }
 
 #[tokio::main]
 async fn main() {
-    // Read config.
+    println!("Starting DASgester");
     let config: IngesterConfig = Figment::new()
         .join(Env::prefixed("INGESTER_"))
         .extract()
@@ -66,35 +80,27 @@ async fn main() {
             msg: format!("{}", config_error),
         })
         .unwrap();
-    // Get database config.
-    let url = config
-        .database_config
-        .get(&*DATABASE_URL_KEY)
-        .and_then(|u| u.clone().into_string())
-        .ok_or(IngesterError::ConfigurationError {
-            msg: format!("Database connection string missing: {}", DATABASE_URL_KEY),
-        })
-        .unwrap();
     // Setup Postgres.
+    let mut tasks = vec![];
     let pool = PgPoolOptions::new()
         .max_connections(5)
-        .connect(&url)
+        .connect(&*config.database_url)
         .await
         .unwrap();
     let background_task_manager =
         TaskManager::new("background-tasks".to_string(), pool.clone()).unwrap();
     // Service streams as separate concurrent processes.
-    let mut tasks = vec![];
+    println!("Setting up tasks");
+    setup_metrics(&config);
     tasks.push(
         service_transaction_stream::<RedisMessenger>(
-            pool.clone(),
+            pool,
             background_task_manager.get_sender(),
             config.messenger_config.clone(),
         )
         .await,
     );
-    // Start up backfiller process.
-    tasks.push(backfiller::<RedisMessenger>(pool.clone(), config.clone()).await);
+    statsd_count!("ingester.startup", 1);
     // Wait for ctrl-c.
     match tokio::signal::ctrl_c().await {
         Ok(()) => {}
@@ -103,7 +109,6 @@ async fn main() {
             // We also shut down in case of error.
         }
     }
-
     // Kill all tasks.
     for task in tasks {
         task.abort();
@@ -120,6 +125,7 @@ async fn service_transaction_stream<T: Messenger>(
 
         manager = setup_manager(manager, pool, tasks).await;
         let mut messenger = T::new(messenger_config).await.unwrap();
+        println!("Setting up transaction listener");
         loop {
             // This call to messenger.recv() blocks with no timeout until
             // a message is received on the stream.
@@ -130,28 +136,221 @@ async fn service_transaction_stream<T: Messenger>(
     })
 }
 
-async fn _service_account_stream<T: Messenger>(
+async fn service_account_stream<T: Messenger>(
     pool: Pool<Postgres>,
     tasks: UnboundedSender<Box<dyn BgTask>>,
     messenger_config: MessengerConfig,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut manager = ProgramHandlerManager::new();
-        let _task_manager = TaskManager::new("background-tasks".to_string(), pool.clone()).unwrap();
+        let task_manager = TaskManager::new("background-tasks".to_string(), pool.clone()).unwrap();
         manager = setup_manager(manager, pool, tasks).await;
         let mut messenger = T::new(messenger_config).await.unwrap();
-
+        println!("Setting up account listener");
         loop {
             // This call to messenger.recv() blocks with no timeout until
             // a message is received on the stream.
             if let Ok(data) = messenger.recv(ACCOUNT_STREAM).await {
-                _handle_account(&manager, data).await
+                handle_account(&manager, data).await
             }
         }
     })
 }
 
-async fn _handle_account(manager: &ProgramHandlerManager<'static>, data: Vec<(i64, &[u8])>) {
+const CHANNEL: &str = "new_item_added";
+
+async fn backfiller(pool: Pool<Postgres>) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        println!("Backfiller task running");
+        let db = SqlxPostgresConnector::from_sqlx_postgres_pool(pool.clone());
+        // Connect to db and create PgListener.
+        let mut listener = match sqlx::postgres::PgListener::connect_with(&pool.clone()).await {
+            Ok(listener) => listener,
+            Err(err) => {
+                println!("Could not connect to database for PgListener {err}");
+                return;
+            }
+        };
+        // Setup listener on channel.
+        if let Err(err) = listener.listen(CHANNEL).await {
+            println!("Error listening to channel on backfill_items table {err}");
+            return;
+        }
+
+        loop {
+            match get_trees_to_backfill(&db).await {
+                Ok(trees) => {
+                    if trees.force_chk_trees.len() == 0 && trees.multi_row_trees.len() == 0 {
+                        // If there are no trees to backfill, wait for a notification on the channel.
+                        let _notification = listener.recv().await.unwrap();
+                    } else {
+                        // Trees with the `force_chk` flag must be backfilled from seq num 1.
+                        println!(
+                            "New trees to backfill from seq num 1: {}",
+                            trees.force_chk_trees.len()
+                        );
+                        for tree in trees.force_chk_trees.iter() {
+                            let tree_str = tree.tree.encode_hex::<String>();
+                            println!("Backfilling tree: {tree_str}");
+                            if let Err(err) = backfill_tree_from_seq_1(&db, &tree.tree).await {
+                                println!(
+                                    "Failed to fetch and plug gaps for {tree_str}, error: {err}"
+                                );
+                            } else {
+                                if let Err(err) = clear_force_chk_flag(&db, &tree.tree).await {
+                                    println!("Error clearing force_chk flag: {err}");
+                                }
+                            }
+                        }
+
+                        // Trees with multiple rows must be checked for the range of seq nums in
+                        // the `backfill_items` table.
+                        println!(
+                            "New trees to backfill by detecting gaps: {}",
+                            trees.multi_row_trees.len()
+                        );
+                        for tree in trees.multi_row_trees.iter() {
+                            let tree_str = tree.tree.encode_hex::<String>();
+                            println!("Backfilling tree: {tree_str}");
+                            match fetch_and_plug_gaps(&db, &tree.tree).await {
+                                Ok(max_seq) => {
+                                    // Only delete extra tree rows if fetching and plugging gaps worked.
+                                    if let Err(err) =
+                                        delete_extra_tree_rows(&db, &tree.tree, max_seq).await
+                                    {
+                                        println!("Error deleting rows: {err}");
+                                    }
+                                }
+                                Err(err) => {
+                                    println!(
+                                        "Failed to fetch and plug gaps for {tree_str}, error: {err}"
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(err) => {
+                    // Print error but keep trying.
+                    println!("Could not get trees from db: {err}");
+                }
+            }
+        }
+    })
+}
+
+#[derive(Debug, FromQueryResult)]
+struct UniqueTree {
+    tree: Vec<u8>,
+}
+
+struct BackfillTrees {
+    force_chk_trees: Vec<UniqueTree>,
+    multi_row_trees: Vec<UniqueTree>,
+}
+
+async fn get_trees_to_backfill(db: &DatabaseConnection) -> Result<BackfillTrees, DbErr> {
+    // Get trees with the `force_chk` flag set.
+    let force_chk_trees = UniqueTree::find_by_statement(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        r#"SELECT DISTINCT backfill_items.tree FROM backfill_items WHERE backfill_items.force_chk = TRUE"#,
+        vec![],
+    ))
+    .all(db)
+    .await?;
+
+    // Get trees with multiple rows from `backfill_items` table.
+    let multi_row_trees = UniqueTree::find_by_statement(Statement::from_sql_and_values(
+        DbBackend::Postgres,
+        r#"SELECT backfill_items.tree FROM backfill_items GROUP BY backfill_items.tree HAVING COUNT(*) > 1"#,
+        vec![],
+    ))
+    .all(db)
+    .await?;
+
+    Ok(BackfillTrees {
+        force_chk_trees,
+        multi_row_trees,
+    })
+}
+
+async fn backfill_tree_from_seq_1(_db: &DatabaseConnection, _tree: &[u8]) -> Result<(), DbErr> {
+    //TODO implement gap filler.
+    Ok(())
+}
+
+async fn fetch_and_plug_gaps(db: &DatabaseConnection, tree: &[u8]) -> Result<i64, DbErr> {
+    //TODO implement gap filler, for now just return the max sequence number.
+    let items = get_items_with_max_seq(db, tree).await?;
+
+    if items.len() > 0 {
+        Ok(items[0].seq)
+    } else {
+        Ok(0)
+    }
+}
+
+async fn get_items_with_max_seq(db: &DatabaseConnection, tree: &[u8]) -> Result<Vec<Model>, DbErr> {
+    //TODO Find better, simpler query for this.
+    backfill_items::Entity::find()
+        .filter(backfill_items::Column::Tree.eq(tree))
+        .filter(
+            Condition::any().add(
+                backfill_items::Column::Seq.in_subquery(
+                    Query::select()
+                        .expr(backfill_items::Column::Seq.max())
+                        .from(backfill_items::Entity)
+                        .and_where(backfill_items::Column::Tree.eq(tree))
+                        .to_owned(),
+                ),
+            ),
+        )
+        .all(db)
+        .await
+}
+
+async fn clear_force_chk_flag(db: &DatabaseConnection, tree: &[u8]) -> Result<UpdateResult, DbErr> {
+    backfill_items::Entity::update_many()
+        .col_expr(backfill_items::Column::ForceChk, Expr::value(false))
+        .filter(backfill_items::Column::Tree.eq(tree))
+        .exec(db)
+        .await
+}
+
+async fn delete_extra_tree_rows(
+    db: &DatabaseConnection,
+    tree: &[u8],
+    seq: i64,
+) -> Result<(), DbErr> {
+    // Delete all rows in the `backfill_items` table for a specified tree, except for the row with
+    // the user-specified sequence number.  One row for each tree must remain so that gaps can be
+    // detected after subsequent inserts.
+    backfill_items::Entity::delete_many()
+        .filter(backfill_items::Column::Tree.eq(tree))
+        .filter(backfill_items::Column::Seq.ne(seq))
+        .exec(db)
+        .await?;
+
+    // Remove any duplicates that have the user-specified seq number (this should not happen under
+    // normal circumstances).
+    let items = backfill_items::Entity::find()
+        .filter(backfill_items::Column::Tree.eq(tree))
+        .filter(backfill_items::Column::Seq.eq(seq))
+        .all(db)
+        .await?;
+
+    if items.len() > 1 {
+        for item in items.iter().skip(1) {
+            backfill_items::Entity::delete_by_id(item.id)
+                .exec(db)
+                .await?;
+        }
+    }
+
+    Ok(())
+}
+
+async fn handle_account(manager: &ProgramHandlerManager<'static>, data: Vec<(i64, &[u8])>) {
     for (_message_id, data) in data {
         // Get root of account info flatbuffers object.
         let account_update = match root_as_account_info(data) {
@@ -163,6 +362,7 @@ async fn _handle_account(manager: &ProgramHandlerManager<'static>, data: Vec<(i6
         };
         let program_id = account_update.owner();
         let parser = manager.match_program(program_id.unwrap());
+        statsd_count!("ingester.account_update_seen", 1);
         match parser {
             Some(p) if p.config().responds_to_account == true => {
                 let _ = p.handle_account(&account_update).map_err(|e| {
@@ -196,7 +396,15 @@ async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<
             }
             Ok(transaction) => transaction,
         };
-
+        if let Some(si) = transaction.slot_index() {
+            let slt_idx = format!("{}-{}", transaction.slot(), si);
+            statsd_count!("ingester.transaction_event_seen", 1, "slot-idx" => &slt_idx);
+        }
+        let seen_at = Utc::now();
+        statsd_time!(
+            "ingester.bus_ingest_time",
+            (seen_at.timestamp_millis() - transaction.seen_at()) as u64
+        );
         // Get account keys flatbuffers object.
         let keys = match transaction.account_keys() {
             None => {
@@ -219,7 +427,9 @@ async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<
             );
 
             let (program, instruction) = outer_ix;
-            let parser = manager.match_program(program.key().unwrap());
+            let program_id = program.key().unwrap();
+            let parser = manager.match_program(program_id);
+            let str_program_id = bs58::encode(program_id).into_string();
             match parser {
                 Some(p) if p.config().responds_to_instruction == true => {
                     let _ = p
@@ -235,9 +445,14 @@ async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<
                         .await
                         .map_err(|e| {
                             // Just for logging
-                            println!("Error in instruction handling {:?}", e);
+                            println!(
+                                "Error in instruction handling onr program {} {:?}",
+                                str_program_id, e
+                            );
                             e
                         });
+                    let finished_at = Utc::now();
+                    statsd_time!("ingester.ix_process_time", (finished_at.timestamp_millis() - transaction.seen_at()) as u64, "program_id" => &str_program_id);
                 }
                 _ => {
                     println!("Program Handler not found for program id {:?}", program);

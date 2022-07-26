@@ -28,7 +28,6 @@ flatbuffers = "2.1.2"
 solana-sdk = { version = "=1.10.10" }
 lazy_static = "1.4.0"
 regex = "1.5.5"
-plerkle = { path = "../plerkle" }
 plerkle-serialization = { path = "../plerkle_serialization" }
 digital_asset_types = { path = "../digital_asset_types", features = ["json_types", "sql_types"] }
 uuid = "1.0.0"
@@ -39,6 +38,8 @@ bubblegum = { path = "../contracts/programs/bubblegum", features = ["no-entrypoi
 figment = { version = "0.10.6", features = ["env"] }
 solana-client = "1.10.10"
 solana-transaction-status = "1.10.10"
+cadence = "0.29.0"
+cadence-macros = "0.29.0"
 
 [dependencies.num-integer]
 version = "0.1.44"

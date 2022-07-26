@@ -1,12 +1,12 @@
 [workspace]
 members = [
-    "plerkle",
     "das_api",
     "nft_ingester",
     "messenger",
     "digital_asset_types"
 ]
 exclude = [
+    "plerkle",
     "deps",
     "contracts",
     "lib"
