@@ -1,0 +1,386 @@
+{
+  "version": "0.1.0",
+  "name": "sugar_shack",
+  "instructions": [
+    {
+      "name": "initializeMarketplace",
+      "accounts": [
+        {
+          "name": "payer",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "marketplaceProps",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "royaltyShare",
+          "type": "u16"
+        },
+        {
+          "name": "authority",
+          "type": "publicKey"
+        }
+      ]
+    },
+    {
+      "name": "updateMarketplaceProperties",
+      "accounts": [
+        {
+          "name": "authority",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "marketplaceProps",
+          "isMut": true,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "authority",
+          "type": {
+            "option": "publicKey"
+          }
+        },
+        {
+          "name": "share",
+          "type": {
+            "option": "u16"
+          }
+        }
+      ]
+    },
+    {
+      "name": "createOrModifyListing",
+      "accounts": [
+        {
+          "name": "owner",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "formerDelegate",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "newDelegate",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "bubblegumAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "gummyroll",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "merkleSlab",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "bubblegum",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "candyWrapper",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "price",
+          "type": "u64"
+        },
+        {
+          "name": "dataHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "creatorHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "index",
+          "type": "u32"
+        },
+        {
+          "name": "root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "removeListing",
+      "accounts": [
+        {
+          "name": "owner",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "formerDelegate",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "newDelegate",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "bubblegumAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "gummyroll",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "merkleSlab",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "bubblegum",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "candyWrapper",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "dataHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "creatorHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "index",
+          "type": "u32"
+        },
+        {
+          "name": "root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "purchase",
+      "accounts": [
+        {
+          "name": "formerOwner",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "purchaser",
+          "isMut": true,
+          "isSigner": true
+        },
+        {
+          "name": "listingDelegate",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "bubblegumAuthority",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "gummyroll",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "merkleSlab",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "bubblegum",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "marketplaceProps",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "candyWrapper",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "price",
+          "type": "u64"
+        },
+        {
+          "name": "metadataArgsHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "index",
+          "type": "u32"
+        },
+        {
+          "name": "root",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "creatorShares",
+          "type": "bytes"
+        },
+        {
+          "name": "sellerFeeBasisPoints",
+          "type": "u16"
+        }
+      ]
+    },
+    {
+      "name": "withdrawFees",
+      "accounts": [
+        {
+          "name": "feePayoutRecipient",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "authority",
+          "isMut": false,
+          "isSigner": true
+        },
+        {
+          "name": "marketplaceProps",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
+          "name": "systemProgram",
+          "isMut": false,
+          "isSigner": false
+        },
+        {
+          "name": "sysvarRent",
+          "isMut": false,
+          "isSigner": false
+        }
+      ],
+      "args": [
+        {
+          "name": "lamportsToWithdraw",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "MarketplaceProperties",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "publicKey"
+          },
+          {
+            "name": "share",
+            "type": "u16"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}
