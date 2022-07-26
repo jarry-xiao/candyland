@@ -76,7 +76,7 @@ type Path = {
 };
 
 export function decodeMerkleRoll(buffer: Buffer): OnChainMerkleRoll {
-  let reader = new borsh.BinaryReader(buffer);
+  let reader: borsh.BinaryReader = new borsh.BinaryReader(buffer);
 
   let header: MerkleRollHeader = {
     maxBufferSize: reader.readU32(),
