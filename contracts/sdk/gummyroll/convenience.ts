@@ -31,7 +31,7 @@ export async function createAllocTreeIx(
 }
 
 export async function getCreateTreeIxs(
-    gummyroll: anchor.Program<Gummyroll>,
+    gummyrollRaw: any,
     maxBufferSize: number,
     maxDepth: number,
     canopyDepth: number,
@@ -40,6 +40,7 @@ export async function getCreateTreeIxs(
     authority: Keypair,
     appendAuthority: PublicKey,
 ): Promise<TransactionInstruction[]> {
+    const gummyroll = gummyrollRaw as anchor.Program<any>;
     const allocAccountIx = await createAllocTreeIx(
         gummyroll.provider.connection,
         maxBufferSize,

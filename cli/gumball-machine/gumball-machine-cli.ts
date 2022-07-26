@@ -6,9 +6,7 @@ import {
     SystemProgram,
     Transaction,
     Connection as web3Connection,
-    LAMPORTS_PER_SOL,
-    ComputeBudgetInstruction,
-    ComputeBudgetProgram
+    LAMPORTS_PER_SOL
 } from "@solana/web3.js";
 import {
     getProvider, loadWalletKey
@@ -23,7 +21,6 @@ import {
     createDestroyInstruction,
     initializeGumballMachineIndices,
 } from "../../contracts/sdk/gumball-machine";
-import { Program, Provider } from '@project-serum/anchor';
 import {
     deserializeInitJson
 } from "./input-deserialization/initializeGumballMachine";
