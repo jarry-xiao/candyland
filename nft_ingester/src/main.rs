@@ -4,15 +4,8 @@ pub mod parsers;
 pub mod tasks;
 pub mod utils;
 
-<<<<<<< HEAD
-use crate::error::IngesterError;
-use crate::tasks::{BgTask, TaskManager};
-use messenger::MessengerConfig;
-use sea_orm::sea_query::BinOper::In;
-=======
 use cadence_macros::statsd_time;
 use chrono::Utc;
->>>>>>> origin/k8s
 use {
     crate::{
         parsers::*,
@@ -35,9 +28,6 @@ use {
     solana_sdk::pubkey::Pubkey,
     sqlx::{self, postgres::PgPoolOptions, Pool, Postgres},
     tokio::sync::mpsc::UnboundedSender,
-<<<<<<< HEAD
-};
-=======
     serde::Deserialize,
     figment::{Figment, providers::Env},
     cadence_macros::{
@@ -51,7 +41,6 @@ use {
 use messenger::MessengerConfig;
 use crate::error::IngesterError;
 use crate::tasks::{BgTask, TaskManager};
->>>>>>> origin/k8s
 
 async fn setup_manager<'a, 'b>(
     mut manager: ProgramHandlerManager<'a>,
@@ -103,23 +92,10 @@ async fn main() {
     let background_task_manager =
         TaskManager::new("background-tasks".to_string(), pool.clone()).unwrap();
     // Service streams as separate concurrent processes.
-<<<<<<< HEAD
-    tasks.push(
-        service_transaction_stream::<RedisMessenger>(
-            pool.clone(),
-            background_task_manager.get_sender(),
-            config.messenger_config.clone(),
-        )
-        .await,
-    );
-    // Start up backfiller process.
-    tasks.push(backfiller(pool.clone()).await);
-=======
     println!("Setting up tasks");
     setup_metrics(&config);
     tasks.push(service_transaction_stream::<RedisMessenger>(pool, background_task_manager.get_sender(), config.messenger_config.clone()).await);
     statsd_count!("ingester.startup", 1);
->>>>>>> origin/k8s
     // Wait for ctrl-c.
     match tokio::signal::ctrl_c().await {
         Ok(()) => {}
