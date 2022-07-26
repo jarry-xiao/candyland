@@ -1,12 +1,12 @@
 import log from 'loglevel';
 import * as fs from 'fs';
 import { PublicKey, Keypair, Connection } from '@solana/web3.js';
-import { Program, Provider } from '@project-serum/anchor';
+import { Program, AnchorProvider } from '@project-serum/anchor';
 import NodeWallet from '@project-serum/anchor/dist/cjs/nodewallet';
 
 export async function getProvider(endpoint: string, payer: Keypair) {
     const connection = new Connection(endpoint);
-    const provider = new Provider(
+    const provider = new AnchorProvider(
         connection,
         new NodeWallet(payer),
         {
