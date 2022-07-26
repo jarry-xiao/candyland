@@ -5,12 +5,12 @@ content-type: application/json
   "jsonrpc": "2.0",
   "method": "get_assets_by_owner",
   "params": [
-    "5EE23hoVKhwrCpmS6cTMFuBrtHbrRCN5oZskxCgxRAXB",
+    "8SUoFdFbc2coz5bu5DHvnfkrRgfKqohkg4PfBHL6ayi7",
     "created",
     50,
     0,
-    "Hky94kmJ4eM2F6aEfkutaRt1Xmfim2dBYDJCTfycUr3E",
-    ""
+    "",
+    "CQ3QsE6F5vsiVGpiHuQnu1B5g9hf7re9RH3pgMUtUsYQ"
   ],
   "id": 0
 }
