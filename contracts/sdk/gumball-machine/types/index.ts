@@ -1,1 +1,1 @@
-export type { GumballMachine } from "../../../target/types/gumball_machine";
+export type { GumballMachine } from "../idl/gumball_machine.json";
