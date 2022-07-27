@@ -44,6 +44,11 @@
           "isSigner": false
         },
         {
+          "name": "mintRequest",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "merkleSlab",
           "isMut": true,
           "isSigner": false
@@ -413,6 +418,11 @@
           ]
         },
         {
+          "name": "bubblegumMintRequest",
+          "isMut": true,
+          "isSigner": false
+        },
+        {
           "name": "candyWrapper",
           "isMut": false,
           "isSigner": false
@@ -496,6 +506,11 @@
           "docs": [
             "This key must sign for all write operations to the NFT Metadata stored in the Merkle slab"
           ]
+        },
+        {
+          "name": "bubblegumMintRequest",
+          "isMut": true,
+          "isSigner": false
         },
         {
           "name": "candyWrapper",

@@ -92,28 +92,31 @@ export const updateHeaderMetadataInstructionDiscriminator = [
  */
 export function createUpdateHeaderMetadataInstruction(
   accounts: UpdateHeaderMetadataInstructionAccounts,
-  args: UpdateHeaderMetadataInstructionArgs,
-  programId = new web3.PublicKey('GBALLoMcmimUutWvtNdFFGH5oguS7ghUUV6toQPppuTW')
+  args: UpdateHeaderMetadataInstructionArgs
 ) {
+  const { gumballMachine, authority } = accounts
+
   const [data] = updateHeaderMetadataStruct.serialize({
     instructionDiscriminator: updateHeaderMetadataInstructionDiscriminator,
     ...args,
   })
   const keys: web3.AccountMeta[] = [
     {
-      pubkey: accounts.gumballMachine,
+      pubkey: gumballMachine,
       isWritable: true,
       isSigner: false,
     },
     {
-      pubkey: accounts.authority,
+      pubkey: authority,
       isWritable: false,
       isSigner: true,
     },
   ]
 
   const ix = new web3.TransactionInstruction({
-    programId,
+    programId: new web3.PublicKey(
+      'GBALLoMcmimUutWvtNdFFGH5oguS7ghUUV6toQPppuTW'
+    ),
     keys,
     data,
   })

@@ -3,11 +3,11 @@ use anchor_lang::{
     solana_program::{
         instruction::{AccountMeta, Instruction},
         keccak::hashv,
-        log::sol_log_compute_units,
         program::{invoke, invoke_signed},
         pubkey::Pubkey,
         system_instruction,
     },
+    InstructionData,
 };
 use bubblegum::program::Bubblegum;
 use gummyroll::program::Gummyroll;
@@ -238,7 +238,7 @@ pub mod sugar_shack {
     /// Enables the owner of a compressed NFT to list their NFT for sale, can also be used to modify the list price of an existing listing.
     pub fn create_or_modify_listing<'info>(
         ctx: Context<'_, '_, '_, 'info, CreateModifyListing<'info>>,
-        price: u64,
+        _price: u64,
         data_hash: [u8; 32],
         creator_hash: [u8; 32],
         nonce: u64,
@@ -338,7 +338,7 @@ pub mod sugar_shack {
         // Second, payout each "creator". Creators are an immutable set of secondary marketplace sale royalty recipients.
         // Simultaneously, collect <address, share> pairs to prepare to compute creator_hash
         let total_creator_allocation = (price as u128)
-            .safe_mul((seller_fee_basis_points as u128))?
+            .safe_mul(seller_fee_basis_points as u128)?
             .safe_div(10000)? as u64;
         let mut amount_paid_out_to_creators = 0;
         let mut creator_data: Vec<Vec<u8>> = Vec::new();
@@ -348,7 +348,7 @@ pub mod sugar_shack {
         for share in creator_shares.into_iter() {
             let current_creator_info = next_account_info(creator_accounts_iter)?;
             let amount_to_pay_creator = (total_creator_allocation as u128)
-                .safe_mul((share as u128))?
+                .safe_mul(share as u128)?
                 .safe_div(100)? as u64;
             invoke(
                 &system_instruction::transfer(
@@ -401,19 +401,16 @@ pub mod sugar_shack {
         let authority_pda_signer: &[&[&[u8]]] = &[&seeds[..]];
 
         // Get the data for the CPI
-        let mut transfer_instruction_data = vec![163, 52, 200, 231, 140, 3, 69, 186];
         let data_hash =
             hashv(&[&metadata_args_hash, &seller_fee_basis_points.to_le_bytes()]).to_bytes();
-        transfer_instruction_data.append(
-            &mut bubblegum::instruction::Transfer {
-                root,
-                data_hash,
-                creator_hash: creator_hash.to_bytes(),
-                nonce,
-                index,
-            }
-            .try_to_vec()?,
-        );
+        let transfer_instruction_data = bubblegum::instruction::Transfer {
+            root,
+            data_hash,
+            creator_hash: creator_hash.to_bytes(),
+            nonce,
+            index,
+        }
+        .data();
 
         // Get the account metas for the CPI call
         // @notice: the reason why we need to manually call `to_account_metas` is because `Bubblegum::transfer` takes
@@ -430,7 +427,7 @@ pub mod sugar_shack {
             merkle_slab: ctx.accounts.merkle_slab.to_account_info(),
             candy_wrapper: ctx.accounts.candy_wrapper.to_account_info(),
         };
-        let mut transfer_account_metas = transfer_accounts.to_account_metas(None);
+        let mut transfer_account_metas = transfer_accounts.to_account_metas(Some(true));
         for acct in transfer_account_metas.iter_mut() {
             if acct.pubkey == ctx.accounts.listing_delegate.key() {
                 (*acct).is_signer = true;

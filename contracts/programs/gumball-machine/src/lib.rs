@@ -1,16 +1,21 @@
 use anchor_lang::{
     prelude::*,
     solana_program::{
-        keccak::hashv, program::invoke, pubkey::Pubkey, system_instruction, sysvar,
-        sysvar::instructions::load_instruction_at_checked, sysvar::SysvarId,
+        instruction::Instruction, program::invoke_signed, keccak::hashv, program::invoke, pubkey::Pubkey,
+        system_instruction, sysvar, sysvar::instructions::load_instruction_at_checked,
+        sysvar::SysvarId,
     },
+    InstructionData
 };
 use anchor_spl::token::{transfer, Mint, Token, TokenAccount, Transfer};
 use bubblegum::program::Bubblegum;
 
 use bubblegum::state::metaplex_adapter::MetadataArgs;
 use bytemuck::cast_slice_mut;
-use gummyroll::{program::Gummyroll, state::CandyWrapper};
+use gummyroll::{
+    program::Gummyroll,
+    state::{CandyWrapper, MerkleRollHeader},
+};
 use spl_token::native_mint;
 
 pub mod state;
@@ -45,6 +50,9 @@ pub struct InitGumballMachine<'info> {
     bubblegum_authority: AccountInfo<'info>,
     candy_wrapper: Program<'info, CandyWrapper>,
     gummyroll: Program<'info, Gummyroll>,
+    /// CHECK: Checked in Bubblegum
+    #[account(mut)]
+    mint_request: AccountInfo<'info>,
     /// CHECK: Empty merkle slab
     #[account(zero)]
     merkle_slab: AccountInfo<'info>,
@@ -106,6 +114,9 @@ pub struct DispenseSol<'info> {
     /// This key must sign for all write operations to the NFT Metadata stored in the Merkle slab
     #[account(mut)]
     bubblegum_authority: AccountInfo<'info>,
+    /// CHECK: PDA is checked in Bubblegum
+    #[account(mut)]
+    bubblegum_mint_request: AccountInfo<'info>,
     candy_wrapper: Program<'info, CandyWrapper>,
     gummyroll: Program<'info, Gummyroll>,
     /// CHECK: Validation occurs in Gummyroll
@@ -145,6 +156,9 @@ pub struct DispenseToken<'info> {
     /// This key must sign for all write operations to the NFT Metadata stored in the Merkle slab
     #[account(mut)]
     bubblegum_authority: AccountInfo<'info>,
+    /// CHECK: PDA is checked in Bubblegum
+    #[account(mut)]
+    bubblegum_mint_request: AccountInfo<'info>,
     candy_wrapper: Program<'info, CandyWrapper>,
     gummyroll: Program<'info, Gummyroll>,
     /// CHECK: Validation occurs in Gummyroll
@@ -268,6 +282,7 @@ fn find_and_mint_compressed_nfts<'info>(
     merkle_slab: &AccountInfo<'info>,
     bubblegum: &Program<'info, Bubblegum>,
     candy_wrapper_program: &Program<'info, CandyWrapper>,
+    mint_request: &AccountInfo<'info>,
     num_items: u32,
 ) -> Result<(GumballMachineHeader, u32)> {
     // Prevent atomic transaction exploit attacks
@@ -321,22 +336,39 @@ fn find_and_mint_compressed_nfts<'info>(
         let seed = gumball_machine.key();
         let seeds = &[seed.as_ref(), &[*willy_wonka_bump]];
         let authority_pda_signer = &[&seeds[..]];
-        let cpi_ctx = CpiContext::new_with_signer(
-            bubblegum.to_account_info(),
-            bubblegum::cpi::accounts::MintV1 {
-                mint_authority: willy_wonka.to_account_info(),
-                authority: bubblegum_authority.to_account_info(),
-                candy_wrapper: candy_wrapper_program.to_account_info(),
-                gummyroll_program: gummyroll.to_account_info(),
-                owner: payer.to_account_info(),
-                delegate: payer.to_account_info(),
-                merkle_slab: merkle_slab.to_account_info(),
-                // dummy account
-                mint_authority_request: payer.to_account_info(),
-            },
+        let mut accounts = bubblegum::accounts::MintV1 {
+            mint_authority: willy_wonka.key(),
+            authority: bubblegum_authority.key(),
+            candy_wrapper: candy_wrapper_program.key(),
+            gummyroll_program: gummyroll.key(),
+            owner: payer.key(),
+            delegate: payer.key(),
+            merkle_slab: merkle_slab.key(),
+            mint_authority_request: mint_request.key(),
+        }
+        .to_account_metas(Some(true));
+        accounts[1].is_signer = true;
+        let data = bubblegum::instruction::MintV1 { message }.data();
+        let mint_ix = Instruction {
+            program_id: bubblegum.key(),
+            accounts: accounts,
+            data,
+        };
+        invoke_signed(
+            &mint_ix,
+            &[
+                bubblegum.to_account_info(),
+                willy_wonka.to_account_info(),
+                bubblegum_authority.to_account_info(),
+                candy_wrapper_program.to_account_info(),
+                gummyroll.to_account_info(),
+                payer.to_account_info(),
+                payer.to_account_info(),
+                merkle_slab.to_account_info(),
+                mint_request.to_account_info(),
+            ],
             authority_pda_signer,
-        );
-        bubblegum::cpi::mint_v1(cpi_ctx, message)?;
+        )?;
     }
     Ok((*gumball_header, num_nfts_to_mint))
 }
@@ -440,20 +472,57 @@ pub mod gumball_machine {
         let seed = ctx.accounts.gumball_machine.key();
         let seeds = &[seed.as_ref(), &[*ctx.bumps.get("willy_wonka").unwrap()]];
         let authority_pda_signer = &[&seeds[..]];
+
+        let is_new_tree = {
+            let merkle_bytes = ctx.accounts.merkle_slab.try_borrow_data()?;
+            let (header_bytes, _) = merkle_bytes.split_at(std::mem::size_of::<MerkleRollHeader>());
+            let header = Box::new(MerkleRollHeader::try_from_slice(&header_bytes)?);
+            header.authority == Pubkey::default() && header.creation_slot == 0
+        };
+
+        if is_new_tree {
+            let cpi_ctx = CpiContext::new_with_signer(
+                ctx.accounts.bubblegum.to_account_info(),
+                bubblegum::cpi::accounts::CreateTree {
+                    tree_creator: ctx.accounts.willy_wonka.to_account_info(),
+                    authority: ctx.accounts.bubblegum_authority.to_account_info(),
+                    candy_wrapper: ctx.accounts.candy_wrapper.to_account_info(),
+                    gummyroll_program: ctx.accounts.gummyroll.to_account_info(),
+                    merkle_slab: ctx.accounts.merkle_slab.to_account_info(),
+                    payer: ctx.accounts.payer.to_account_info(),
+                    system_program: ctx.accounts.system_program.to_account_info(),
+                },
+                authority_pda_signer,
+            );
+            bubblegum::cpi::create_tree(cpi_ctx, max_depth, max_buffer_size)?;
+        }
         let cpi_ctx = CpiContext::new_with_signer(
             ctx.accounts.bubblegum.to_account_info(),
-            bubblegum::cpi::accounts::CreateTree {
-                tree_creator: ctx.accounts.willy_wonka.to_account_info(),
-                authority: ctx.accounts.bubblegum_authority.to_account_info(),
-                candy_wrapper: ctx.accounts.candy_wrapper.to_account_info(),
-                gummyroll_program: ctx.accounts.gummyroll.to_account_info(),
-                merkle_slab: ctx.accounts.merkle_slab.to_account_info(),
+            bubblegum::cpi::accounts::SetMintRequest {
+                mint_authority_request: ctx.accounts.mint_request.to_account_info(),
+                mint_authority: ctx.accounts.willy_wonka.to_account_info(),
+                tree_authority: ctx.accounts.bubblegum_authority.to_account_info(),
                 payer: ctx.accounts.payer.to_account_info(),
                 system_program: ctx.accounts.system_program.to_account_info(),
+                merkle_slab: ctx.accounts.merkle_slab.to_account_info(),
             },
             authority_pda_signer,
         );
-        bubblegum::cpi::create_tree(cpi_ctx, max_depth, max_buffer_size)
+        bubblegum::cpi::request_mint_authority(cpi_ctx, 1 << max_depth)?;
+        if is_new_tree {
+            let cpi_ctx = CpiContext::new_with_signer(
+                ctx.accounts.bubblegum.to_account_info(),
+                bubblegum::cpi::accounts::ApproveMintRequest {
+                    mint_authority_request: ctx.accounts.mint_request.to_account_info(),
+                    tree_delegate: ctx.accounts.willy_wonka.to_account_info(),
+                    tree_authority: ctx.accounts.bubblegum_authority.to_account_info(),
+                    merkle_slab: ctx.accounts.merkle_slab.to_account_info(),
+                },
+                authority_pda_signer,
+            );
+            bubblegum::cpi::approve_mint_authority_request(cpi_ctx, 1 << max_depth)?;
+        }
+        Ok(())
     }
 
     /// Initialize chunk of NFT indices (as many as possible within the compute budget of a single transaction). All indices must be initialized before the tree can dispense.
@@ -687,6 +756,7 @@ pub mod gumball_machine {
             &ctx.accounts.merkle_slab,
             &ctx.accounts.bubblegum,
             &ctx.accounts.candy_wrapper,
+            &ctx.accounts.bubblegum_mint_request,
             num_items,
         )?;
 
@@ -729,6 +799,7 @@ pub mod gumball_machine {
             &ctx.accounts.merkle_slab,
             &ctx.accounts.bubblegum,
             &ctx.accounts.candy_wrapper,
+            &ctx.accounts.bubblegum_mint_request,
             num_items,
         )?;
 

@@ -9,7 +9,10 @@ import {
   TransactionInstruction,
   Connection,
 } from "@solana/web3.js";
-import { getBubblegumAuthorityPDA } from "../../bubblegum/src/convenience";
+import {
+  getBubblegumAuthorityPDA,
+  getMintRequestPDA,
+} from "../../bubblegum/src/convenience";
 import {
   InitializeGumballMachineInstructionArgs,
   createInitializeGumballMachineInstruction,
@@ -17,7 +20,7 @@ import {
   createDispenseNftTokenInstruction,
   DispenseNftSolInstructionArgs,
   DispenseNftTokenInstructionArgs,
-  createInitializeIndicesChunkInstruction
+  createInitializeIndicesChunkInstruction,
 } from "../src/generated";
 import { getWillyWonkaPDAKey } from "../utils";
 import { CANDY_WRAPPER_PROGRAM_ID } from "../../utils";
@@ -42,10 +45,9 @@ export async function createInitializeGumballMachineIxs(
   const allocGumballMachineAcctInstr = SystemProgram.createAccount({
     fromPubkey: payerPublicKey,
     newAccountPubkey: gumballMachinePublicKey,
-    lamports:
-      await connection.getMinimumBalanceForRentExemption(
-        gumballMachineAcctSize
-      ),
+    lamports: await connection.getMinimumBalanceForRentExemption(
+      gumballMachineAcctSize
+    ),
     space: gumballMachineAcctSize,
     programId: GUMBALL_MACHINE_PROGRAM_ID,
   });
@@ -53,10 +55,9 @@ export async function createInitializeGumballMachineIxs(
   const allocMerkleRollAcctInstr = SystemProgram.createAccount({
     fromPubkey: payerPublicKey,
     newAccountPubkey: merkleRollPublicKey,
-    lamports:
-      await connection.getMinimumBalanceForRentExemption(
-        merkleRollAccountSize
-      ),
+    lamports: await connection.getMinimumBalanceForRentExemption(
+      merkleRollAccountSize
+    ),
     space: merkleRollAccountSize,
     programId: GUMMYROLL_MACHINE_PROGRAM_ID,
   });
@@ -66,14 +67,20 @@ export async function createInitializeGumballMachineIxs(
     GUMBALL_MACHINE_PROGRAM_ID
   );
   const bubblegumAuthorityPDAKey = await getBubblegumAuthorityPDA(
-    merkleRollPublicKey,
+    merkleRollPublicKey
+  );
+
+  const [mintRequestPDAKey] = await PublicKey.findProgramAddress(
+    [merkleRollPublicKey.toBuffer(), willyWonkaPDAKey.toBuffer()],
+    BUBBLEGUM_MACHINE_PROGRAM_ID
   );
 
   const initGumballMachineInstr = createInitializeGumballMachineInstruction(
     {
       gumballMachine: gumballMachinePublicKey,
       payer: payerPublicKey,
-      mint,
+      mintRequest: mintRequestPDAKey,
+      mint: mint,
       willyWonka: willyWonkaPDAKey,
       bubblegumAuthority: bubblegumAuthorityPDAKey,
       candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
@@ -91,7 +98,7 @@ export async function createInitializeGumballMachineIxs(
 }
 
 /**
- * Wrapper to generate all instructions needed to initialize a gumball machine's indices. 
+ * Wrapper to generate all instructions needed to initialize a gumball machine's indices.
  * @notice Each instruction should be executed in its transaction to stay within Solana's compute limit
  */
 export function createInitializeIndicesInstructions(
@@ -102,14 +109,15 @@ export function createInitializeIndicesInstructions(
   let smallestUnintializedInd = 0;
   let indexInitInstrs: TransactionInstruction[] = [];
   while (smallestUnintializedInd < maxItems) {
-    let initIndexChunkInstr = createInitializeIndicesChunkInstruction(
-      {
-        authority,
-        gumballMachine,
-      }
-    )
+    let initIndexChunkInstr = createInitializeIndicesChunkInstruction({
+      authority,
+      gumballMachine,
+    });
     indexInitInstrs.push(initIndexChunkInstr);
-    smallestUnintializedInd = Math.min(smallestUnintializedInd + 250000, maxItems);
+    smallestUnintializedInd = Math.min(
+      smallestUnintializedInd + 250000,
+      maxItems
+    );
   }
   return indexInitInstrs;
 }
@@ -124,9 +132,16 @@ export async function createDispenseNFTForSolIx(
   gumballMachinePubkey: PublicKey,
   merkleRollPubkey: PublicKey
 ): Promise<TransactionInstruction> {
-  const willyWonkaPDAKey = await getWillyWonkaPDAKey(gumballMachinePubkey, GUMBALL_MACHINE_PROGRAM_ID);
+  const willyWonkaPDAKey = await getWillyWonkaPDAKey(
+    gumballMachinePubkey,
+    GUMBALL_MACHINE_PROGRAM_ID
+  );
   const bubblegumAuthorityPDAKey = await getBubblegumAuthorityPDA(
-    merkleRollPubkey,
+    merkleRollPubkey
+  );
+  const [mintRequestPDAKey] = await PublicKey.findProgramAddress(
+    [merkleRollPubkey.toBuffer(), willyWonkaPDAKey.toBuffer()],
+    BUBBLEGUM_MACHINE_PROGRAM_ID
   );
   const dispenseInstr = createDispenseNftSolInstruction(
     {
@@ -137,6 +152,7 @@ export async function createDispenseNFTForSolIx(
       recentBlockhashes: SYSVAR_SLOT_HASHES_PUBKEY,
       instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
       bubblegumAuthority: bubblegumAuthorityPDAKey,
+      bubblegumMintRequest: mintRequestPDAKey,
       candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
       gummyroll: GUMMYROLL_MACHINE_PROGRAM_ID,
       merkleSlab: merkleRollPubkey,
@@ -163,7 +179,11 @@ export async function createDispenseNFTForTokensIx(
     GUMBALL_MACHINE_PROGRAM_ID
   );
   const bubblegumAuthorityPDAKey = await getBubblegumAuthorityPDA(
-    merkleRollPubkey,
+    merkleRollPubkey
+  );
+  const [mintRequestPDAKey] = await PublicKey.findProgramAddress(
+    [merkleRollPubkey.toBuffer(), willyWonkaPDAKey.toBuffer()],
+    BUBBLEGUM_MACHINE_PROGRAM_ID
   );
   const dispenseInstr = createDispenseNftTokenInstruction(
     {
@@ -175,6 +195,7 @@ export async function createDispenseNFTForTokensIx(
       recentBlockhashes: SYSVAR_SLOT_HASHES_PUBKEY,
       instructionSysvarAccount: SYSVAR_INSTRUCTIONS_PUBKEY,
       bubblegumAuthority: bubblegumAuthorityPDAKey,
+      bubblegumMintRequest: mintRequestPDAKey,
       candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
       gummyroll: GUMMYROLL_MACHINE_PROGRAM_ID,
       merkleSlab: merkleRollPubkey,
