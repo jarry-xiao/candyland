@@ -508,7 +508,7 @@ pub mod gumball_machine {
             },
             authority_pda_signer,
         );
-        bubblegum::cpi::request_mint_authority(cpi_ctx, 1 << max_depth)?;
+        bubblegum::cpi::request_mint_authority(cpi_ctx, max_items as u64)?;
         if is_new_tree {
             let cpi_ctx = CpiContext::new_with_signer(
                 ctx.accounts.bubblegum.to_account_info(),
@@ -520,7 +520,7 @@ pub mod gumball_machine {
                 },
                 authority_pda_signer,
             );
-            bubblegum::cpi::approve_mint_authority_request(cpi_ctx, 1 << max_depth)?;
+            bubblegum::cpi::approve_mint_authority_request(cpi_ctx, max_items as u64)?;
         }
         Ok(())
     }
