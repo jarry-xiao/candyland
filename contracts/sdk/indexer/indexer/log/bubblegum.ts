@@ -267,6 +267,8 @@ export async function parseBubblegumLog(
         case "Delegate":
             await parseBubblegumReplaceLeaf(db, parsedLog.logs, slot, parser, optionalInfo);
             break;
+        default:
+            break;
     }
 }
 

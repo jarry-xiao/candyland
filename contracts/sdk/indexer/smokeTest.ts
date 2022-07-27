@@ -12,6 +12,8 @@ import {
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 import { Bubblegum } from "../../target/types/bubblegum";
 import {
+  createApproveMintAuthorityRequestInstruction,
+  createCreateDefaultMintRequestInstruction,
   createCreateTreeInstruction,
   createMintV1Instruction,
   createTransferInstruction,
@@ -19,7 +21,8 @@ import {
   Version,
 } from "../bubblegum/src/generated";
 import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
-import { CANDY_WRAPPER_PROGRAM_ID, logTx } from "../utils";
+import { CANDY_WRAPPER_PROGRAM_ID, execute, logTx } from "../utils";
+import { getDefaultMintRequestPDA } from "../bubblegum/src/convenience";
 
 async function main() {
   const connection = new web3.Connection("http://127.0.0.1:8899", {
@@ -116,8 +119,32 @@ async function main() {
       maxBufferSize: maxSize,
     }
   );
+  let mintAuthorityRequest = await getDefaultMintRequestPDA(merkleRollKeypair.publicKey);
+  let requestIx = createCreateDefaultMintRequestInstruction(
+    {
+      mintAuthorityRequest,
+      payer: payer.publicKey,
+      merkleSlab: merkleRollKeypair.publicKey,
+      creator: payer.publicKey,
+      treeAuthority: authority, 
+    },
+    {
+      mintCapacity: 1 << maxDepth
+    }
+  );
+  let approveIx = createApproveMintAuthorityRequestInstruction(
+    {
+      mintAuthorityRequest,
+      merkleSlab: merkleRollKeypair.publicKey,
+      treeDelegate: payer.publicKey,
+      treeAuthority: authority, 
+    },
+    {
+      numMintsToApprove: 1 << maxDepth
+    }
+  );
   let tx = new Transaction();
-  tx = tx.add(allocAccountIx).add(createTreeIx);
+  tx = tx.add(allocAccountIx).add(createTreeIx).add(requestIx).add(approveIx);
   let txId = await BubblegumCtx.provider.connection.sendTransaction(
     tx,
     [payer, merkleRollKeypair],
@@ -134,10 +161,11 @@ async function main() {
       continue;
     }
     if (Math.random() < 0.5) {
-      let tx = new Transaction().add(
-        createMintV1Instruction(
+      console.log("MINT");
+      const mintIx = createMintV1Instruction(
           {
-            mintAuthority: payer.publicKey,
+            mintAuthorityRequest: mintAuthorityRequest,
+            mintAuthority: authority,
             authority: authority,
             merkleSlab: merkleRollKeypair.publicKey,
             gummyrollProgram: GummyrollCtx.programId,
@@ -163,20 +191,18 @@ async function main() {
               ],
             },
           }
-        )
       );
-      await BubblegumCtx.provider.connection.sendTransaction(tx, [payer], {
-        skipPreflight: true,
-      });
+      await execute(BubblegumCtx.provider, [mintIx], [], true);
       numMints++;
     } else {
+      console.log("TRANSFER");
       let response = await fetch(
         `${assetServerUrl}?owner=${wallets[i].publicKey.toBase58()}`,
         { method: "GET" }
       );
       const assets = await response.json();
       if (assets.length === 0) {
-        console.log("No assets found");
+        console.log("   No assets found");
         continue;
       }
       let k = Math.floor(Math.random() * assets.length);
@@ -224,28 +250,27 @@ async function main() {
       );
       replaceIx.keys[1].isSigner = true;
       replaceIx.keys = [...replaceIx.keys, ...proofNodes];
-      let tx = new Transaction().add(replaceIx);
-      let txId = await BubblegumCtx.provider.connection.sendTransaction(
-        tx,
-        [wallets[i]],
-        { skipPreflight: true }
-      );
-      let res = await BubblegumCtx.provider.connection.confirmTransaction(
-        txId,
-        "confirmed"
-      );
-      if (!res.value.err) {
-        let txSize = tx.serialize().length;
-        console.log("Transaction Size", txSize);
-        console.log(
-          `Successfully transferred asset (${assets[k].leafHash} from tree: ${assets[k].treeId
-          }) - ${wallets[i].publicKey.toBase58()} -> ${wallets[
-            j
-          ].publicKey.toBase58()}`
+      try {
+        let txId = await execute(BubblegumCtx.provider, [replaceIx], [wallets[i]], true);
+        let res = await BubblegumCtx.provider.connection.confirmTransaction(
+          txId,
+          "confirmed"
         );
-      } else {
-        console.log("Encountered Error when transferring");
-        await logTx(BubblegumCtx.provider, txId);
+        if (!res.value.err) {
+          let txSize = tx.serialize().length;
+          console.log("Transaction Size", txSize);
+          console.log(
+            `Successfully transferred asset (${assets[k].leafHash} from tree: ${assets[k].treeId
+            }) - ${wallets[i].publicKey.toBase58()} -> ${wallets[
+              j
+            ].publicKey.toBase58()}`
+          );
+        } else {
+          console.log("Encountered Error when transferring");
+          await logTx(BubblegumCtx.provider, txId);
+        }
+      } catch (e) {
+          console.log("Encountered Error when transferring");
       }
     }
   }
