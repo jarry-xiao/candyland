@@ -117,12 +117,13 @@ impl ProgramHandler for BubblegumHandler {
     async fn handle_instruction(&self, bundle: &InstructionBundle) -> Result<(), IngesterError> {
         handle_bubblegum_instruction(
             &bundle.instruction,
+            bundle.slot,
             &bundle.instruction_logs,
             &bundle.keys,
             &self.storage,
             &self.task_sender,
         )
-            .await
+        .await
     }
 }
 
@@ -161,12 +162,15 @@ fn get_bubblegum_event<T: anchor_lang::Event + anchor_lang::AnchorDeserialize>(l
     found_event.ok_or(IngesterError::CompressedAssetEventMalformed)
 }
 
-
-async fn tree_change_only<'a>(db: &DatabaseConnection, logs: &Vec<&'a str>) -> Result<(), IngesterError> {
+async fn tree_change_only<'a>(
+    db: &DatabaseConnection,
+    slot: u64,
+    logs: &Vec<&'a str>,
+) -> Result<(), IngesterError> {
     let gummy_roll_events = get_gummy_roll_events(logs)?;
     db.transaction::<_, _, IngesterError>(|txn| {
         Box::pin(async move {
-            save_changelog_events(gummy_roll_events, txn).await?;
+            save_changelog_events(gummy_roll_events, slot, txn).await?;
             Ok(())
         })
     })
@@ -184,6 +188,7 @@ async fn update_asset(txn: &DatabaseTransaction, id: Vec<u8>, model: asset::Acti
 
 async fn handle_bubblegum_instruction<'a, 'b, 't>(
     instruction: &'a transaction_info::CompiledInstruction<'a>,
+    slot: u64,
     logs: &Vec<&'a str>,
     keys: &Vector<'b, ForwardsUOffset<transaction_info::Pubkey<'b>>>,
     db: &DatabaseConnection,
@@ -197,7 +202,7 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
             let leaf_event = get_leaf_event(logs)?;
             db.transaction::<_, _, IngesterError>(|txn| {
                 Box::pin(async move {
-                    save_changelog_events(gummy_roll_events, txn).await?;
+                    save_changelog_events(gummy_roll_events, slot, txn).await?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
                             nonce: _,
@@ -227,7 +232,7 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
             let leaf_event = get_leaf_event(logs)?;
             db.transaction::<_, _, IngesterError>(|txn| {
                 Box::pin(async move {
-                    save_changelog_events(gummy_roll_events, txn).await?;
+                    save_changelog_events(gummy_roll_events, slot, txn).await?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
                             id,
@@ -254,7 +259,7 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
             let leaf_event = get_leaf_event(logs)?;
             db.transaction::<_, _, IngesterError>(|txn| {
                 Box::pin(async move {
-                    save_changelog_events(gummy_roll_events, txn).await?;
+                    save_changelog_events(gummy_roll_events, slot, txn).await?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
                             id,
@@ -292,7 +297,7 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
             let metadata = ix.message.clone();
             let asset_data_id = db.transaction::<_, i64, IngesterError>(|txn| {
                 Box::pin(async move {
-                    save_changelog_events(gummy_roll_events, txn).await?;
+                    save_changelog_events(gummy_roll_events, slot, txn).await?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
                             nonce,
@@ -436,7 +441,7 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
             let leaf_event = get_leaf_event(logs)?;
             db.transaction::<_, _, IngesterError>(|txn| {
                 Box::pin(async move {
-                    save_changelog_events(gummy_roll_events, txn).await?;
+                    save_changelog_events(gummy_roll_events, slot, txn).await?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
                             id,
@@ -460,7 +465,7 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
             let leaf_event = get_leaf_event(logs)?;
             db.transaction::<_, _, IngesterError>(|txn| {
                 Box::pin(async move {
-                    save_changelog_events(gummy_roll_events, txn).await?;
+                    save_changelog_events(gummy_roll_events, slot, txn).await?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
                             id,

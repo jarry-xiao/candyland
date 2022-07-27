@@ -26,8 +26,11 @@ import {
   assertInRangeAndReturnNum,
   assertLengthAndConvertByteArray,
   assertNonNegativeAndConvertToBN,
-  assertLengthAndConvertToPublicKey
+  assertLengthAndConvertToPublicKey,
+  deserializeCreatorKeys,
+  deserializeCreatorShares
 } from "./utils";
+
 
 export function deserializeInitJson(input): [InitializeGumballMachineInstructionArgs, number, number] {
   const gumballMachineInitArgs: InitializeGumballMachineInstructionArgs = {
@@ -47,17 +50,18 @@ export function deserializeInitJson(input): [InitializeGumballMachineInstruction
     authority: assertLengthAndConvertToPublicKey(input.args.authority, "authority"),
     collectionKey: input.args.collectionKey === null ? SystemProgram.programId : assertLengthAndConvertToPublicKey(input.args.collectionKey, "collectionKey"),
     extensionLen: assertNonNegativeAndConvertToBN(input.args.extensionLen, "extensionLen"),
-    maxMintSize: assertNonNegativeAndConvertToBN(input.args.maxMintSize, "maxMintSize"),
-    maxItems: assertNonNegativeAndConvertToBN(input.args.maxItems, "maxItems"),
+    maxMintSize: assertInRangeAndReturnNum(input.args.maxMintSize, "maxMintSize"),
+    maxItems: assertInRangeAndReturnNum(input.args.maxItems, "maxItems"),
+    creatorKeys: deserializeCreatorKeys(input.args.creatorKeys, input.args.creatorShares),
+    creatorShares: deserializeCreatorShares(input.args.creatorShares)
   }
 
-  const GUMBALL_MACHINE_ACCT_CONFIG_INDEX_ARRAY_SIZE = val(gumballMachineInitArgs.maxItems).toNumber() * 4;
-  const GUMBALL_MACHINE_ACCT_CONFIG_LINES_SIZE = val(gumballMachineInitArgs.extensionLen).toNumber() * val(gumballMachineInitArgs.maxItems).toNumber();
+  const GUMBALL_MACHINE_ACCT_CONFIG_INDEX_ARRAY_SIZE = gumballMachineInitArgs.maxItems * 4;
+  const GUMBALL_MACHINE_ACCT_CONFIG_LINES_SIZE = val(gumballMachineInitArgs.extensionLen).toNumber() * gumballMachineInitArgs.maxItems;
   const GUMBALL_MACHINE_ACCT_SIZE =
     gumballMachineHeaderBeet.byteSize +
     GUMBALL_MACHINE_ACCT_CONFIG_INDEX_ARRAY_SIZE +
     GUMBALL_MACHINE_ACCT_CONFIG_LINES_SIZE;
-  
   
   let MERKLE_ROLL_ACCT_SIZE;
   if ("optionals" in input && "canopyDepth" in input.optionals) {

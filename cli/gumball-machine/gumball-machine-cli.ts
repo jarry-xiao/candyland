@@ -6,8 +6,8 @@ import {
     SystemProgram,
     Transaction,
     Connection as web3Connection,
-    LAMPORTS_PER_SOL,
-  } from "@solana/web3.js";
+    LAMPORTS_PER_SOL
+} from "@solana/web3.js";
 import {
     getProvider, loadWalletKey
 } from '../helpers/utils';
@@ -19,8 +19,8 @@ import {
     createUpdateConfigLinesInstruction,
     createUpdateHeaderMetadataInstruction,
     createDestroyInstruction,
+    initializeGumballMachineIndices,
 } from "../../contracts/sdk/gumball-machine";
-import { Program, Provider } from '@project-serum/anchor';
 import {
     deserializeInitJson
 } from "./input-deserialization/initializeGumballMachine";
@@ -40,18 +40,6 @@ import {
     deserializeDispenseNFTTokensJson
 } from "./input-deserialization/dispenseNFTForTokens";
 import {
-    GumballMachine, IDL as GumballMachineIDL
-} from "../../contracts/target/types/gumball_machine";
-import {
-    PROGRAM_ID as BUBBLEGUM_PROGRAM_ID
-} from "../../contracts/sdk/bubblegum/src/generated";
-import {
-    PROGRAM_ID as GUMBALL_MACHINE_PROGRAM_ID
-} from "../../contracts/sdk/gumball-machine/src/generated";
-import {
-    PROGRAM_ID as GUMMYROLL_PROGRAM_ID
-} from "../../contracts/sdk/gummyroll/index";
-import {
     execute
 } from "../../contracts/sdk/utils";
 import {
@@ -60,6 +48,7 @@ import {
 import {
     resolve
 } from 'path';
+import { deserializeInitIndicesJson } from './input-deserialization/initIndices';
 
 const program = new Command();
 program
@@ -104,7 +93,6 @@ createCommand("init")
         const mintPublicKey = new PublicKey(mintPubkey);
         const provider = await getProvider(url, payerKeypair);
         const creatorKeypair = loadWalletKey(creatorKeypairPath);
-        const gumballMachine = new Program(GumballMachineIDL, GUMBALL_MACHINE_PROGRAM_ID, provider);
 
         const inputObject = JSON.parse(readFileSync(resolve(__dirname, jsonConfigFilepath)).toString());
         const [gumballMachineInitArgs, gumballMachineAcctSize, merkleRollAcctSize] = deserializeInitJson(inputObject);
@@ -118,28 +106,54 @@ createCommand("init")
         // Creator funds creation of gumballMachine and merkleRoll accounts
         await provider.connection.confirmTransaction(
             await provider.connection.requestAirdrop(
-              creatorKeypair.publicKey,
-              LAMPORTS_PER_SOL
+                creatorKeypair.publicKey,
+                75 * LAMPORTS_PER_SOL
             ),
             "confirmed"
         );
 
         const initializeGumballMachineInstrs =
             await createInitializeGumballMachineIxs(
-              creatorKeypair,
-              gumballMachineKeypair,
-              gumballMachineAcctSize,
-              merkleRollKeypair,
-              merkleRollAcctSize,
-              gumballMachineInitArgs,
-              mintPublicKey,
-              creatorKeypair.publicKey,
-              GUMMYROLL_PROGRAM_ID,
-              BUBBLEGUM_PROGRAM_ID,
-              gumballMachine
+                creatorKeypair.publicKey,
+                gumballMachineKeypair.publicKey,
+                gumballMachineAcctSize,
+                merkleRollKeypair.publicKey,
+                merkleRollAcctSize,
+                gumballMachineInitArgs,
+                mintPublicKey,
+                provider.connection
             );
-        const txId = await execute(provider, initializeGumballMachineInstrs, [creatorKeypair, gumballMachineKeypair, merkleRollKeypair], false, true);
+        const txId = await execute(provider, initializeGumballMachineInstrs, [creatorKeypair, gumballMachineKeypair, merkleRollKeypair], true, true);
         log.info(`TX Completed Successfully: ${txId}`);
+    });
+
+createCommand("init-indices")
+    .description("Initialize the NFT indices for the gumball machine. This command may execute multiple transactions.")
+    .requiredOption(
+        "-a, --authority-keypair-path <string>",
+        'Path to gumball machine creator keypair'
+    )
+    .requiredOption(
+        "-g, --gumball-machine-pubkey <string>",
+        'Public key of the gumball machine'
+    )
+    .requiredOption(
+        "-j, --json-config-filepath <string>",
+        "File path to JSON file with args"
+    )
+    .action(async (options) => {
+        const { url, payerKeypairPath, authorityKeypairPath, gumballMachinePubkey, jsonConfigFilepath } = options;
+
+        const payerKeypair = loadWalletKey(payerKeypairPath);
+        const authorityKeypair = loadWalletKey(authorityKeypairPath);
+        const gumballMachinePublicKey = new PublicKey(gumballMachinePubkey);
+
+        const inputObject = JSON.parse(readFileSync(resolve(__dirname, jsonConfigFilepath)).toString());
+        const initIndicesArgs = deserializeInitIndicesJson(inputObject);
+
+        const provider = await getProvider(url, payerKeypair);
+
+        await initializeGumballMachineIndices(provider, initIndicesArgs.maxItems, authorityKeypair, gumballMachinePublicKey, true);
     });
 
 createCommand("add-config-lines")
@@ -162,7 +176,7 @@ createCommand("add-config-lines")
         const payerKeypair = loadWalletKey(payerKeypairPath);
         const authorityKeypair = loadWalletKey(authorityKeypairPath);
         const gumballMachinePublicKey = new PublicKey(gumballMachinePubkey);
-        
+
         const inputObject = JSON.parse(readFileSync(resolve(__dirname, jsonConfigFilepath)).toString());
         const configLinesToAdd = deserializeAddConfigLinesJson(inputObject);
 
@@ -176,7 +190,7 @@ createCommand("add-config-lines")
                 },
                 configLinesToAdd
             );
-        const txId = await execute(provider, [addConfigLinesInstr], [authorityKeypair], false, true);
+        const txId = await execute(provider, [addConfigLinesInstr], [authorityKeypair], true, true);
         log.info(`TX Completed Successfully: ${txId}`);
     });
 
@@ -214,7 +228,7 @@ createCommand("update-config-lines")
                 },
                 updateConfigLinesArgs
             );
-        const txId = await execute(provider, [updateConfigLinesInstr], [authorityKeypair], false, true);
+        const txId = await execute(provider, [updateConfigLinesInstr], [authorityKeypair], true, true);
         log.info(`TX Completed Successfully: ${txId}`);
     });
 
@@ -252,7 +266,7 @@ createCommand("update-header-metadata")
                 },
                 updateGumballMachineHeaderArgs
             );
-        const txId = await execute(provider, [updateHeaderMetadataInstr], [authorityKeypair], false, true);
+        const txId = await execute(provider, [updateHeaderMetadataInstr], [authorityKeypair], true, true);
         log.info(`TX Completed Successfully: ${txId}`);
     });
 
@@ -282,7 +296,7 @@ createCommand("destroy")
                     authority: authorityKeypair.publicKey,
                 }
             );
-        const txId = await execute(provider, [destroyInstr], [authorityKeypair], false, true);
+        const txId = await execute(provider, [destroyInstr], [authorityKeypair], true, true);
         log.info(`TX Completed Successfully: ${txId}`);
     });
 
@@ -317,20 +331,15 @@ createCommand("dispense-nft-sol")
         const inputObject = JSON.parse(readFileSync(resolve(__dirname, jsonConfigFilepath)).toString());
         const dispenseNFTSolArgs = deserializeDispenseNFTSolJson(inputObject);
 
-        const gumballMachine = new Program(GumballMachineIDL, GUMBALL_MACHINE_PROGRAM_ID, provider);
-
         const dispenseNFTForSolIx =
             await createDispenseNFTForSolIx(
                 dispenseNFTSolArgs,
                 payerKeypair.publicKey,
                 receiverPublicKey,
                 gumballMachinePublicKey,
-                merkleRollPublicKey,
-                GUMMYROLL_PROGRAM_ID,
-                BUBBLEGUM_PROGRAM_ID,
-                gumballMachine
+                merkleRollPublicKey
             );
-        const txId = await execute(provider, [dispenseNFTForSolIx], [payerKeypair], false, true);
+        const txId = await execute(provider, [dispenseNFTForSolIx], [payerKeypair], true, true);
         log.info(`TX Completed Successfully: ${txId}`);
     });
 
@@ -370,8 +379,6 @@ createCommand("dispense-nft-token")
         const inputObject = JSON.parse(readFileSync(resolve(__dirname, jsonConfigFilepath)).toString());
         const dispenseNFTTokenArgs = deserializeDispenseNFTTokensJson(inputObject);
 
-        const gumballMachine = new Program(GumballMachineIDL, GUMBALL_MACHINE_PROGRAM_ID, provider);
-
         const dispenseNFTForTokensIx =
             await createDispenseNFTForTokensIx(
                 dispenseNFTTokenArgs,
@@ -379,12 +386,9 @@ createCommand("dispense-nft-token")
                 payerTokensPublicKey,
                 receiverPublicKey,
                 gumballMachinePublicKey,
-                merkleRollPublicKey,
-                GUMMYROLL_PROGRAM_ID,
-                BUBBLEGUM_PROGRAM_ID,
-                gumballMachine
+                merkleRollPublicKey
             );
-        const txId = await execute(provider, [dispenseNFTForTokensIx], [payerKeypair], false, true);
+        const txId = await execute(provider, [dispenseNFTForTokensIx], [payerKeypair], true, true);
         log.info(`TX Completed Successfully: ${txId}`);
     });
 

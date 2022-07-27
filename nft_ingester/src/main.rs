@@ -1,13 +1,15 @@
-pub mod error;
-pub mod events;
-pub mod parsers;
-pub mod utils;
-pub mod tasks;
+mod backfiller;
+mod error;
+mod events;
+mod parsers;
+mod tasks;
+mod utils;
 
 use cadence_macros::statsd_time;
 use chrono::Utc;
 use {
     crate::{
+        backfiller::backfiller,
         parsers::*,
         utils::{order_instructions, parse_logs},
     },
@@ -27,7 +29,6 @@ use {
     cadence::{BufferedUdpMetricSink, QueuingMetricSink, StatsdClient},
     std::net::UdpSocket,
 };
-
 use messenger::MessengerConfig;
 use crate::error::IngesterError;
 use crate::tasks::{BgTask, TaskManager};
@@ -45,10 +46,20 @@ async fn setup_manager<'a, 'b>(
     manager
 }
 
-#[derive(Deserialize, PartialEq, Debug)]
+// Types and constants used for Figment configuration items.
+pub type DatabaseConfig = figment::value::Dict;
+pub const DATABASE_URL_KEY: &str = "url";
+pub const DATABASE_LISTENER_CHANNEL_KEY: &str = "listener_channel";
+pub type RpcConfig = figment::value::Dict;
+pub const RPC_URL_KEY: &str = "url";
+pub const RPC_COMMITMENT_KEY: &str = "commitment";
+
+// Struct used for Figment configuration items.
+#[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct IngesterConfig {
+    pub database_config: DatabaseConfig,
     pub messenger_config: MessengerConfig,
-    pub database_url: String,
+    pub rpc_config: RpcConfig,
     pub metrics_port: u16,
     pub metrics_host: String,
 }
@@ -67,24 +78,40 @@ fn setup_metrics(config: &IngesterConfig) {
 
 #[tokio::main]
 async fn main() {
+    // Read config.
     println!("Starting DASgester");
     let config: IngesterConfig = Figment::new()
         .join(Env::prefixed("INGESTER_"))
         .extract()
-        .map_err(|config_error| IngesterError::ConfigurationError { msg: format!("{}", config_error) }).unwrap();
+        .map_err(|config_error| IngesterError::ConfigurationError {
+            msg: format!("{}", config_error),
+        })
+        .unwrap();
+    // Get database config.
+    let url = config
+        .database_config
+        .get(&*DATABASE_URL_KEY)
+        .and_then(|u| u.clone().into_string())
+        .ok_or(IngesterError::ConfigurationError {
+            msg: format!("Database connection string missing: {}", DATABASE_URL_KEY),
+        })
+        .unwrap();
     // Setup Postgres.
     let mut tasks = vec![];
     let pool = PgPoolOptions::new()
         .max_connections(5)
-        .connect(&*config.database_url)
+        .connect(&url)
         .await
         .unwrap();
-    let background_task_manager = TaskManager::new("background-tasks".to_string(), pool.clone()).unwrap();
+    let background_task_manager =
+        TaskManager::new("background-tasks".to_string(), pool.clone()).unwrap();
     // Service streams as separate concurrent processes.
     println!("Setting up tasks");
     setup_metrics(&config);
-    tasks.push(service_transaction_stream::<RedisMessenger>(pool, background_task_manager.get_sender(), config.messenger_config.clone()).await);
+    tasks.push(service_transaction_stream::<RedisMessenger>(pool.clone(), background_task_manager.get_sender(), config.messenger_config.clone()).await);
     statsd_count!("ingester.startup", 1);
+
+    tasks.push(backfiller::<RedisMessenger>(pool.clone(), config.clone()).await);
     // Wait for ctrl-c.
     match tokio::signal::ctrl_c().await {
         Ok(()) => {}
@@ -93,6 +120,7 @@ async fn main() {
             // We also shut down in case of error.
         }
     }
+
     // Kill all tasks.
     for task in tasks {
         task.abort();
@@ -228,6 +256,7 @@ async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<
                             inner_ix,
                             keys,
                             instruction_logs: parsed_log.1,
+                            slot: transaction.slot(),
                         })
                         .await
                         .map_err(|e| {

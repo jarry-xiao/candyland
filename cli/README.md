@@ -6,6 +6,6 @@ Welcome to the Candyland CLI suite! There are CLI solutions for several common j
 
 To install dependencies common to all of the CLIs:
 
-1. `npm install`
+1. `yarn install`
 
 Each individual CLI may have more setup instructions, so please follow those as well.

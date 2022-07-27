@@ -13,7 +13,7 @@ import {
   strToByteUint8Array
 } from "../../../contracts/sdk/utils/index";
 
-export function getBufferFromStringArr(stringArray: [string]): Buffer {
+export function getBufferFromStringArr(stringArray: string[]): Buffer {
   const buffer = stringArray.reduce(
     (prevVal, curVal) =>
       Buffer.concat([prevVal, Buffer.from(curVal)]),
@@ -52,4 +52,22 @@ export function assertLengthAndConvertByteArray(s: string, size: number, propert
     throw new Error(`❌ ${propertyName} has too many characters! Reference docs for size limits of GumballHeader props. Double check your JSON init props. ❌`);
   }
   return strToByteArray(s, size);
+}
+
+export function deserializeCreatorKeys(keys: string[], shares: number[]): PublicKey[] {
+  if (keys.length != shares.length) {
+    throw new Error(`❌ creatorKeys must be the same length as creatorShares ❌`);
+  }
+  if (keys.length > 4) {
+    throw new Error(`❌ creatorKeys is too long! We currently only support at most 4 creators ❌`);
+  } else {
+    return keys.map((key, i) => assertLengthAndConvertToPublicKey(key, `Creator key ${i}`))
+  }
+}
+
+export function deserializeCreatorShares(shares: number[]): Uint8Array {
+  if (shares.length > 0 && shares.reduce((acc, share) => acc + share, 0) != 100) {
+    throw new Error(`❌ creatorShares must sum to exactly 100% ❌`);
+  }
+  return Uint8Array.from(shares);
 }
