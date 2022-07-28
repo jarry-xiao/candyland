@@ -18,6 +18,7 @@ pub struct Model {
     pub asset_id: Vec<u8>,
     pub scopes: Option<String>,
     pub authority: Vec<u8>,
+    pub seq: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveColumn)]
@@ -26,6 +27,7 @@ pub enum Column {
     AssetId,
     Scopes,
     Authority,
+    Seq,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DerivePrimaryKey)]
@@ -53,6 +55,7 @@ impl ColumnTrait for Column {
             Self::AssetId => ColumnType::Binary.def(),
             Self::Scopes => ColumnType::Custom("array".to_owned()).def().null(),
             Self::Authority => ColumnType::Binary.def(),
+            Self::Seq => ColumnType::BigInteger.def(),
         }
     }
 }

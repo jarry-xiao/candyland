@@ -18,6 +18,10 @@ use {
         SqlxPostgresConnector,
         TransactionTrait,
         DatabaseTransaction,
+        sea_query::OnConflict,
+        DbBackend,
+        ExecResult,
+        DbErr
     },
     solana_sdk::pubkeys,
     digital_asset_types::{
@@ -170,20 +174,43 @@ async fn tree_change_only<'a>(
     let gummy_roll_events = get_gummy_roll_events(logs)?;
     db.transaction::<_, _, IngesterError>(|txn| {
         Box::pin(async move {
-            save_changelog_events(gummy_roll_events, slot, txn).await?;
-            Ok(())
+            save_changelog_events(gummy_roll_events, slot, txn).await.map(|_| ())
         })
     })
         .await
         .map_err(Into::into)
 }
 
-async fn update_asset(txn: &DatabaseTransaction, id: Vec<u8>, model: asset::ActiveModel) -> Result<asset::Model, IngesterError> {
-    asset::Entity::update(model)
-        .filter(asset::Column::Id.eq(id))
-        .exec(txn)
-        .await
-        .map_err(Into::into)
+async fn update_asset(
+    txn: &DatabaseTransaction,
+    id: Vec<u8>,
+    seq: Option<u64>,
+    model: asset::ActiveModel,
+) -> Result<(), IngesterError> {
+    let update_one = if let Some(seq) = seq {
+        asset::Entity::update(model)
+            .filter(asset::Column::Id.eq(id))
+            .filter(asset::Column::Seq.lte(seq))
+    } else {
+        asset::Entity::update(model)
+            .filter(asset::Column::Id.eq(id))
+    };
+
+    match update_one.exec(txn).await {
+        Ok(_) => Ok(()),
+        Err(err) => {
+            match err {
+                DbErr::RecordNotFound(ref s) => {
+                    if s.find("None of the database rows are affected") != None {
+                        Ok(())
+                    } else {
+                        Err(IngesterError::from(err))
+                    }
+                },
+                _ => Err(IngesterError::from(err))
+            }
+        }
+    }
 }
 
 async fn handle_bubblegum_instruction<'a, 'b, 't>(
@@ -202,24 +229,35 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
             let leaf_event = get_leaf_event(logs)?;
             db.transaction::<_, _, IngesterError>(|txn| {
                 Box::pin(async move {
-                    save_changelog_events(gummy_roll_events, slot, txn).await?;
+                    let seq = save_changelog_events(gummy_roll_events, slot, txn)
+                        .await?
+                        .iter()
+                        .max()
+                        .map(|v| *v)
+                        .ok_or(IngesterError::ChangeLogEventMalformed)?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
-                            nonce: _,
                             id,
+                            delegate,
                             owner,
                             ..
                         } => {
-                            let owner_bytes = owner.to_bytes().to_vec();
                             let id_bytes = id.to_bytes().to_vec();
+                            let delegate = if owner == delegate {
+                                None
+                            } else {
+                                Some(delegate.to_bytes().to_vec())
+                            };
+                            let owner_bytes = owner.to_bytes().to_vec();
                             let asset_to_update = asset::ActiveModel {
                                 id: Unchanged(id_bytes.clone()),
                                 leaf: Set(Some(leaf_event.schema.to_node().to_vec())),
-                                delegate: Set(None),
+                                delegate: Set(delegate),
                                 owner: Set(owner_bytes),
+                                seq: Set(seq as i64), // gummyroll seq
                                 ..Default::default()
                             };
-                            update_asset(txn, id_bytes, asset_to_update).await
+                            update_asset(txn, id_bytes, Some(seq), asset_to_update).await
                         }
                         _ => Err(IngesterError::NotImplemented)
                     }
@@ -232,21 +270,26 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
             let leaf_event = get_leaf_event(logs)?;
             db.transaction::<_, _, IngesterError>(|txn| {
                 Box::pin(async move {
-                    save_changelog_events(gummy_roll_events, slot, txn).await?;
+                    let _seq = save_changelog_events(gummy_roll_events, slot, txn)
+                        .await?
+                        .iter()
+                        .max()
+                        .map(|v| *v)
+                        .ok_or(IngesterError::ChangeLogEventMalformed)?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
                             id,
-                            delegate,
                             ..
                         } => {
-                            let _delegate_bytes = delegate.to_bytes().to_vec();
                             let id_bytes = id.to_bytes().to_vec();
                             let asset_to_update = asset::ActiveModel {
                                 id: Unchanged(id_bytes.clone()),
                                 burnt: Set(true),
                                 ..Default::default()
                             };
-                            update_asset(txn, id_bytes, asset_to_update).await
+                            // Don't send sequence number with this update, because we will always
+                            // run this update even if it's from a backfill/replay.
+                            update_asset(txn, id_bytes, None, asset_to_update).await
                         }
                         _ => Err(IngesterError::NotImplemented)
                     }
@@ -259,22 +302,35 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
             let leaf_event = get_leaf_event(logs)?;
             db.transaction::<_, _, IngesterError>(|txn| {
                 Box::pin(async move {
-                    save_changelog_events(gummy_roll_events, slot, txn).await?;
+                    let seq = save_changelog_events(gummy_roll_events, slot, txn)
+                        .await?
+                        .iter()
+                        .max()
+                        .map(|v| *v)
+                        .ok_or(IngesterError::ChangeLogEventMalformed)?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
                             id,
                             delegate,
+                            owner,
                             ..
                         } => {
-                            let delegate_bytes = delegate.to_bytes().to_vec();
                             let id_bytes = id.to_bytes().to_vec();
+                            let delegate = if owner == delegate {
+                                None
+                            } else {
+                                Some(delegate.to_bytes().to_vec())
+                            };
+                            let owner_bytes = owner.to_bytes().to_vec();
                             let asset_to_update = asset::ActiveModel {
                                 id: Unchanged(id_bytes.clone()),
                                 leaf: Set(Some(leaf_event.schema.to_node().to_vec())),
-                                delegate: Set(Some(delegate_bytes)),
+                                delegate: Set(delegate),
+                                owner: Set(owner_bytes),
+                                seq: Set(seq as i64), // gummyroll seq
                                 ..Default::default()
                             };
-                            update_asset(txn, id_bytes, asset_to_update).await
+                            update_asset(txn, id_bytes, Some(seq), asset_to_update).await
                         }
                         _ => Err(IngesterError::NotImplemented)
                     }
@@ -297,7 +353,12 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
             let metadata = ix.message.clone();
             let asset_data_id = db.transaction::<_, i64, IngesterError>(|txn| {
                 Box::pin(async move {
-                    save_changelog_events(gummy_roll_events, slot, txn).await?;
+                    let seq = save_changelog_events(gummy_roll_events, slot, txn)
+                        .await?
+                        .iter()
+                        .max()
+                        .map(|v| *v)
+                        .ok_or(IngesterError::ChangeLogEventMalformed)?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
                             nonce,
@@ -313,6 +374,10 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                                 metadata.primary_sale_happened,
                                 metadata.is_mutable,
                             );
+
+                            // Insert into `asset_data` table.  Note that if a transaction is
+                            // replayed, this will insert the data again resulting in a
+                            // duplicate entry.
                             let chain_data = ChainDataV1 {
                                 name: metadata.name,
                                 symbol: metadata.symbol,
@@ -345,17 +410,15 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                                 metadata: Set(JsonValue::String("processing".to_string())),
                                 metadata_mutability: Set(Mutability::Mutable),
                                 ..Default::default()
-                            }.insert(txn).await
-                                .map_err(|txn_err| {
-                                    IngesterError::StorageWriteError(txn_err.to_string())
-                                })?;
+                            }.insert(txn).await?;
 
+                            // Insert into `asset` table.
                             let delegate = if owner == delegate {
                                 None
                             } else {
                                 Some(delegate)
                             };
-                            asset::ActiveModel {
+                            let model = asset::ActiveModel {
                                 id: Set(id.to_bytes().to_vec()),
                                 owner: Set(owner),
                                 owner_type: Set(OwnerType::Single),
@@ -369,17 +432,26 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                                 specification_version: Set(1),
                                 nonce: Set(nonce as i64),
                                 leaf: Set(Some(leaf_event.schema.to_node().to_vec())),
-                                /// Get gummy roll seq
                                 royalty_target_type: Set(RoyaltyTargetType::Creators),
                                 royalty_target: Set(None),
                                 royalty_amount: Set(metadata.seller_fee_basis_points as i32), //basis points
                                 chain_data_id: Set(Some(data.id)),
+                                seq: Set(seq as i64), // gummyroll seq
                                 ..Default::default()
-                            }.insert(txn)
-                                .await
-                                .map_err(|txn_err| {
-                                    IngesterError::StorageWriteError(txn_err.to_string())
-                                })?;
+                            };
+
+                            // Do not attempt to modify any existing values:
+                            // `ON CONFLICT ('id') DO NOTHING`.
+                            let query = asset::Entity::insert(model)
+                                .on_conflict(
+                                    OnConflict::columns([asset::Column::Id])
+                                        .do_nothing()
+                                        .to_owned(),
+                                )
+                               .build(DbBackend::Postgres);
+                            txn.execute(query).await?;
+
+                            // Insert into `asset_creators` table.
                             if metadata.creators.len() > 0 {
                                 let mut creators = Vec::with_capacity(metadata.creators.len());
                                 for c in metadata.creators {
@@ -388,37 +460,63 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                                         creator: Set(c.address.to_bytes().to_vec()),
                                         share: Set(c.share as i32),
                                         verified: Set(c.verified),
+                                        seq: Set(seq as i64), // gummyroll seq
                                         ..Default::default()
                                     });
                                 }
-                                asset_creators::Entity::insert_many(creators)
-                                    .exec(txn)
-                                    .await
-                                    .map_err(|txn_err| {
-                                        IngesterError::StorageWriteError(txn_err.to_string())
-                                    })?;
-                            }
-                            asset_authority::ActiveModel {
-                                asset_id: Set(id.to_bytes().to_vec()),
-                                authority: Set(update_authority),
-                                ..Default::default()
-                            }.insert(txn)
-                                .await
-                                .map_err(|txn_err| {
-                                    IngesterError::StorageWriteError(txn_err.to_string())
-                                })?;
-                            if let Some(c) = metadata.collection {
-                                if c.verified {
-                                    asset_grouping::ActiveModel {
-                                        asset_id: Set(id.to_bytes().to_vec()),
-                                        group_key: Set("collection".to_string()),
-                                        group_value: Set(c.key.to_string()),
-                                        ..Default::default()
-                                    }.insert(txn)
-                                        .await
-                                        .map_err(|txn_err| {
-                                            IngesterError::StorageWriteError(txn_err.to_string())
-                                        })?;
+
+                                // Do not attempt to modify any existing values:
+                                // `ON CONFLICT ('asset_id') DO NOTHING`.
+                                let query = asset_creators::Entity::insert_many(creators)
+                                    .on_conflict(
+                                        OnConflict::columns([asset_creators::Column::AssetId])
+                                            .do_nothing()
+                                            .to_owned(),
+                                    )
+                                    .build(DbBackend::Postgres);
+                                txn.execute(query).await?;
+
+                                // Insert into `asset_authority` table.
+                                let model = asset_authority::ActiveModel {
+                                    asset_id: Set(id.to_bytes().to_vec()),
+                                    authority: Set(update_authority),
+                                    seq: Set(seq as i64), // gummyroll seq
+                                    ..Default::default()
+                                };
+
+                                // Do not attempt to modify any existing values:
+                                // `ON CONFLICT ('asset_id') DO NOTHING`.
+                                let query = asset_authority::Entity::insert(model)
+                                    .on_conflict(
+                                        OnConflict::columns([asset_authority::Column::AssetId])
+                                            .do_nothing()
+                                            .to_owned(),
+                                    )
+                                    .build(DbBackend::Postgres);
+                                txn.execute(query).await?;
+
+                                // Insert into `asset_grouping` table.
+                                if let Some(c) = metadata.collection {
+                                    if c.verified {
+                                        let model = asset_grouping::ActiveModel {
+                                            asset_id: Set(id.to_bytes().to_vec()),
+                                            group_key: Set("collection".to_string()),
+                                            group_value: Set(c.key.to_string()),
+                                            seq: Set(seq as i64), // gummyroll seq
+                                            ..Default::default()
+                                        };
+
+                                    // Do not attempt to modify any existing values:
+                                    // `ON CONFLICT ('asset_id') DO NOTHING`.
+                                        let query = asset_grouping::Entity::insert(model)
+                                            .on_conflict(
+                                                OnConflict::columns([asset_grouping::Column::AssetId])
+                                                    .do_nothing()
+                                                    .to_owned(),
+                                            )
+                                            .build(DbBackend::Postgres);
+                                        txn.execute(query).await?;
+                                    }
                                 }
                             }
                             Ok(data.id)
@@ -436,24 +534,40 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
             task_manager.send(Box::new(task.unwrap()))?;
         }
         bubblegum::InstructionName::Redeem => {
-            println!("Bubblegum: Redeem");
+            println!("BGUM: Redeem");
             let gummy_roll_events = get_gummy_roll_events(logs)?;
             let leaf_event = get_leaf_event(logs)?;
             db.transaction::<_, _, IngesterError>(|txn| {
                 Box::pin(async move {
-                    save_changelog_events(gummy_roll_events, slot, txn).await?;
+                    let seq = save_changelog_events(gummy_roll_events, slot, txn)
+                        .await?
+                        .iter()
+                        .max()
+                        .map(|v| *v)
+                        .ok_or(IngesterError::ChangeLogEventMalformed)?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
                             id,
+                            delegate,
+                            owner,
                             ..
                         } => {
                             let id_bytes = id.to_bytes().to_vec();
+                            let delegate = if owner == delegate {
+                                None
+                            } else {
+                                Some(delegate.to_bytes().to_vec())
+                            };
+                            let owner_bytes = owner.to_bytes().to_vec();
                             let asset_to_update = asset::ActiveModel {
                                 id: Unchanged(id_bytes.clone()),
                                 leaf: Set(Some(vec![0; 32])),
+                                delegate: Set(delegate),
+                                owner: Set(owner_bytes),
+                                seq: Set(seq as i64), // gummyroll seq
                                 ..Default::default()
                             };
-                            update_asset(txn, id_bytes, asset_to_update).await
+                            update_asset(txn, id_bytes, Some(seq), asset_to_update).await
                         }
                         _ => Err(IngesterError::NotImplemented)
                     }
@@ -461,23 +575,40 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
             }).await?;
         }
         bubblegum::InstructionName::CancelRedeem => {
+            println!("BGUM: Cancel Redeem");
             let gummy_roll_events = get_gummy_roll_events(logs)?;
             let leaf_event = get_leaf_event(logs)?;
             db.transaction::<_, _, IngesterError>(|txn| {
                 Box::pin(async move {
-                    save_changelog_events(gummy_roll_events, slot, txn).await?;
+                    let seq = save_changelog_events(gummy_roll_events, slot, txn)
+                        .await?
+                        .iter()
+                        .max()
+                        .map(|v| *v)
+                        .ok_or(IngesterError::ChangeLogEventMalformed)?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
                             id,
+                            delegate,
+                            owner,
                             ..
                         } => {
                             let id_bytes = id.to_bytes().to_vec();
+                            let delegate = if owner == delegate {
+                                None
+                            } else {
+                                Some(delegate.to_bytes().to_vec())
+                            };
+                            let owner_bytes = owner.to_bytes().to_vec();
                             let asset_to_update = asset::ActiveModel {
                                 id: Unchanged(id_bytes.clone()),
                                 leaf: Set(Some(leaf_event.schema.to_node().to_vec())),
+                                delegate: Set(delegate),
+                                owner: Set(owner_bytes),
+                                seq: Set(seq as i64), // gummyroll seq
                                 ..Default::default()
                             };
-                            update_asset(txn, id_bytes, asset_to_update).await
+                            update_asset(txn, id_bytes, Some(seq), asset_to_update).await
                         }
                         _ => Err(IngesterError::NotImplemented)
                     }
@@ -492,7 +623,7 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                     match decompress_event.version {
                         Version::V1 => {
                             let id_bytes = decompress_event.id.to_bytes().to_vec();
-                            let asset_to_update = asset::ActiveModel {
+                            let model = asset::ActiveModel {
                                 id: Unchanged(id_bytes.clone()),
                                 leaf: Set(None),
                                 compressed: Set(false),
@@ -501,7 +632,19 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                                 supply_mint: Set(Some(id_bytes.clone())),
                                 ..Default::default()
                             };
-                            update_asset(txn, id_bytes, asset_to_update).await
+
+                            // After the decompress instruction runs, the asset is no longer managed
+                            // by Bubblegum and Gummyroll, so there will not be any other instructions
+                            // after this one.
+                            //
+                            // Do not run this command if the asset is already marked as
+                            // decompressed.
+                            let query = asset::Entity::update(model)
+                                .filter(asset::Column::Id.eq(id_bytes))
+                                .filter(asset::Column::Compressed.eq(true))
+                                .build(DbBackend::Postgres);
+
+                            txn.execute(query).await.map(|_| ()).map_err(Into::into)
                         }
                         _ => Err(IngesterError::NotImplemented)
                     }

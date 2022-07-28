@@ -96,6 +96,7 @@ create table asset
     supply_mint           bytea,
     -- compression
     compressed            bool                not null default false,
+    seq                   bigint              not null,
     -- -- Can this asset be compressed
     compressible          bool                not null default false,
     tree_id               bytea,
@@ -125,9 +126,11 @@ create table asset_grouping
     id          bigserial PRIMARY KEY,
     asset_id    bytea references asset (id) not null,
     group_key   text                        not null,
-    group_value text                        not null
+    group_value text                        not null,
+    seq         bigint                      not null
 );
 -- Limit indexable grouping keys, meaning only create on specific keys, but index the ones we allow
+create unique index asset_grouping_asset_id on asset_grouping (asset_id);
 create index asset_grouping_key on asset_grouping (group_key, group_value);
 create index asset_grouping_value on asset_grouping (group_key, asset_id);
 
@@ -137,8 +140,10 @@ create table asset_authority
     id        bigserial PRIMARY KEY,
     asset_id  bytea references asset (id) not null,
     scopes    text[],
-    authority bytea                       not null
+    authority bytea                       not null,
+    seq       bigint                      not null
 );
+create unique index asset_authority_asset_id on asset_authority (asset_id);
 create index asset_authority_idx on asset_authority (asset_id, authority);
 
 -- creators
@@ -148,9 +153,9 @@ create table asset_creators
     asset_id bytea references asset (id) not null,
     creator  bytea                       not null,
     share    int                         not null default 0,
-    verified bool                        not null default false
+    verified bool                        not null default false,
+    seq      bigint                      not null
 );
-
-
+create unique index asset_creators_asset_id on asset_creators (asset_id);
 create index asset_creator on asset_creators (asset_id, creator);
 create index asset_verified_creator on asset_creators (asset_id, verified);
