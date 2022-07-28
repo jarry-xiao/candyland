@@ -52,7 +52,8 @@ impl ProgramHandler for GummyRollHandler {
     }
 
     async fn handle_instruction(&self, bundle: &InstructionBundle) -> Result<(), IngesterError> {
-        let _ = handle_gummyroll_instruction(&bundle.instruction_logs, bundle.slot, &self.storage).await?;
+        let _ = handle_gummyroll_instruction(&bundle.instruction_logs, bundle.slot, &self.storage)
+            .await?;
         Ok(())
     }
 }
@@ -92,8 +93,7 @@ pub async fn save_changelog_events(
 ) -> Result<Vec<u64>, IngesterError> {
     let mut seq_nums = Vec::with_capacity(gummy_roll_events.len());
     for change_log_event in gummy_roll_events {
-        gummyroll_change_log_event_to_database(&change_log_event, slot, txn, false)
-            .await?;
+        gummyroll_change_log_event_to_database(&change_log_event, slot, txn, false).await?;
 
         seq_nums.push(change_log_event.seq);
     }
