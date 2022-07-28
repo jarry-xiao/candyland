@@ -96,6 +96,7 @@ create table asset
     supply_mint           bytea,
     -- compression
     compressed            bool                not null default false,
+    seq                   bigint              not null,
     -- -- Can this asset be compressed
     compressible          bool                not null default false,
     tree_id               bytea,
@@ -109,8 +110,7 @@ create table asset
     chain_data_id         bigint references asset_data (id),
     -- visibility
     created_at            timestamp with time zone     default (now() at time zone 'utc'),
-    burnt                 bool                not null default false,
-    seq                   bigint              not null
+    burnt                 bool                not null default false
 );
 
 create index asset_tree on asset (tree_id);

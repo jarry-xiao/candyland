@@ -231,6 +231,9 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                 Box::pin(async move {
                     let seq = save_changelog_events(gummy_roll_events, slot, txn)
                         .await?
+                        .iter()
+                        .max()
+                        .map(|v| *v)
                         .ok_or(IngesterError::ChangeLogEventMalformed)?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
@@ -267,8 +270,11 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
             let leaf_event = get_leaf_event(logs)?;
             db.transaction::<_, _, IngesterError>(|txn| {
                 Box::pin(async move {
-                    let seq = save_changelog_events(gummy_roll_events, slot, txn)
+                    let _seq = save_changelog_events(gummy_roll_events, slot, txn)
                         .await?
+                        .iter()
+                        .max()
+                        .map(|v| *v)
                         .ok_or(IngesterError::ChangeLogEventMalformed)?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
@@ -298,6 +304,9 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                 Box::pin(async move {
                     let seq = save_changelog_events(gummy_roll_events, slot, txn)
                         .await?
+                        .iter()
+                        .max()
+                        .map(|v| *v)
                         .ok_or(IngesterError::ChangeLogEventMalformed)?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
@@ -346,8 +355,10 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                 Box::pin(async move {
                     let seq = save_changelog_events(gummy_roll_events, slot, txn)
                         .await?
+                        .iter()
+                        .max()
+                        .map(|v| *v)
                         .ok_or(IngesterError::ChangeLogEventMalformed)?;
-
                     match leaf_event.schema {
                         LeafSchema::V1 {
                             nonce,
@@ -530,6 +541,9 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                 Box::pin(async move {
                     let seq = save_changelog_events(gummy_roll_events, slot, txn)
                         .await?
+                        .iter()
+                        .max()
+                        .map(|v| *v)
                         .ok_or(IngesterError::ChangeLogEventMalformed)?;
                     match leaf_event.schema {
                         LeafSchema::V1 {
@@ -568,6 +582,9 @@ async fn handle_bubblegum_instruction<'a, 'b, 't>(
                 Box::pin(async move {
                     let seq = save_changelog_events(gummy_roll_events, slot, txn)
                         .await?
+                        .iter()
+                        .max()
+                        .map(|v| *v)
                         .ok_or(IngesterError::ChangeLogEventMalformed)?;
                     match leaf_event.schema {
                         LeafSchema::V1 {

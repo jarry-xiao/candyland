@@ -89,36 +89,29 @@ pub async fn save_changelog_events(
     gummy_roll_events: Vec<ChangeLogEvent>,
     slot: u64,
     txn: &DatabaseTransaction,
-) -> Result<Option<u64>, IngesterError> {
-    let mut max_seq = None;
+) -> Result<Vec<u64>, IngesterError> {
+    let mut seq_nums = Vec::with_capacity(gummy_roll_events.len());
     for change_log_event in gummy_roll_events {
         gummyroll_change_log_event_to_database(&change_log_event, slot, txn, false)
-            .await
-            .map(|_| ())?;
+            .await?;
 
-        if let Some(seq) = max_seq {
-            if change_log_event.seq > seq {
-                max_seq = Some(change_log_event.seq);
-            }
-        } else {
-            max_seq = Some(change_log_event.seq);
-        }
+        seq_nums.push(change_log_event.seq);
     }
-    Ok(max_seq)
+    Ok(seq_nums)
 }
 
 pub async fn handle_gummyroll_instruction(
     logs: &Vec<&str>,
     slot: u64,
     db: &DatabaseConnection,
-) -> Result<Option<u64>, IngesterError> {
+) -> Result<Vec<u64>, IngesterError> {
     // map to owned vec to avoid static lifetime issues, instead of moving logs into Box
     let events = get_gummy_roll_events(logs)?;
     db.transaction::<_, _, IngesterError>(|txn| {
         Box::pin(async move { save_changelog_events(events, slot, txn).await })
     })
     .await
-    .map_err(|db_err| IngesterError::StorageWriteError(db_err.to_string()))
+    .map_err(Into::into)
 }
 
 fn node_idx_to_leaf_idx(index: i64, tree_height: u32) -> i64 {
