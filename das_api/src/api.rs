@@ -45,8 +45,8 @@ pub trait ApiContract: Send + Sync + 'static {
         after: String,
     ) -> Result<AssetList, DasApiError>;
     async fn get_assets_by_creator(
-        &mut self,
-        creator_expression: String,
+        &self,
+        creator_expression: Vec<String>,
         sort_by: AssetSorting,
         limit: u32,
         page: u32,
@@ -91,6 +91,17 @@ impl<'a> RpcApiBuilder {
                     rpc_params.parse().unwrap();
                 rpc_context
                     .get_assets_by_owner(owner_address, sort_by, limit, page, before, after)
+                    .await
+                    .map_err(Into::into)
+            },
+        )?;
+        module.register_async_method(
+            "get_assets_by_creator",
+            |rpc_params, rpc_context| async move {
+                let (creator_expression, sort_by, limit, page, before, after) =
+                    rpc_params.parse().unwrap();
+                rpc_context
+                    .get_assets_by_creator(creator_expression, sort_by, limit, page, before, after)
                     .await
                     .map_err(Into::into)
             },
