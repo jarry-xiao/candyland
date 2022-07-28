@@ -1,4 +1,4 @@
-use digital_asset_types::dapi::asset::get_asset;
+use digital_asset_types::dapi::{asset::get_asset, assets_by_creator::get_assets_by_creator};
 use digital_asset_types::rpc::Asset;
 use {
     crate::api::ApiContract,
@@ -137,15 +137,42 @@ impl ApiContract for DasApi {
     }
 
     async fn get_assets_by_creator(
-        &mut self,
-        _creator_expression: String,
-        _sort_by: AssetSorting,
-        _limit: u32,
-        _page: u32,
-        _before: String,
-        _after: String,
+        self: &DasApi,
+        creator_expression: Vec<String>,
+        sort_by: AssetSorting,
+        limit: u32,
+        page: u32,
+        before: String,
+        after: String,
     ) -> Result<AssetList, DasApiError> {
-        todo!()
+        let creator_addresses = creator_expression
+            .into_iter()
+            .map(|x| validate_pubkey(x).unwrap().to_bytes().to_vec())
+            .collect::<Vec<_>>();
+
+        let before = if !before.is_empty() {
+            validate_pubkey(before.clone())?.to_bytes().to_vec()
+        } else {
+            before.as_bytes().to_vec()
+        };
+
+        let after = if !after.is_empty() {
+            validate_pubkey(after.clone())?.to_bytes().to_vec()
+        } else {
+            after.as_bytes().to_vec()
+        };
+
+        get_assets_by_creator(
+            &self.db_connection,
+            creator_addresses,
+            sort_by,
+            limit,
+            page,
+            before,
+            after,
+        )
+        .await
+        .map_err(Into::into)
     }
 
     async fn search_assets(

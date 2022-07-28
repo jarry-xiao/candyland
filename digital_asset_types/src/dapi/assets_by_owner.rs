@@ -33,8 +33,8 @@ pub async fn get_assets_by_owner(
         paginator.fetch_page((page - 1).try_into().unwrap()).await?
     } else if !before.is_empty() {
         let rows = asset::Entity::find()
-            .filter(asset::Column::Owner.eq(owner_address.clone()))
             .order_by_asc(sort_column)
+            .filter(asset::Column::Owner.eq(owner_address.clone()))
             .cursor_by(asset::Column::Id)
             .before(before)
             .first(limit.into())
@@ -51,8 +51,8 @@ pub async fn get_assets_by_owner(
         assets
     } else {
         let rows = asset::Entity::find()
-            .filter(asset::Column::Owner.eq(owner_address.clone()))
             .order_by_asc(sort_column)
+            .filter(asset::Column::Owner.eq(owner_address.clone()))
             .cursor_by(asset::Column::Id)
             .after(after)
             .first(limit.into())
