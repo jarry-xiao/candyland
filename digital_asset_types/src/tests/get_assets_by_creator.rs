@@ -9,7 +9,7 @@ mod get_assets_by_creator {
         adapter::{Creator, TokenProgramVersion, TokenStandard},
         dao::{
             asset, asset_authority, asset_creators, asset_data,
-            prelude::AssetData,
+            prelude::Asset,
             sea_orm_active_enums::{ChainMutability, Mutability, OwnerType, RoyaltyTargetType},
         },
         json::ChainDataV1,
@@ -192,6 +192,13 @@ mod get_assets_by_creator {
             }]])
             .append_query_results(vec![vec![
                 (
+                    asset_creators::Model {
+                        id: 2,
+                        asset_id: id_2.to_bytes().to_vec(),
+                        creator: creator_3.to_bytes().to_vec(),
+                        share: 100,
+                        verified: true,
+                    },
                     asset::Model {
                         id: id_2.to_bytes().to_vec(),
                         owner: owner_2.to_bytes().to_vec(),
@@ -213,25 +220,15 @@ mod get_assets_by_creator {
                         burnt: false,
                         created_at: None,
                     },
-                    asset_data::Model {
-                        id: 2,
-                        chain_data_mutability: ChainMutability::Mutable,
-                        schema_version: 1,
-                        chain_data: serde_json::to_value(ChainDataV1 {
-                            name: String::from("Test #2"),
-                            symbol: String::from("BUBBLE"),
-                            edition_nonce: None,
-                            primary_sale_happened: true,
-                            token_standard: Some(TokenStandard::NonFungible),
-                            uses: None,
-                        })
-                        .unwrap(),
-                        metadata_url: uri_2.to_string(),
-                        metadata_mutability: Mutability::Mutable,
-                        metadata: JsonValue::String("processing".to_string()),
-                    },
                 ),
                 (
+                    asset_creators::Model {
+                        id: 3,
+                        asset_id: id_3.to_bytes().to_vec(),
+                        creator: creator_3.to_bytes().to_vec(),
+                        share: 100,
+                        verified: true,
+                    },
                     asset::Model {
                         id: id_3.to_bytes().to_vec(),
                         owner: owner_2.to_bytes().to_vec(),
@@ -252,23 +249,6 @@ mod get_assets_by_creator {
                         chain_data_id: Some(3),
                         burnt: false,
                         created_at: None,
-                    },
-                    asset_data::Model {
-                        id: 3,
-                        chain_data_mutability: ChainMutability::Mutable,
-                        schema_version: 1,
-                        chain_data: serde_json::to_value(ChainDataV1 {
-                            name: String::from("Test #3"),
-                            symbol: String::from("BUBBLE"),
-                            edition_nonce: None,
-                            primary_sale_happened: true,
-                            token_standard: Some(TokenStandard::NonFungible),
-                            uses: None,
-                        })
-                        .unwrap(),
-                        metadata_url: uri_3.to_string(),
-                        metadata_mutability: Mutability::Mutable,
-                        metadata: JsonValue::String("processing".to_string()),
                     },
                 ),
             ]])
@@ -628,15 +608,22 @@ mod get_assets_by_creator {
         assert_eq!(
             asset_creators::Entity::find()
                 .filter(
-                Condition::any()
-                    .add(asset_creators::Column::Creator.eq(creator_2.to_bytes().to_vec())), // .add(asset_creators::Column::Creator.eq(creator_expression[1].clone())),
-            )
+                    sea_orm::Condition::any()
+                        .add(asset_creators::Column::Creator.eq(creator_2.to_bytes().to_vec())), // .add(asset_creators::Column::Creator.eq(creator_expression[1].clone())),
+                )
                 .find_also_related(Asset)
                 .all(&db)
                 .await?,
             vec![
                 (
-                    asset::Model {
+                    asset_creators::Model {
+                        id: 2,
+                        asset_id: id_2.to_bytes().to_vec(),
+                        creator: creator_3.to_bytes().to_vec(),
+                        share: 100,
+                        verified: true,
+                    },
+                    Some(asset::Model {
                         id: id_2.to_bytes().to_vec(),
                         owner: owner_2.to_bytes().to_vec(),
                         owner_type: OwnerType::Single,
@@ -656,27 +643,17 @@ mod get_assets_by_creator {
                         chain_data_id: Some(2),
                         burnt: false,
                         created_at: None,
-                    },
-                    Some(asset_data::Model {
-                        id: 2,
-                        chain_data_mutability: ChainMutability::Mutable,
-                        schema_version: 1,
-                        chain_data: serde_json::to_value(ChainDataV1 {
-                            name: String::from("Test #2"),
-                            symbol: String::from("BUBBLE"),
-                            edition_nonce: None,
-                            primary_sale_happened: true,
-                            token_standard: Some(TokenStandard::NonFungible),
-                            uses: None,
-                        })
-                        .unwrap(),
-                        metadata_url: uri_2.to_string(),
-                        metadata_mutability: Mutability::Mutable,
-                        metadata: JsonValue::String("processing".to_string()),
                     })
                 ),
                 (
-                    asset::Model {
+                    asset_creators::Model {
+                        id: 3,
+                        asset_id: id_3.to_bytes().to_vec(),
+                        creator: creator_3.to_bytes().to_vec(),
+                        share: 100,
+                        verified: true,
+                    },
+                    Some(asset::Model {
                         id: id_3.to_bytes().to_vec(),
                         owner: owner_2.to_bytes().to_vec(),
                         owner_type: OwnerType::Single,
@@ -696,23 +673,6 @@ mod get_assets_by_creator {
                         chain_data_id: Some(3),
                         burnt: false,
                         created_at: None,
-                    },
-                    Some(asset_data::Model {
-                        id: 3,
-                        chain_data_mutability: ChainMutability::Mutable,
-                        schema_version: 1,
-                        chain_data: serde_json::to_value(ChainDataV1 {
-                            name: String::from("Test #3"),
-                            symbol: String::from("BUBBLE"),
-                            edition_nonce: None,
-                            primary_sale_happened: true,
-                            token_standard: Some(TokenStandard::NonFungible),
-                            uses: None,
-                        })
-                        .unwrap(),
-                        metadata_url: uri_3.to_string(),
-                        metadata_mutability: Mutability::Mutable,
-                        metadata: JsonValue::String("processing".to_string()),
                     })
                 )
             ]

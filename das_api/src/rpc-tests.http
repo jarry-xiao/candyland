@@ -8,8 +8,8 @@ content-type: application/json
     "FWXys3VXUQhAS7BkpBqnAYuJhz1dNUsexVGuJgaRio8v",
     "created",
     50,
-    0,
-    "Hky94kmJ4eM2F6aEfkutaRt1Xmfim2dBYDJCTfycUr3E",
+    1,
+    "",
     ""
   ],
   "id": 0
@@ -23,7 +23,7 @@ content-type: application/json
   "jsonrpc": "2.0",
   "method": "get_assets_by_creator",
   "params": [
-    ["ohs9X6mPZG3mLqdPheYpEGvvXZkGwVFdV1ec8WbTecV"],
+    ["FWXys3VXUQhAS7BkpBqnAYuJhz1dNUsexVGuJgaRio8v"],
     "created",
     50,
     1,
