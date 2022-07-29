@@ -1,34 +1,28 @@
-mod backfiller;
-mod error;
-mod events;
-mod parsers;
-mod tasks;
-mod utils;
+pub mod error;
+pub mod events;
+pub mod parsers;
+pub mod utils;
+pub mod tasks;
 
-use crate::error::IngesterError;
-use crate::tasks::{BgTask, TaskManager};
-use cadence_macros::statsd_time;
-use chrono::Utc;
-use messenger::MessengerConfig;
+use sea_orm::sea_query::BinOper::In;
 use {
     crate::{
-        backfiller::backfiller,
         parsers::*,
         utils::{order_instructions, parse_logs},
     },
-    cadence::{BufferedUdpMetricSink, QueuingMetricSink, StatsdClient},
-    cadence_macros::{set_global_default, statsd_count},
-    figment::{providers::Env, Figment},
     futures_util::TryFutureExt,
     messenger::{Messenger, RedisMessenger, ACCOUNT_STREAM, TRANSACTION_STREAM},
     plerkle_serialization::account_info_generated::account_info::root_as_account_info,
     plerkle_serialization::transaction_info_generated::transaction_info::root_as_transaction_info,
-    serde::Deserialize,
     solana_sdk::pubkey::Pubkey,
     sqlx::{self, postgres::PgPoolOptions, Pool, Postgres},
-    std::net::UdpSocket,
     tokio::sync::mpsc::UnboundedSender,
+    serde::Deserialize,
+    figment::{Figment, providers::Env},
 };
+use messenger::MessengerConfig;
+use crate::error::IngesterError;
+use crate::tasks::{BgTask, TaskManager};
 
 async fn setup_manager<'a, 'b>(
     mut manager: ProgramHandlerManager<'a>,
@@ -43,79 +37,31 @@ async fn setup_manager<'a, 'b>(
     manager
 }
 
-// Types and constants used for Figment configuration items.
-pub type DatabaseConfig = figment::value::Dict;
-pub const DATABASE_URL_KEY: &str = "url";
-pub const DATABASE_LISTENER_CHANNEL_KEY: &str = "listener_channel";
-pub type RpcConfig = figment::value::Dict;
-pub const RPC_URL_KEY: &str = "url";
-pub const RPC_COMMITMENT_KEY: &str = "commitment";
-
-// Struct used for Figment configuration items.
-#[derive(Deserialize, PartialEq, Debug, Clone)]
+#[derive(Deserialize, PartialEq, Debug)]
 pub struct IngesterConfig {
-    pub database_config: DatabaseConfig,
-    pub messenger_config: MessengerConfig,
-    pub rpc_config: RpcConfig,
-    pub metrics_port: u16,
-    pub metrics_host: String,
+    messenger_config: MessengerConfig,
+    database_url: String,
 }
 
-fn setup_metrics(config: &IngesterConfig) {
-    let uri = config.metrics_host.clone();
-    let port = config.metrics_port.clone();
-    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
-    socket.set_nonblocking(true).unwrap();
-    let host = (uri, port);
-    let udp_sink = BufferedUdpMetricSink::from(host, socket).unwrap();
-    let queuing_sink = QueuingMetricSink::from(udp_sink);
-    let client = StatsdClient::from_sink("das_ingester", queuing_sink);
-    set_global_default(client);
-}
 
 #[tokio::main]
 async fn main() {
-    // Read config.
     println!("Starting DASgester");
     let config: IngesterConfig = Figment::new()
         .join(Env::prefixed("INGESTER_"))
         .extract()
-        .map_err(|config_error| IngesterError::ConfigurationError {
-            msg: format!("{}", config_error),
-        })
-        .unwrap();
-    // Get database config.
-    let url = config
-        .database_config
-        .get(&*DATABASE_URL_KEY)
-        .and_then(|u| u.clone().into_string())
-        .ok_or(IngesterError::ConfigurationError {
-            msg: format!("Database connection string missing: {}", DATABASE_URL_KEY),
-        })
-        .unwrap();
+        .map_err(|config_error| IngesterError::ConfigurationError { msg: format!("{}", config_error) }).unwrap();
     // Setup Postgres.
     let mut tasks = vec![];
     let pool = PgPoolOptions::new()
         .max_connections(5)
-        .connect(&url)
+        .connect(&*config.database_url)
         .await
         .unwrap();
-    let background_task_manager =
-        TaskManager::new("background-tasks".to_string(), pool.clone()).unwrap();
+    let background_task_manager = TaskManager::new("background-tasks".to_string(), pool.clone()).unwrap();
     // Service streams as separate concurrent processes.
     println!("Setting up tasks");
-    setup_metrics(&config);
-    tasks.push(
-        service_transaction_stream::<RedisMessenger>(
-            pool.clone(),
-            background_task_manager.get_sender(),
-            config.messenger_config.clone(),
-        )
-        .await,
-    );
-    statsd_count!("ingester.startup", 1);
-
-    tasks.push(backfiller::<RedisMessenger>(pool.clone(), config.clone()).await);
+    tasks.push(service_transaction_stream::<RedisMessenger>(pool, background_task_manager.get_sender(), config.messenger_config.clone()).await);
     // Wait for ctrl-c.
     match tokio::signal::ctrl_c().await {
         Ok(()) => {}
@@ -185,7 +131,6 @@ async fn handle_account(manager: &ProgramHandlerManager<'static>, data: Vec<(i64
         };
         let program_id = account_update.owner();
         let parser = manager.match_program(program_id.unwrap());
-        statsd_count!("ingester.account_update_seen", 1);
         match parser {
             Some(p) if p.config().responds_to_account == true => {
                 let _ = p.handle_account(&account_update).map_err(|e| {
@@ -219,15 +164,7 @@ async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<
             }
             Ok(transaction) => transaction,
         };
-        if let Some(si) = transaction.slot_index() {
-            let slt_idx = format!("{}-{}", transaction.slot(), si);
-            statsd_count!("ingester.transaction_event_seen", 1, "slot-idx" => &slt_idx);
-        }
-        let seen_at = Utc::now();
-        statsd_time!(
-            "ingester.bus_ingest_time",
-            (seen_at.timestamp_millis() - transaction.seen_at()) as u64
-        );
+
         // Get account keys flatbuffers object.
         let keys = match transaction.account_keys() {
             None => {
@@ -250,9 +187,7 @@ async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<
             );
 
             let (program, instruction) = outer_ix;
-            let program_id = program.key().unwrap();
-            let parser = manager.match_program(program_id);
-            let str_program_id = bs58::encode(program_id).into_string();
+            let parser = manager.match_program(program.key().unwrap());
             match parser {
                 Some(p) if p.config().responds_to_instruction == true => {
                     let _ = p
@@ -263,19 +198,13 @@ async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<
                             inner_ix,
                             keys,
                             instruction_logs: parsed_log.1,
-                            slot: transaction.slot(),
                         })
                         .await
                         .map_err(|e| {
                             // Just for logging
-                            println!(
-                                "Error in instruction handling onr program {} {:?}",
-                                str_program_id, e
-                            );
+                            println!("Error in instruction handling {:?}", e);
                             e
                         });
-                    let finished_at = Utc::now();
-                    statsd_time!("ingester.ix_process_time", (finished_at.timestamp_millis() - transaction.seen_at()) as u64, "program_id" => &str_program_id);
                 }
                 _ => {
                     println!("Program Handler not found for program id {:?}", program);

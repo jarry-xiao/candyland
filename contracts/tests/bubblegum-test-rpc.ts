@@ -11,7 +11,8 @@ import {
   SystemProgram,
   Transaction,
   Connection as web3Connection,
-  SYSVAR_RENT_PUBKEY, AccountMeta,
+  SYSVAR_RENT_PUBKEY,
+  AccountMeta,
 } from "@solana/web3.js";
 import { assert } from "chai";
 import {
@@ -21,7 +22,7 @@ import {
   createDelegateInstruction,
   createRedeemInstruction,
   createCancelRedeemInstruction,
-  createCreateTreeInstruction
+  createCreateTreeInstruction,
 } from "../sdk/bubblegum/src/generated";
 
 import { buildTree, checkProof, Tree } from "./merkle-tree";
@@ -41,9 +42,18 @@ import { TokenProgramVersion, Version } from "../sdk/bubblegum/src/generated";
 import { sleep } from "@metaplex-foundation/amman/dist/utils";
 import { verbose } from "sqlite3";
 import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
-import { CANDY_WRAPPER_PROGRAM_ID, execute, logTx, num16ToBuffer, bufferToArray } from "../sdk/utils";
-// TODO: cleanup this test file using the convenience methods and remove all .send calls
-import { computeDataHash, computeCreatorHash } from "../sdk/bubblegum/src/convenience";
+import {
+  CANDY_WRAPPER_PROGRAM_ID,
+  execute,
+  logTx,
+  num16ToBuffer,
+  bufferToArray,
+} from "../sdk/utils";
+// TODO: cleanup this test file using the convenience methods and remove all .sendTransaction calls
+import {
+  computeDataHash,
+  computeCreatorHash,
+} from "../sdk/bubblegum/src/convenience";
 
 // @ts-ignore
 let Bubblegum;
@@ -51,17 +61,20 @@ let Bubblegum;
 let GummyrollProgramId;
 
 interface TreeProof {
-  root: string,
-  proof: AccountMeta[]
+  root: string;
+  proof: AccountMeta[];
 }
 
 async function getProof(asset: PublicKey): Promise<TreeProof> {
   let resp = await fetch("http://localhost:9090", {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      jsonrpc: "2.0", id: "stupid", method: "get_asset_proof", params: [asset.toBase58()]
-    })
+      jsonrpc: "2.0",
+      id: "stupid",
+      method: "get_asset_proof",
+      params: [asset.toBase58()],
+    }),
   });
   let js = await resp.json();
   const proofNodes: Array<AccountMeta> = js.result.proof.map((key) => {
@@ -73,7 +86,7 @@ async function getProof(asset: PublicKey): Promise<TreeProof> {
   });
   return {
     root: js.result.root,
-    proof: proofNodes
+    proof: proofNodes,
   };
 }
 
@@ -154,19 +167,22 @@ describe("bubblegum", () => {
         payer: payer.publicKey,
         authority: authority,
         gummyrollProgram: GummyrollProgramId,
-        merkleSlab: merkleRollKeypair.publicKey
+        merkleSlab: merkleRollKeypair.publicKey,
       },
       {
         maxDepth: MAX_DEPTH,
-        maxBufferSize: MAX_SIZE
+        maxBufferSize: MAX_SIZE,
       }
     );
 
     let tx = new Transaction().add(allocAccountIx).add(initGummyrollIx);
-
-    await Bubblegum.provider.send(tx, [payer, merkleRollKeypair], {
-      commitment: "confirmed",
-    });
+    await Bubblegum.provider.connection.sendTransaction(
+      tx,
+      [payer, merkleRollKeypair],
+      {
+        commitment: "confirmed",
+      }
+    );
 
     await assertOnChainMerkleRollProperties(
       Bubblegum.provider.connection,
@@ -193,7 +209,7 @@ describe("bubblegum", () => {
         if (i > stop) {
           return (stop - i) % stop;
         }
-        return i
+        return i;
       }
 
       for (let i = 0; i < 10000; i++) {
@@ -209,7 +225,7 @@ describe("bubblegum", () => {
           tokenProgramVersion: TokenProgramVersion.Original,
           collection: null,
           uses: null,
-          creators: [],
+          creators: [{ address: payer.publicKey, share: 100, verified: true }],
         };
         const mintIx = createMintV1Instruction(
           {
@@ -224,14 +240,15 @@ describe("bubblegum", () => {
           { message: metadata }
         );
         console.log(" - Minting to tree");
-        const mintTx = await Bubblegum.provider.send(
-          new Transaction().add(mintIx),
-          [payer],
-          {
-            skipPreflight: true,
-            commitment: "confirmed",
-          }
-        );
+        const mintTx =
+          await Bubblegum.provider.connection.sendTransaction(
+            new Transaction().add(mintIx),
+            [payer],
+            {
+              skipPreflight: true,
+              commitment: "confirmed",
+            }
+          );
         const dataHash = computeDataHash(metadata.sellerFeeBasisPoints, mintIx);
         const creatorHash = computeCreatorHash(metadata.creators);
 
@@ -243,7 +260,11 @@ describe("bubblegum", () => {
           new BN(1)
         );
         let [asset] = await PublicKey.findProgramAddress(
-          [Buffer.from("asset", "utf8"), merkleRollKeypair.publicKey.toBuffer(), leafNonce.toBuffer("le", 8)],
+          [
+            Buffer.from("asset", "utf8"),
+            merkleRollKeypair.publicKey.toBuffer(),
+            leafNonce.toBuffer("le", 8),
+          ],
           Bubblegum.programId
         );
         {
@@ -320,7 +341,7 @@ describe("bubblegum", () => {
           );
           delTransferIx.keys[2].isSigner = true;
           delTransferIx.keys = [...delTransferIx.keys, ...proof];
-          let delTransferTx = await Bubblegum.provider.send(
+          let delTransferTx = await Bubblegum.provider.connection.sendTransaction(
             new Transaction().add(delTransferIx),
             [delegateKey],
             {
@@ -334,7 +355,7 @@ describe("bubblegum", () => {
           [
             Buffer.from("voucher", "utf8"),
             merkleRollKeypair.publicKey.toBuffer(),
-            leafNonce.toBuffer("le", 8)
+            leafNonce.toBuffer("le", 8),
           ],
           Bubblegum.programId
         );
@@ -361,7 +382,7 @@ describe("bubblegum", () => {
               }
             );
             redeemIx.keys = [...redeemIx.keys, ...proof];
-            let redeemTx = await Bubblegum.provider.send(
+            let redeemTx = await Bubblegum.provider.connection.sendTransaction(
               new Transaction().add(redeemIx),
               [payer],
               {
@@ -380,9 +401,10 @@ describe("bubblegum", () => {
             let { root, proof } = await getProof(asset);
             console.log("rpc root ", root);
 
-
-            console.log("on chain roots ")
-            merkleRoll.roll.changeLogs.map(cl => console.log(cl.root.toBase58()))
+            console.log("on chain roots ");
+            merkleRoll.roll.changeLogs.map((cl) =>
+              console.log(cl.root.toBase58())
+            );
 
             const cancelRedeemIx = createCancelRedeemInstruction(
               {
@@ -398,7 +420,7 @@ describe("bubblegum", () => {
               }
             );
             cancelRedeemIx.keys = [...cancelRedeemIx.keys, ...proof];
-            let cancelRedeemTx = await Bubblegum.provider.send(
+            let cancelRedeemTx = await Bubblegum.provider.connection.sendTransaction(
               new Transaction().add(cancelRedeemIx),
               [payer],
               {
@@ -429,7 +451,7 @@ describe("bubblegum", () => {
               }
             );
             redeemIx.keys = [...redeemIx.keys, ...proof];
-            let redeemTX = await Bubblegum.provider.send(
+            let redeemTX = await Bubblegum.provider.connection.sendTransaction(
               new Transaction().add(redeemIx),
               [payer],
               {
@@ -438,7 +460,7 @@ describe("bubblegum", () => {
             );
           }
 
-          console.log("Decompressing - ", asset.toBase58())
+          console.log("Decompressing - ", asset.toBase58());
 
           let [mintAuthority] = await PublicKey.findProgramAddress(
             [asset.toBuffer()],
@@ -450,7 +472,11 @@ describe("bubblegum", () => {
           ): Promise<anchor.web3.PublicKey> => {
             return (
               await anchor.web3.PublicKey.findProgramAddress(
-                [Buffer.from("metadata"), PROGRAM_ID.toBuffer(), mint.toBuffer()],
+                [
+                  Buffer.from("metadata"),
+                  PROGRAM_ID.toBuffer(),
+                  mint.toBuffer(),
+                ],
                 PROGRAM_ID
               )
             )[0];
@@ -494,13 +520,14 @@ describe("bubblegum", () => {
             }
           );
 
-          let decompressTx = await Bubblegum.provider.send(
-            new Transaction().add(decompressIx),
-            [payer],
-            {
-              commitment: "confirmed",
-            }
-          );
+          let decompressTx =
+            await Bubblegum.provider.connection.sendTransaction(
+              new Transaction().add(decompressIx),
+              [payer],
+              {
+                commitment: "confirmed",
+              }
+            );
         }
       }
     });
