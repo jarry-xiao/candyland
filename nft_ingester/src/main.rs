@@ -5,33 +5,30 @@ mod parsers;
 mod tasks;
 mod utils;
 
+use crate::error::IngesterError;
+use crate::tasks::{BgTask, TaskManager};
 use cadence_macros::statsd_time;
 use chrono::Utc;
+use messenger::MessengerConfig;
 use {
     crate::{
         backfiller::backfiller,
         parsers::*,
         utils::{order_instructions, parse_logs},
     },
+    cadence::{BufferedUdpMetricSink, QueuingMetricSink, StatsdClient},
+    cadence_macros::{set_global_default, statsd_count},
+    figment::{providers::Env, Figment},
     futures_util::TryFutureExt,
     messenger::{Messenger, RedisMessenger, ACCOUNT_STREAM, TRANSACTION_STREAM},
     plerkle_serialization::account_info_generated::account_info::root_as_account_info,
     plerkle_serialization::transaction_info_generated::transaction_info::root_as_transaction_info,
+    serde::Deserialize,
     solana_sdk::pubkey::Pubkey,
     sqlx::{self, postgres::PgPoolOptions, Pool, Postgres},
-    tokio::sync::mpsc::UnboundedSender,
-    serde::Deserialize,
-    figment::{Figment, providers::Env},
-    cadence_macros::{
-        set_global_default,
-        statsd_count,
-    },
-    cadence::{BufferedUdpMetricSink, QueuingMetricSink, StatsdClient},
     std::net::UdpSocket,
+    tokio::sync::mpsc::UnboundedSender,
 };
-use messenger::MessengerConfig;
-use crate::error::IngesterError;
-use crate::tasks::{BgTask, TaskManager};
 
 async fn setup_manager<'a, 'b>(
     mut manager: ProgramHandlerManager<'a>,
@@ -108,7 +105,14 @@ async fn main() {
     // Service streams as separate concurrent processes.
     println!("Setting up tasks");
     setup_metrics(&config);
-    tasks.push(service_transaction_stream::<RedisMessenger>(pool.clone(), background_task_manager.get_sender(), config.messenger_config.clone()).await);
+    tasks.push(
+        service_transaction_stream::<RedisMessenger>(
+            pool.clone(),
+            background_task_manager.get_sender(),
+            config.messenger_config.clone(),
+        )
+        .await,
+    );
     statsd_count!("ingester.startup", 1);
 
     tasks.push(backfiller::<RedisMessenger>(pool.clone(), config.clone()).await);
@@ -220,7 +224,10 @@ async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<
             statsd_count!("ingester.transaction_event_seen", 1, "slot-idx" => &slt_idx);
         }
         let seen_at = Utc::now();
-        statsd_time!("ingester.bus_ingest_time", (seen_at.timestamp_millis() - transaction.seen_at()) as u64);
+        statsd_time!(
+            "ingester.bus_ingest_time",
+            (seen_at.timestamp_millis() - transaction.seen_at()) as u64
+        );
         // Get account keys flatbuffers object.
         let keys = match transaction.account_keys() {
             None => {
@@ -261,7 +268,10 @@ async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<
                         .await
                         .map_err(|e| {
                             // Just for logging
-                            println!("Error in instruction handling onr program {} {:?}", str_program_id, e);
+                            println!(
+                                "Error in instruction handling onr program {} {:?}",
+                                str_program_id, e
+                            );
                             e
                         });
                     let finished_at = Utc::now();
