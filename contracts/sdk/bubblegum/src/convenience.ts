@@ -20,11 +20,12 @@ export async function getNonceCount(connection: Connection, tree: PublicKey): Pr
 }
 
 export async function getVoucherPDA(connection: Connection, tree: PublicKey, leafIndex: number): Promise<PublicKey> {
+    console.log(tree.toString(), leafIndex, new BN(leafIndex), new BN(leafIndex).toArray('le', 8))
     let [voucher] = await PublicKey.findProgramAddress(
         [
             Buffer.from("voucher", "utf8"),
             tree.toBuffer(),
-            new BN(leafIndex).toBuffer("le", 8),
+            Buffer.from(new BN(leafIndex).toArray("le", 8)),
         ],
         PROGRAM_ID
     );
@@ -36,7 +37,7 @@ export async function getLeafAssetId(tree: PublicKey, leafIndex: BN): Promise<Pu
         [
             Buffer.from("asset", "utf8"),
             tree.toBuffer(),
-            leafIndex.toBuffer("le", 8),
+            Buffer.from(leafIndex.toArray("le", 8)),
         ],
         PROGRAM_ID
     );
