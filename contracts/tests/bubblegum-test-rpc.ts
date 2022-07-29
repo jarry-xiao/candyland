@@ -53,7 +53,7 @@ let GummyrollProgramId;
 function bufferToArray(buffer: Buffer): number[] {
   const nums = [];
   for (let i = 0; i < buffer.length; i++) {
-    nums.push(buffer.at(i));
+    nums.push(buffer[i]);
   }
   return nums;
 }
