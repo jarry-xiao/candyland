@@ -1,8 +1,12 @@
+use crate::dao::prelude::AssetData;
+use crate::dao::{asset, asset_authority, asset_creators, asset_grouping};
 use crate::rpc::filter::AssetSorting;
 use crate::rpc::response::AssetList;
 use crate::rpc::{Asset as RpcAsset, Compression, Interface, Ownership, Royalty};
 use sea_orm::DatabaseConnection;
 use sea_orm::{entity::*, query::*, DbErr};
+
+use super::asset::{get_content, to_authority, to_creators, to_grouping};
 
 pub async fn get_assets_by_owner(
     db: &DatabaseConnection,
@@ -20,7 +24,7 @@ pub async fn get_assets_by_owner(
     };
 
     let assets = if page > 0 {
-        let paginator = Asset::find()
+        let paginator = asset::Entity::find()
             .filter(asset::Column::Owner.eq(owner_address.clone()))
             .find_also_related(AssetData)
             .order_by_asc(sort_column)
@@ -30,8 +34,9 @@ pub async fn get_assets_by_owner(
     } else if !before.is_empty() {
         let rows = asset::Entity::find()
             .filter(asset::Column::Owner.eq(owner_address.clone()))
+            .order_by_asc(sort_column)
             .cursor_by(asset::Column::Id)
-            .after(after)
+            .before(before)
             .first(limit.into())
             .all(db)
             .await?
@@ -47,6 +52,7 @@ pub async fn get_assets_by_owner(
     } else {
         let rows = asset::Entity::find()
             .filter(asset::Column::Owner.eq(owner_address.clone()))
+            .order_by_asc(sort_column)
             .cursor_by(asset::Column::Id)
             .after(after)
             .first(limit.into())
