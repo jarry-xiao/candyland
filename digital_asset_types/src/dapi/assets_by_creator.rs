@@ -38,9 +38,7 @@ pub async fn get_assets_by_creator(
             .order_by_asc(sort_column)
             .paginate(db, limit.try_into().unwrap());
 
-        let page = paginator.fetch_page((page - 1).try_into().unwrap()).await?;
-
-        page
+        paginator.fetch_page((page - 1).try_into().unwrap()).await?
     } else if !before.is_empty() {
         let rows = asset::Entity::find()
             .order_by_asc(sort_column)
