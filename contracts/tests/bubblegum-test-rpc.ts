@@ -50,7 +50,16 @@ let Bubblegum;
 // @ts-ignore
 let GummyrollProgramId;
 
-interface TreeProof {
+/// Converts to Uint8Array
+function bufferToArray(buffer: Buffer): number[] {
+  const nums = [];
+  for (let i = 0; i < buffer.length; i++) {
+    nums.push(buffer[i]);
+  }
+  return nums;
+}
+
+interface TreeProof  {
   root: string,
   proof: AccountMeta[]
 }

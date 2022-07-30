@@ -5,12 +5,12 @@ content-type: application/json
   "jsonrpc": "2.0",
   "method": "get_assets_by_owner",
   "params": [
-    "8SUoFdFbc2coz5bu5DHvnfkrRgfKqohkg4PfBHL6ayi7",
+    "FWXys3VXUQhAS7BkpBqnAYuJhz1dNUsexVGuJgaRio8v",
     "created",
     50,
-    0,
+    1,
     "",
-    "CQ3QsE6F5vsiVGpiHuQnu1B5g9hf7re9RH3pgMUtUsYQ"
+    ""
   ],
   "id": 0
 }
@@ -23,7 +23,7 @@ content-type: application/json
   "jsonrpc": "2.0",
   "method": "get_assets_by_creator",
   "params": [
-    ["ohs9X6mPZG3mLqdPheYpEGvvXZkGwVFdV1ec8WbTecV"],
+    ["FWXys3VXUQhAS7BkpBqnAYuJhz1dNUsexVGuJgaRio8v"],
     "created",
     50,
     1,
@@ -43,12 +43,11 @@ content-type: application/json
   "id": "stupid",
   "method": "get_asset_proof",
   "params": [
-    "3EFw4bC2SxsbDZyCvdmaW8pDiEoWbdt1mXwzNoBy8afZ"
+    "BEczha2EVgjJMqDLrqv2z19C3t5YVjpER9AHBYeh5zjG"
   ]
 }
 
 ###
-
 POST http://localhost:9090 HTTP/1.1
 content-type: application/json
 
@@ -57,6 +56,6 @@ content-type: application/json
   "id": "stupid",
   "method": "get_asset",
   "params": [
-    "3EFw4bC2SxsbDZyCvdmaW8pDiEoWbdt1mXwzNoBy8afZ"
+    "BEczha2EVgjJMqDLrqv2z19C3t5YVjpER9AHBYeh5zjG"
   ]
 }

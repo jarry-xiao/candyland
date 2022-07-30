@@ -1,7 +1,9 @@
 mod get_asset_by_id;
+mod get_assets_by_creator;
 mod get_assets_by_owner;
 
 pub use get_asset_by_id::*;
+pub use get_assets_by_creator::*;
 pub use get_assets_by_owner::*;
 
 use crate::adapter::{Collection, Creator, TokenProgramVersion, TokenStandard, Uses};

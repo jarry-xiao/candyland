@@ -4,8 +4,8 @@ use crate::dapi::asset::{get_content, to_authority, to_creators, to_grouping};
 use crate::rpc::filter::AssetSorting;
 use crate::rpc::response::AssetList;
 use crate::rpc::{Asset as RpcAsset, Compression, Interface, Ownership, Royalty};
-use sea_orm::DatabaseConnection;
-use sea_orm::{entity::*, query::*, DbErr};
+use sea_orm::{entity::*, query::*, DbBackend, DbErr};
+use sea_orm::{DatabaseBackend, DatabaseConnection};
 
 pub async fn get_assets_by_creator(
     db: &DatabaseConnection,
@@ -23,6 +23,7 @@ pub async fn get_assets_by_creator(
     };
 
     let assets = if page > 0 {
+<<<<<<< HEAD
         let test = asset_creators::Entity::find()
             .filter(
                 Condition::any()
@@ -37,6 +38,14 @@ pub async fn get_assets_by_creator(
         println!("rows {:?}", test);
         println!("rows {:?}", test);
 
+=======
+        //     let result = asset_creators::Entity::find().from_raw_sql(Statement::from_sql_and_values(
+        //     DbBackend::Postgres,
+        //     r#"SELECT "asset_creators"."id" AS "A_id", "asset_creators"."asset_id" AS "A_asset_id", "asset_creators"."creator" AS "A_creator", "asset_creators"."share" AS "A_share", "asset_creators"."verified" AS "A_verified", "asset"."id" AS "B_id", "asset"."specification_version" AS "B_specification_version", "asset"."owner" AS "B_owner", CAST("asset"."owner_type" AS text) AS "B_owner_type", "asset"."delegate" AS "B_delegate", "asset"."frozen" AS "B_frozen", "asset"."supply" AS "B_supply", "asset"."supply_mint" AS "B_supply_mint", "asset"."compressed" AS "B_compressed", "asset"."compressible" AS "B_compressible", "asset"."tree_id" AS "B_tree_id", "asset"."leaf" AS "B_leaf", "asset"."nonce" AS "B_nonce", CAST("asset"."royalty_target_type" AS text) AS "B_royalty_target_type", "asset"."royalty_target" AS "B_royalty_target", "asset"."royalty_amount" AS "B_royalty_amount", "asset"."chain_data_id" AS "B_chain_data_id", "asset"."created_at" AS "B_created_at", "asset"."burnt" AS "B_burnt" FROM "asset_creators" LEFT JOIN "asset" ON "asset_creators"."asset_id" = "asset"."id" "#,
+        //     vec![],
+        // )).all(db).await?;
+
+>>>>>>> 1946a0b9e1d76ba4cf4d067deac408daffcbf78a
         let paginator = AssetCreators::find()
             .filter(
                 Condition::any()
@@ -49,10 +58,13 @@ pub async fn get_assets_by_creator(
         let rows = paginator.fetch_page((page - 1).try_into().unwrap()).await?;
 
         let get_asset_data = rows.into_iter().map(|(_creator, asset)| async move {
+<<<<<<< HEAD
             println!("asset {:?}", asset);
             println!("asset {:?}", asset);
             println!("asset {:?}", asset);
 
+=======
+>>>>>>> 1946a0b9e1d76ba4cf4d067deac408daffcbf78a
             let asset_data = asset
                 .as_ref()
                 .unwrap()
