@@ -1,6 +1,5 @@
 POST http://localhost:9090 HTTP/1.1
 content-type: application/json
-
 {
   "jsonrpc": "2.0",
   "method": "get_assets_by_owner",
@@ -18,7 +17,6 @@ content-type: application/json
 ### 
 POST http://localhost:9090 HTTP/1.1
 content-type: application/json
-
 {
   "jsonrpc": "2.0",
   "method": "get_assets_by_creator",
@@ -34,10 +32,8 @@ content-type: application/json
 }
 
 ###
-
 POST http://localhost:9090 HTTP/1.1
 content-type: application/json
-
 {
   "jsonrpc": "2.0",
   "id": "stupid",
@@ -50,7 +46,6 @@ content-type: application/json
 ###
 POST http://localhost:9090 HTTP/1.1
 content-type: application/json
-
 {
   "jsonrpc": "2.0",
   "id": "stupid",

@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod get_assets_by_creator {
     use sea_orm::{
-        entity::prelude::*, entity::*, DatabaseBackend, JsonValue, MockDatabase, MockExecResult,
+        entity::prelude::*, entity::*, Condition, DatabaseBackend, JoinType, JsonValue,
+        MockDatabase, MockExecResult, QuerySelect,
     };
     use solana_sdk::{signature::Keypair, signer::Signer};
 
@@ -9,11 +10,7 @@ mod get_assets_by_creator {
         adapter::{Creator, TokenProgramVersion, TokenStandard},
         dao::{
             asset, asset_authority, asset_creators, asset_data,
-<<<<<<< HEAD
             prelude::AssetData,
-=======
-            prelude::Asset,
->>>>>>> 1946a0b9e1d76ba4cf4d067deac408daffcbf78a
             sea_orm_active_enums::{ChainMutability, Mutability, OwnerType, RoyaltyTargetType},
         },
         json::ChainDataV1,
@@ -196,16 +193,6 @@ mod get_assets_by_creator {
             }]])
             .append_query_results(vec![vec![
                 (
-<<<<<<< HEAD
-=======
-                    asset_creators::Model {
-                        id: 2,
-                        asset_id: id_2.to_bytes().to_vec(),
-                        creator: creator_3.to_bytes().to_vec(),
-                        share: 100,
-                        verified: true,
-                    },
->>>>>>> 1946a0b9e1d76ba4cf4d067deac408daffcbf78a
                     asset::Model {
                         id: id_2.to_bytes().to_vec(),
                         owner: owner_2.to_bytes().to_vec(),
@@ -227,7 +214,6 @@ mod get_assets_by_creator {
                         burnt: false,
                         created_at: None,
                     },
-<<<<<<< HEAD
                     asset_data::Model {
                         id: 2,
                         chain_data_mutability: ChainMutability::Mutable,
@@ -247,17 +233,6 @@ mod get_assets_by_creator {
                     },
                 ),
                 (
-=======
-                ),
-                (
-                    asset_creators::Model {
-                        id: 3,
-                        asset_id: id_3.to_bytes().to_vec(),
-                        creator: creator_3.to_bytes().to_vec(),
-                        share: 100,
-                        verified: true,
-                    },
->>>>>>> 1946a0b9e1d76ba4cf4d067deac408daffcbf78a
                     asset::Model {
                         id: id_3.to_bytes().to_vec(),
                         owner: owner_2.to_bytes().to_vec(),
@@ -279,7 +254,6 @@ mod get_assets_by_creator {
                         burnt: false,
                         created_at: None,
                     },
-<<<<<<< HEAD
                     asset_data::Model {
                         id: 3,
                         chain_data_mutability: ChainMutability::Mutable,
@@ -297,8 +271,6 @@ mod get_assets_by_creator {
                         metadata_mutability: Mutability::Mutable,
                         metadata: JsonValue::String("processing".to_string()),
                     },
-=======
->>>>>>> 1946a0b9e1d76ba4cf4d067deac408daffcbf78a
                 ),
             ]])
             .into_connection();
@@ -655,34 +627,21 @@ mod get_assets_by_creator {
         assert_eq!(insert_result.last_insert_id, 3);
 
         assert_eq!(
-            asset_creators::Entity::find()
+            asset::Entity::find()
+                .join(
+                    JoinType::LeftJoin,
+                    asset::Entity::has_many(asset_creators::Entity).into(),
+                )
                 .filter(
-<<<<<<< HEAD
-                Condition::any()
-                    .add(asset_creators::Column::Creator.eq(creator_2.to_bytes().to_vec())), // .add(asset_creators::Column::Creator.eq(creator_expression[1].clone())),
-            )
-=======
-                    sea_orm::Condition::any()
+                    Condition::any()
                         .add(asset_creators::Column::Creator.eq(creator_2.to_bytes().to_vec())), // .add(asset_creators::Column::Creator.eq(creator_expression[1].clone())),
                 )
->>>>>>> 1946a0b9e1d76ba4cf4d067deac408daffcbf78a
-                .find_also_related(Asset)
+                .find_also_related(AssetData)
                 .all(&db)
                 .await?,
             vec![
                 (
-<<<<<<< HEAD
                     asset::Model {
-=======
-                    asset_creators::Model {
-                        id: 2,
-                        asset_id: id_2.to_bytes().to_vec(),
-                        creator: creator_3.to_bytes().to_vec(),
-                        share: 100,
-                        verified: true,
-                    },
-                    Some(asset::Model {
->>>>>>> 1946a0b9e1d76ba4cf4d067deac408daffcbf78a
                         id: id_2.to_bytes().to_vec(),
                         owner: owner_2.to_bytes().to_vec(),
                         owner_type: OwnerType::Single,
@@ -702,7 +661,6 @@ mod get_assets_by_creator {
                         chain_data_id: Some(2),
                         burnt: false,
                         created_at: None,
-<<<<<<< HEAD
                     },
                     Some(asset_data::Model {
                         id: 2,
@@ -724,19 +682,6 @@ mod get_assets_by_creator {
                 ),
                 (
                     asset::Model {
-=======
-                    })
-                ),
-                (
-                    asset_creators::Model {
-                        id: 3,
-                        asset_id: id_3.to_bytes().to_vec(),
-                        creator: creator_3.to_bytes().to_vec(),
-                        share: 100,
-                        verified: true,
-                    },
-                    Some(asset::Model {
->>>>>>> 1946a0b9e1d76ba4cf4d067deac408daffcbf78a
                         id: id_3.to_bytes().to_vec(),
                         owner: owner_2.to_bytes().to_vec(),
                         owner_type: OwnerType::Single,
@@ -756,7 +701,6 @@ mod get_assets_by_creator {
                         chain_data_id: Some(3),
                         burnt: false,
                         created_at: None,
-<<<<<<< HEAD
                     },
                     Some(asset_data::Model {
                         id: 3,
@@ -774,8 +718,6 @@ mod get_assets_by_creator {
                         metadata_url: uri_3.to_string(),
                         metadata_mutability: Mutability::Mutable,
                         metadata: JsonValue::String("processing".to_string()),
-=======
->>>>>>> 1946a0b9e1d76ba4cf4d067deac408daffcbf78a
                     })
                 )
             ]

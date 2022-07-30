@@ -1,11 +1,11 @@
-use crate::dao::prelude::{Asset, AssetCreators, AssetData};
+use crate::dao::prelude::AssetData;
 use crate::dao::{asset, asset_authority, asset_creators, asset_grouping};
 use crate::dapi::asset::{get_content, to_authority, to_creators, to_grouping};
 use crate::rpc::filter::AssetSorting;
 use crate::rpc::response::AssetList;
 use crate::rpc::{Asset as RpcAsset, Compression, Interface, Ownership, Royalty};
-use sea_orm::{entity::*, query::*, DbBackend, DbErr};
-use sea_orm::{DatabaseBackend, DatabaseConnection};
+use sea_orm::DatabaseConnection;
+use sea_orm::{entity::*, query::*, DbErr};
 
 pub async fn get_assets_by_creator(
     db: &DatabaseConnection,
@@ -22,65 +22,32 @@ pub async fn get_assets_by_creator(
         AssetSorting::RecentAction => todo!(),
     };
 
+    // TODO: throw error if cursor and page pagination are included
+    // TODO: returning proper
     let assets = if page > 0 {
-<<<<<<< HEAD
-        let test = asset_creators::Entity::find()
-            .filter(
-                Condition::any()
-                    .add(asset_creators::Column::Creator.eq(creator_expression[0].clone())), // .add(asset_creators::Column::Creator.eq(creator_expression[1].clone())),
+        let paginator = asset::Entity::find()
+            .join(
+                JoinType::LeftJoin,
+                asset::Entity::has_many(asset_creators::Entity).into(),
             )
-            .find_also_related(Asset)
-            .order_by_asc(sort_column)
-            .all(db)
-            .await?;
-
-        println!("rows {:?}", test);
-        println!("rows {:?}", test);
-        println!("rows {:?}", test);
-
-=======
-        //     let result = asset_creators::Entity::find().from_raw_sql(Statement::from_sql_and_values(
-        //     DbBackend::Postgres,
-        //     r#"SELECT "asset_creators"."id" AS "A_id", "asset_creators"."asset_id" AS "A_asset_id", "asset_creators"."creator" AS "A_creator", "asset_creators"."share" AS "A_share", "asset_creators"."verified" AS "A_verified", "asset"."id" AS "B_id", "asset"."specification_version" AS "B_specification_version", "asset"."owner" AS "B_owner", CAST("asset"."owner_type" AS text) AS "B_owner_type", "asset"."delegate" AS "B_delegate", "asset"."frozen" AS "B_frozen", "asset"."supply" AS "B_supply", "asset"."supply_mint" AS "B_supply_mint", "asset"."compressed" AS "B_compressed", "asset"."compressible" AS "B_compressible", "asset"."tree_id" AS "B_tree_id", "asset"."leaf" AS "B_leaf", "asset"."nonce" AS "B_nonce", CAST("asset"."royalty_target_type" AS text) AS "B_royalty_target_type", "asset"."royalty_target" AS "B_royalty_target", "asset"."royalty_amount" AS "B_royalty_amount", "asset"."chain_data_id" AS "B_chain_data_id", "asset"."created_at" AS "B_created_at", "asset"."burnt" AS "B_burnt" FROM "asset_creators" LEFT JOIN "asset" ON "asset_creators"."asset_id" = "asset"."id" "#,
-        //     vec![],
-        // )).all(db).await?;
-
->>>>>>> 1946a0b9e1d76ba4cf4d067deac408daffcbf78a
-        let paginator = AssetCreators::find()
             .filter(
-                Condition::any()
-                    .add(asset_creators::Column::Creator.eq(creator_expression[0].clone())), // .add(asset_creators::Column::Creator.eq(creator_expression[1].clone())),
+                sea_orm::Condition::any()
+                    .add(asset_creators::Column::Creator.eq(creator_expression[0].clone())),
             )
-            .find_also_related(Asset)
+            .find_also_related(AssetData)
             .order_by_asc(sort_column)
             .paginate(db, limit.try_into().unwrap());
 
-        let rows = paginator.fetch_page((page - 1).try_into().unwrap()).await?;
+        let page = paginator.fetch_page((page - 1).try_into().unwrap()).await?;
 
-        let get_asset_data = rows.into_iter().map(|(_creator, asset)| async move {
-<<<<<<< HEAD
-            println!("asset {:?}", asset);
-            println!("asset {:?}", asset);
-            println!("asset {:?}", asset);
-
-=======
->>>>>>> 1946a0b9e1d76ba4cf4d067deac408daffcbf78a
-            let asset_data = asset
-                .as_ref()
-                .unwrap()
-                .find_related(AssetData)
-                .one(db)
-                .await
-                .unwrap();
-
-            (asset, asset_data)
-        });
-
-        let assets = futures::future::join_all(get_asset_data).await;
-        assets
+        page
     } else if !before.is_empty() {
-        let rows = asset_creators::Entity::find()
+        let rows = asset::Entity::find()
             .order_by_asc(sort_column)
+            .join(
+                JoinType::LeftJoin,
+                asset::Entity::has_many(asset_creators::Entity).into(),
+            )
             .filter(
                 Condition::all()
                     .add(asset_creators::Column::Creator.eq(creator_expression[0].clone())), // .add(asset_creators::Column::Creator.eq(creator_expression[1].clone())),
@@ -92,23 +59,20 @@ pub async fn get_assets_by_creator(
             .await?
             .into_iter()
             .map(|x| async move {
-                let asset = x.find_related(Asset).one(db).await.unwrap();
-                let asset_data = asset
-                    .as_ref()
-                    .unwrap()
-                    .find_related(AssetData)
-                    .one(db)
-                    .await
-                    .unwrap();
+                let asset_data = x.find_related(AssetData).one(db).await.unwrap();
 
-                (asset, asset_data)
+                (x, asset_data)
             });
 
         let assets = futures::future::join_all(rows).await;
         assets
     } else {
-        let rows = asset_creators::Entity::find()
+        let rows = asset::Entity::find()
             .order_by_asc(sort_column)
+            .join(
+                JoinType::LeftJoin,
+                asset::Entity::has_many(asset_creators::Entity).into(),
+            )
             .filter(
                 Condition::all()
                     .add(asset_creators::Column::Creator.eq(creator_expression[0].clone())), // .add(asset_creators::Column::Creator.eq(creator_expression[1].clone())),
@@ -120,16 +84,9 @@ pub async fn get_assets_by_creator(
             .await?
             .into_iter()
             .map(|x| async move {
-                let asset = x.find_related(Asset).one(db).await.unwrap();
-                let asset_data = asset
-                    .as_ref()
-                    .unwrap()
-                    .find_related(AssetData)
-                    .one(db)
-                    .await
-                    .unwrap();
+                let asset_data = x.find_related(AssetData).one(db).await.unwrap();
 
-                (asset, asset_data)
+                (x, asset_data)
             });
 
         let assets = futures::future::join_all(rows).await;
@@ -138,8 +95,8 @@ pub async fn get_assets_by_creator(
 
     let filter_assets: Result<Vec<_>, _> = assets
         .into_iter()
-        .map(|(asset, asset_data)| match (asset, asset_data) {
-            (Some(asset), Some(asset_data)) => Ok((asset, asset_data)),
+        .map(|(asset, asset_data)| match asset_data {
+            Some(asset_data) => Ok((asset, asset_data)),
             _ => Err(DbErr::RecordNotFound("Asset Not Found".to_string())),
         })
         .collect();
@@ -152,13 +109,6 @@ pub async fn get_assets_by_creator(
                 _ => Interface::Nft,
             };
 
-            println!("asset {:?}", asset);
-            println!("asset {:?}", asset);
-            println!("asset {:?}", asset);
-
-            println!("asset data {:?}", asset_data);
-            println!("asset data {:?}", asset_data);
-            println!("asset data {:?}", asset_data);
             let content = get_content(&asset, &asset_data).unwrap();
 
             let authorities = asset_authority::Entity::find()
