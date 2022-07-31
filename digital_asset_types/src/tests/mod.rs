@@ -2,9 +2,11 @@ mod get_asset_by_id;
 mod get_assets_by_creator;
 mod get_assets_by_owner;
 
+use crate::dao::{asset_creators, prelude::AssetCreators};
 pub use get_asset_by_id::*;
 pub use get_assets_by_creator::*;
 pub use get_assets_by_owner::*;
+use sea_orm::{DeriveModel, FromQueryResult};
 
 use crate::adapter::{Collection, Creator, TokenProgramVersion, TokenStandard, Uses};
 
@@ -31,4 +33,20 @@ pub struct MetadataArgs {
     pub uses: Option<Uses>,
     pub token_program_version: TokenProgramVersion,
     pub creators: Vec<Creator>,
+}
+
+#[derive(FromQueryResult, Debug, Default, Clone, Eq, PartialEq)]
+pub struct CakeAndFillingCount {
+    asset_id: Vec<u8>,
+    creator: Vec<u8>,
+    id: i64,
+    // chain_data_id: i64,
+    owner: Vec<u8>,
+    share: i32,
+    verified: bool,
+}
+
+#[derive(FromQueryResult, Debug, Default, Clone, Eq, PartialEq)]
+pub struct Correct {
+    id: Vec<u8>,
 }
