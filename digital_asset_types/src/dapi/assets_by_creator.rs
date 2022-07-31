@@ -1,11 +1,20 @@
 use crate::dao::prelude::AssetData;
 use crate::dao::{asset, asset_authority, asset_creators, asset_grouping};
 use crate::dapi::asset::{get_content, to_authority, to_creators, to_grouping};
+use crate::dapi::assets_by_creator::asset::Relation::AssetCreators;
+use crate::dapi::assets_by_creator::asset_creators::Relation::Asset;
 use crate::rpc::filter::AssetSorting;
 use crate::rpc::response::AssetList;
 use crate::rpc::{Asset as RpcAsset, Compression, Interface, Ownership, Royalty};
-use sea_orm::DatabaseConnection;
-use sea_orm::{entity::*, query::*, DbErr};
+use sea_orm::{entity::*, query::*, DbErr, FromQueryResult};
+use sea_orm::{DatabaseConnection, DbBackend};
+
+#[derive(FromQueryResult)]
+struct CakeAndFillingCount {
+    id: i32,
+    name: String,
+    count: i32,
+}
 
 pub async fn get_assets_by_creator(
     db: &DatabaseConnection,
@@ -25,6 +34,17 @@ pub async fn get_assets_by_creator(
     // TODO: throw error if cursor and page pagination are included
     // TODO: returning proper
     let assets = if page > 0 {
+        let mut cake_pages = asset_creators::Entity::find()
+            .from_raw_sql(Statement::from_sql_and_values(
+                DbBackend::Postgres,
+                r#"SELECT "ac"."asset_id", "ac"."creator" FROM "asset_creators" AS "ac"
+                    LEFT OUTER JOIN "asset" AS "a" ON "a"."id" = "ac"."asset_id" 
+                     WHERE "ac"."creator" = $1"#,
+                vec![1.into()],
+            ))
+            .into_model::<CakeAndFillingCount>()
+            .paginate(db, 50);
+
         let paginator = asset::Entity::find()
             .join(
                 JoinType::LeftJoin,
