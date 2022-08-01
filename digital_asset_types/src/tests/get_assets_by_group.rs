@@ -1,8 +1,7 @@
 #[cfg(test)]
 mod get_assets_by_group {
     use sea_orm::{
-        entity::prelude::*, entity::*, Condition, ConnectionTrait, DatabaseBackend,
-        FromQueryResult, JoinType, JsonValue, MockDatabase, MockExecResult, QuerySelect,
+        entity::prelude::*, Condition, DatabaseBackend, JoinType, MockDatabase, QuerySelect,
     };
     use solana_sdk::{signature::Keypair, signer::Signer};
 
@@ -11,10 +10,12 @@ mod get_assets_by_group {
         dao::{
             asset, asset_authority, asset_creators, asset_data,
             prelude::AssetData,
-            sea_orm_active_enums::{ChainMutability, Mutability, OwnerType, RoyaltyTargetType},
+            sea_orm_active_enums::{OwnerType, RoyaltyTargetType},
         },
-        json::ChainDataV1,
-        tests::MetadataArgs,
+        tests::{
+            create_asset, create_asset_authority, create_asset_creator, create_asset_data,
+            create_asset_grouping, MetadataArgs,
+        },
     };
 
     #[cfg(feature = "mock")]
@@ -41,263 +42,6 @@ mod get_assets_by_group {
 
         let collection = Keypair::new().pubkey();
 
-        let db = MockDatabase::new(DatabaseBackend::Postgres)
-            .append_query_results(vec![vec![asset_data::Model {
-                id: 1,
-                chain_data_mutability: ChainMutability::Mutable,
-                schema_version: 1,
-                chain_data: serde_json::to_value(ChainDataV1 {
-                    name: String::from("Test #1"),
-                    symbol: String::from("BUBBLE"),
-                    edition_nonce: None,
-                    primary_sale_happened: true,
-                    token_standard: Some(TokenStandard::NonFungible),
-                    uses: None,
-                })
-                .unwrap(),
-                metadata_url: Keypair::new().pubkey().to_string(),
-                metadata_mutability: Mutability::Mutable,
-                metadata: JsonValue::String("processing".to_string()),
-            }]])
-            .append_query_results(vec![vec![asset::Model {
-                id: id_1.to_bytes().to_vec(),
-                owner: owner_1.to_bytes().to_vec(),
-                owner_type: OwnerType::Single,
-                delegate: None,
-                frozen: false,
-                supply: 1,
-                supply_mint: None,
-                compressed: true,
-                compressible: false,
-                tree_id: None,
-                specification_version: 1,
-                nonce: (0 as i64),
-                leaf: None,
-                royalty_target_type: RoyaltyTargetType::Creators,
-                royalty_target: None,
-                royalty_amount: 100, //basis points
-                chain_data_id: Some(1),
-                burnt: false,
-                created_at: None,
-            }]])
-            .append_query_results(vec![vec![asset_creators::Model {
-                id: 1,
-                asset_id: id_1.to_bytes().to_vec(),
-                creator: creator_1.to_bytes().to_vec(),
-                share: 100,
-                verified: true,
-            }]])
-            .append_query_results(vec![vec![asset_authority::Model {
-                asset_id: id_1.to_bytes().to_vec(),
-                authority: update_authority_1.to_bytes().to_vec(),
-                id: 1,
-                scopes: None,
-            }]])
-            .append_query_results(vec![vec![asset_data::Model {
-                id: 2,
-                chain_data_mutability: ChainMutability::Mutable,
-                schema_version: 1,
-                chain_data: serde_json::to_value(ChainDataV1 {
-                    name: String::from("Test #2"),
-                    symbol: String::from("BUBBLE"),
-                    edition_nonce: None,
-                    primary_sale_happened: true,
-                    token_standard: Some(TokenStandard::NonFungible),
-                    uses: None,
-                })
-                .unwrap(),
-                metadata_url: Keypair::new().pubkey().to_string(),
-                metadata_mutability: Mutability::Mutable,
-                metadata: JsonValue::String("processing".to_string()),
-            }]])
-            .append_query_results(vec![vec![asset::Model {
-                id: id_2.to_bytes().to_vec(),
-                owner: owner_2.to_bytes().to_vec(),
-                owner_type: OwnerType::Single,
-                delegate: None,
-                frozen: false,
-                supply: 1,
-                supply_mint: None,
-                compressed: true,
-                compressible: false,
-                tree_id: None,
-                specification_version: 1,
-                nonce: (0 as i64),
-                leaf: None,
-                royalty_target_type: RoyaltyTargetType::Creators,
-                royalty_target: None,
-                royalty_amount: 100, //basis points
-                chain_data_id: Some(2),
-                burnt: false,
-                created_at: None,
-            }]])
-            .append_query_results(vec![vec![asset_creators::Model {
-                id: 2,
-                asset_id: id_2.to_bytes().to_vec(),
-                creator: creator_2.to_bytes().to_vec(),
-                share: 100,
-                verified: true,
-            }]])
-            .append_query_results(vec![vec![asset_authority::Model {
-                asset_id: id_2.to_bytes().to_vec(),
-                authority: update_authority_2.to_bytes().to_vec(),
-                id: 2,
-                scopes: None,
-            }]])
-            .append_query_results(vec![vec![asset_grouping::Model {
-                asset_id: id_2.to_bytes().to_vec(),
-                group_value: bs58::encode(collection).into_string(),
-                id: 1,
-                group_key: "collection".to_string(),
-            }]])
-            .append_query_results(vec![vec![asset_data::Model {
-                id: 3,
-                chain_data_mutability: ChainMutability::Mutable,
-                schema_version: 1,
-                chain_data: serde_json::to_value(ChainDataV1 {
-                    name: String::from("Test #3"),
-                    symbol: String::from("BUBBLE"),
-                    edition_nonce: None,
-                    primary_sale_happened: true,
-                    token_standard: Some(TokenStandard::NonFungible),
-                    uses: None,
-                })
-                .unwrap(),
-                metadata_url: Keypair::new().pubkey().to_string(),
-                metadata_mutability: Mutability::Mutable,
-                metadata: JsonValue::String("processing".to_string()),
-            }]])
-            .append_query_results(vec![vec![asset::Model {
-                id: id_3.to_bytes().to_vec(),
-                owner: owner_2.to_bytes().to_vec(),
-                owner_type: OwnerType::Single,
-                delegate: None,
-                frozen: false,
-                supply: 1,
-                supply_mint: None,
-                compressed: true,
-                compressible: false,
-                tree_id: None,
-                specification_version: 1,
-                nonce: (0 as i64),
-                leaf: None,
-                royalty_target_type: RoyaltyTargetType::Creators,
-                royalty_target: None,
-                royalty_amount: 100, //basis points
-                chain_data_id: Some(3),
-                burnt: false,
-                created_at: None,
-            }]])
-            .append_query_results(vec![vec![asset_creators::Model {
-                id: 3,
-                asset_id: id_3.to_bytes().to_vec(),
-                creator: creator_2.to_bytes().to_vec(),
-                share: 10,
-                verified: true,
-            }]])
-            .append_query_results(vec![vec![asset_creators::Model {
-                id: 4,
-                asset_id: id_3.to_bytes().to_vec(),
-                creator: creator_3.to_bytes().to_vec(),
-                share: 90,
-                verified: true,
-            }]])
-            .append_query_results(vec![vec![asset_authority::Model {
-                asset_id: id_3.to_bytes().to_vec(),
-                authority: update_authority_3.to_bytes().to_vec(),
-                id: 3,
-                scopes: None,
-            }]])
-            .append_query_results(vec![vec![asset_grouping::Model {
-                asset_id: id_3.to_bytes().to_vec(),
-                group_value: bs58::encode(collection).into_string(),
-                id: 2,
-                group_key: "collection".to_string(),
-            }]])
-            .append_query_results(vec![vec![
-                (
-                    asset::Model {
-                        id: id_2.to_bytes().to_vec(),
-                        owner: owner_2.to_bytes().to_vec(),
-                        owner_type: OwnerType::Single,
-                        delegate: None,
-                        frozen: false,
-                        supply: 1,
-                        supply_mint: None,
-                        compressed: true,
-                        compressible: false,
-                        tree_id: None,
-                        specification_version: 1,
-                        nonce: (0 as i64),
-                        leaf: None,
-                        royalty_target_type: RoyaltyTargetType::Creators,
-                        royalty_target: None,
-                        royalty_amount: 100, //basis points
-                        chain_data_id: Some(2),
-                        burnt: false,
-                        created_at: None,
-                    },
-                    asset_data::Model {
-                        id: 2,
-                        chain_data_mutability: ChainMutability::Mutable,
-                        schema_version: 1,
-                        chain_data: serde_json::to_value(ChainDataV1 {
-                            name: String::from("Test #2"),
-                            symbol: String::from("BUBBLE"),
-                            edition_nonce: None,
-                            primary_sale_happened: true,
-                            token_standard: Some(TokenStandard::NonFungible),
-                            uses: None,
-                        })
-                        .unwrap(),
-                        metadata_url: uri_2.to_string(),
-                        metadata_mutability: Mutability::Mutable,
-                        metadata: JsonValue::String("processing".to_string()),
-                    },
-                ),
-                (
-                    asset::Model {
-                        id: id_3.to_bytes().to_vec(),
-                        owner: owner_2.to_bytes().to_vec(),
-                        owner_type: OwnerType::Single,
-                        delegate: None,
-                        frozen: false,
-                        supply: 1,
-                        supply_mint: None,
-                        compressed: true,
-                        compressible: false,
-                        tree_id: None,
-                        specification_version: 1,
-                        nonce: (0 as i64),
-                        leaf: None,
-                        royalty_target_type: RoyaltyTargetType::Creators,
-                        royalty_target: None,
-                        royalty_amount: 100, //basis points
-                        chain_data_id: Some(3),
-                        burnt: false,
-                        created_at: None,
-                    },
-                    asset_data::Model {
-                        id: 3,
-                        chain_data_mutability: ChainMutability::Mutable,
-                        schema_version: 1,
-                        chain_data: serde_json::to_value(ChainDataV1 {
-                            name: String::from("Test #3"),
-                            symbol: String::from("BUBBLE"),
-                            edition_nonce: None,
-                            primary_sale_happened: true,
-                            token_standard: Some(TokenStandard::NonFungible),
-                            uses: None,
-                        })
-                        .unwrap(),
-                        metadata_url: uri_3.to_string(),
-                        metadata_mutability: Mutability::Mutable,
-                        metadata: JsonValue::String("processing".to_string()),
-                    },
-                ),
-            ]])
-            .into_connection();
-
         let metadata_1 = MetadataArgs {
             name: String::from("Test #1"),
             symbol: String::from("BUBBLE"),
@@ -318,102 +62,40 @@ mod get_assets_by_group {
             seller_fee_basis_points: 100,
         };
 
-        let chain_data_1 = ChainDataV1 {
-            name: metadata_1.name,
-            symbol: metadata_1.symbol,
-            edition_nonce: metadata_1.edition_nonce,
-            primary_sale_happened: metadata_1.primary_sale_happened,
-            token_standard: metadata_1.token_standard,
-            uses: None,
-        };
-
-        let chain_data_json = serde_json::to_value(chain_data_1).unwrap();
-
-        let chain_mutability = match metadata_1.is_mutable {
-            true => ChainMutability::Mutable,
-            false => ChainMutability::Immutable,
-        };
-
-        let data_1 = asset_data::ActiveModel {
-            chain_data_mutability: Set(chain_mutability),
-            schema_version: Set(1),
-            chain_data: Set(chain_data_json),
-            metadata_url: Set(metadata_1.uri),
-            metadata: Set(JsonValue::String("processing".to_string())),
-            metadata_mutability: Set(Mutability::Mutable),
-            ..Default::default()
-        };
-
-        let insert_result = asset_data::Entity::insert(data_1).exec(&db).await?;
-        assert_eq!(insert_result.last_insert_id, 1);
-
-        let asset_1 = asset::ActiveModel {
-            id: Set(id_1.to_bytes().to_vec()),
-            owner: Set(owner_1.to_bytes().to_vec()),
-            owner_type: Set(OwnerType::Single),
-            delegate: Set(None),
-            frozen: Set(false),
-            supply: Set(1),
-            supply_mint: Set(None),
-            compressed: Set(true),
-            compressible: Set(false),
-            tree_id: Set(None),
-            specification_version: Set(1),
-            nonce: Set(0 as i64),
-            leaf: Set(None),
-            royalty_target_type: Set(RoyaltyTargetType::Creators),
-            royalty_target: Set(None),
-            royalty_amount: Set(metadata_1.seller_fee_basis_points as i32), //basis points
-            chain_data_id: Set(Some(insert_result.last_insert_id)),
-            ..Default::default()
-        };
-
-        assert_eq!(
-            asset_1.insert(&db).await?,
-            asset::Model {
-                id: id_1.to_bytes().to_vec(),
-                owner: owner_1.to_bytes().to_vec(),
-                owner_type: OwnerType::Single,
-                delegate: None,
-                frozen: false,
-                supply: 1,
-                supply_mint: None,
-                compressed: true,
-                compressible: false,
-                tree_id: None,
-                specification_version: 1,
-                nonce: (0 as i64),
-                leaf: None,
-                royalty_target_type: RoyaltyTargetType::Creators,
-                royalty_target: None,
-                royalty_amount: 100, //basis points
-                chain_data_id: Some(1),
-                burnt: false,
-                created_at: None,
-            }
+        let asset_data_1 = create_asset_data(metadata_1.clone(), 1);
+        let asset_1 = create_asset(
+            id_1.to_bytes().to_vec(),
+            owner_1.to_bytes().to_vec(),
+            OwnerType::Single,
+            None,
+            false,
+            1,
+            None,
+            true,
+            false,
+            None,
+            1,
+            0 as i64,
+            None,
+            RoyaltyTargetType::Creators,
+            None,
+            metadata_1.seller_fee_basis_points as i32,
+            Some(1),
         );
 
-        let creator = asset_creators::ActiveModel {
-            asset_id: Set(id_1.to_bytes().to_vec()),
-            creator: Set(metadata_1.creators[0].address.to_bytes().to_vec()),
-            share: Set(metadata_1.creators[0].share as i32),
-            verified: Set(metadata_1.creators[0].verified),
-            ..Default::default()
-        };
+        let asset_creator_1_1 = create_asset_creator(
+            id_1.to_bytes().to_vec(),
+            metadata_1.creators[0].address.to_bytes().to_vec(),
+            100,
+            true,
+            1,
+        );
 
-        let insert_result = asset_creators::Entity::insert(creator).exec(&db).await?;
-        assert_eq!(insert_result.last_insert_id, 1);
-
-        let authority_1 = asset_authority::ActiveModel {
-            asset_id: Set(id_1.to_bytes().to_vec()),
-            authority: Set(update_authority_1.to_bytes().to_vec()),
-            ..Default::default()
-        };
-
-        let insert_result = asset_authority::Entity::insert(authority_1)
-            .exec(&db)
-            .await?;
-        assert_eq!(insert_result.last_insert_id, 1);
+        let asset_authority_1 = create_asset_authority(
+            id_1.to_bytes().to_vec(),
+            update_authority_1.to_bytes().to_vec(),
+            1,
+        );
 
         let metadata_2 = MetadataArgs {
             name: String::from("Test #2"),
@@ -435,112 +117,43 @@ mod get_assets_by_group {
             seller_fee_basis_points: 100,
         };
 
-        let chain_data_2 = ChainDataV1 {
-            name: metadata_2.name,
-            symbol: metadata_2.symbol,
-            edition_nonce: metadata_2.edition_nonce,
-            primary_sale_happened: metadata_2.primary_sale_happened,
-            token_standard: metadata_2.token_standard,
-            uses: None,
-        };
-
-        let chain_data_json = serde_json::to_value(chain_data_2).unwrap();
-
-        let chain_mutability = match metadata_2.is_mutable {
-            true => ChainMutability::Mutable,
-            false => ChainMutability::Immutable,
-        };
-
-        let data_2 = asset_data::ActiveModel {
-            chain_data_mutability: Set(chain_mutability),
-            schema_version: Set(1),
-            chain_data: Set(chain_data_json),
-            metadata_url: Set(metadata_2.uri),
-            metadata: Set(JsonValue::String("processing".to_string())),
-            metadata_mutability: Set(Mutability::Mutable),
-            ..Default::default()
-        };
-
-        let insert_result = asset_data::Entity::insert(data_2).exec(&db).await?;
-        assert_eq!(insert_result.last_insert_id, 2);
-
-        let asset_2 = asset::ActiveModel {
-            id: Set(id_2.to_bytes().to_vec()),
-            owner: Set(owner_2.to_bytes().to_vec()),
-            owner_type: Set(OwnerType::Single),
-            delegate: Set(None),
-            frozen: Set(false),
-            supply: Set(1),
-            supply_mint: Set(None),
-            compressed: Set(true),
-            compressible: Set(false),
-            tree_id: Set(None),
-            specification_version: Set(1),
-            nonce: Set(0 as i64),
-            leaf: Set(None),
-            royalty_target_type: Set(RoyaltyTargetType::Creators),
-            royalty_target: Set(None),
-            royalty_amount: Set(metadata_2.seller_fee_basis_points as i32), //basis points
-            chain_data_id: Set(Some(insert_result.last_insert_id)),
-            ..Default::default()
-        };
-
-        assert_eq!(
-            asset_2.insert(&db).await?,
-            asset::Model {
-                id: id_2.to_bytes().to_vec(),
-                owner: owner_2.to_bytes().to_vec(),
-                owner_type: OwnerType::Single,
-                delegate: None,
-                frozen: false,
-                supply: 1,
-                supply_mint: None,
-                compressed: true,
-                compressible: false,
-                tree_id: None,
-                specification_version: 1,
-                nonce: (0 as i64),
-                leaf: None,
-                royalty_target_type: RoyaltyTargetType::Creators,
-                royalty_target: None,
-                royalty_amount: 100, //basis points
-                chain_data_id: Some(2),
-                burnt: false,
-                created_at: None,
-            }
+        let asset_data_2 = create_asset_data(metadata_2.clone(), 2);
+        let asset_2 = create_asset(
+            id_2.to_bytes().to_vec(),
+            owner_2.to_bytes().to_vec(),
+            OwnerType::Single,
+            None,
+            false,
+            1,
+            None,
+            true,
+            false,
+            None,
+            1,
+            0 as i64,
+            None,
+            RoyaltyTargetType::Creators,
+            None,
+            metadata_2.seller_fee_basis_points as i32,
+            Some(2),
         );
 
-        let creator = asset_creators::ActiveModel {
-            asset_id: Set(id_2.to_bytes().to_vec()),
-            creator: Set(metadata_2.creators[0].address.to_bytes().to_vec()),
-            share: Set(metadata_2.creators[0].share as i32),
-            verified: Set(metadata_2.creators[0].verified),
-            ..Default::default()
-        };
+        let asset_creator_2_1 = create_asset_creator(
+            id_2.to_bytes().to_vec(),
+            metadata_2.creators[0].address.to_bytes().to_vec(),
+            100,
+            true,
+            2,
+        );
 
-        let insert_result = asset_creators::Entity::insert(creator).exec(&db).await?;
-        assert_eq!(insert_result.last_insert_id, 2);
+        let asset_authority_2 = create_asset_authority(
+            id_2.to_bytes().to_vec(),
+            update_authority_2.to_bytes().to_vec(),
+            2,
+        );
 
-        let authority_2 = asset_authority::ActiveModel {
-            asset_id: Set(id_2.to_bytes().to_vec()),
-            authority: Set(update_authority_2.to_bytes().to_vec()),
-            ..Default::default()
-        };
-
-        let insert_result = asset_authority::Entity::insert(authority_2)
-            .exec(&db)
-            .await?;
-        assert_eq!(insert_result.last_insert_id, 2);
-
-        let grouping_2 = asset_grouping::ActiveModel {
-            asset_id: Set(id_2.to_bytes().to_vec()),
-            group_key: Set(String::from("collection")),
-            group_value: Set(bs58::encode(collection).into_string()),
-            ..Default::default()
-        };
-
-        let insert_result = asset_grouping::Entity::insert(grouping_2).exec(&db).await?;
-        assert_eq!(insert_result.last_insert_id, 1);
+        let asset_grouping_2 =
+            create_asset_grouping(id_2.to_bytes().to_vec(), collection.clone(), 1);
 
         let metadata_3 = MetadataArgs {
             name: String::from("Test #3"),
@@ -569,122 +182,151 @@ mod get_assets_by_group {
             seller_fee_basis_points: 100,
         };
 
-        let chain_data_3 = ChainDataV1 {
-            name: metadata_3.name,
-            symbol: metadata_3.symbol,
-            edition_nonce: metadata_3.edition_nonce,
-            primary_sale_happened: metadata_3.primary_sale_happened,
-            token_standard: metadata_3.token_standard,
-            uses: None,
-        };
-
-        let chain_data_json = serde_json::to_value(chain_data_3).unwrap();
-
-        let chain_mutability = match metadata_3.is_mutable {
-            true => ChainMutability::Mutable,
-            false => ChainMutability::Immutable,
-        };
-
-        let data_3 = asset_data::ActiveModel {
-            chain_data_mutability: Set(chain_mutability),
-            schema_version: Set(1),
-            chain_data: Set(chain_data_json),
-            metadata_url: Set(metadata_3.uri),
-            metadata: Set(JsonValue::String("processing".to_string())),
-            metadata_mutability: Set(Mutability::Mutable),
-            ..Default::default()
-        };
-
-        let insert_result = asset_data::Entity::insert(data_3).exec(&db).await?;
-        assert_eq!(insert_result.last_insert_id, 3);
-
-        let asset_3 = asset::ActiveModel {
-            id: Set(id_3.to_bytes().to_vec()),
-            owner: Set(owner_2.to_bytes().to_vec()),
-            owner_type: Set(OwnerType::Single),
-            delegate: Set(None),
-            frozen: Set(false),
-            supply: Set(1),
-            supply_mint: Set(None),
-            compressed: Set(true),
-            compressible: Set(false),
-            tree_id: Set(None),
-            specification_version: Set(1),
-            nonce: Set(0 as i64),
-            leaf: Set(None),
-            royalty_target_type: Set(RoyaltyTargetType::Creators),
-            royalty_target: Set(None),
-            royalty_amount: Set(metadata_3.seller_fee_basis_points as i32), //basis points
-            chain_data_id: Set(Some(insert_result.last_insert_id)),
-            ..Default::default()
-        };
-
-        assert_eq!(
-            asset_3.insert(&db).await?,
-            asset::Model {
-                id: id_3.to_bytes().to_vec(),
-                owner: owner_2.to_bytes().to_vec(),
-                owner_type: OwnerType::Single,
-                delegate: None,
-                frozen: false,
-                supply: 1,
-                supply_mint: None,
-                compressed: true,
-                compressible: false,
-                tree_id: None,
-                specification_version: 1,
-                nonce: (0 as i64),
-                leaf: None,
-                royalty_target_type: RoyaltyTargetType::Creators,
-                royalty_target: None,
-                royalty_amount: 100, //basis points
-                chain_data_id: Some(3),
-                burnt: false,
-                created_at: None,
-            }
+        let asset_data_3 = create_asset_data(metadata_3.clone(), 3);
+        let asset_3 = create_asset(
+            id_3.to_bytes().to_vec(),
+            owner_2.to_bytes().to_vec(),
+            OwnerType::Single,
+            None,
+            false,
+            1,
+            None,
+            true,
+            false,
+            None,
+            1,
+            0 as i64,
+            None,
+            RoyaltyTargetType::Creators,
+            None,
+            metadata_3.seller_fee_basis_points as i32,
+            Some(3),
         );
 
-        let creator = asset_creators::ActiveModel {
-            asset_id: Set(id_3.to_bytes().to_vec()),
-            creator: Set(metadata_3.creators[0].address.to_bytes().to_vec()),
-            share: Set(metadata_3.creators[0].share as i32),
-            verified: Set(metadata_3.creators[0].verified),
-            ..Default::default()
-        };
+        let asset_creator_3_1 = create_asset_creator(
+            id_3.to_bytes().to_vec(),
+            metadata_3.creators[0].address.to_bytes().to_vec(),
+            10,
+            true,
+            3,
+        );
 
-        let insert_result = asset_creators::Entity::insert(creator).exec(&db).await?;
-        assert_eq!(insert_result.last_insert_id, 3);
+        let asset_creator_3_2 = create_asset_creator(
+            id_3.to_bytes().to_vec(),
+            metadata_3.creators[1].address.to_bytes().to_vec(),
+            90,
+            true,
+            4,
+        );
 
-        let creator = asset_creators::ActiveModel {
-            asset_id: Set(id_3.to_bytes().to_vec()),
-            creator: Set(metadata_3.creators[1].address.to_bytes().to_vec()),
-            share: Set(metadata_3.creators[1].share as i32),
-            verified: Set(metadata_3.creators[1].verified),
-            ..Default::default()
-        };
+        let asset_authority_3 = create_asset_authority(
+            id_3.to_bytes().to_vec(),
+            update_authority_3.to_bytes().to_vec(),
+            3,
+        );
 
-        let insert_result = asset_creators::Entity::insert(creator).exec(&db).await?;
-        assert_eq!(insert_result.last_insert_id, 4);
+        let asset_grouping_3 =
+            create_asset_grouping(id_3.to_bytes().to_vec(), collection.clone(), 2);
 
-        let authority_3 = asset_authority::ActiveModel {
-            asset_id: Set(id_3.to_bytes().to_vec()),
-            authority: Set(update_authority_3.to_bytes().to_vec()),
-            ..Default::default()
-        };
+        let db = MockDatabase::new(DatabaseBackend::Postgres)
+            .append_query_results(vec![vec![asset_data_1.1]])
+            .append_query_results(vec![vec![asset_1.1]])
+            .append_query_results(vec![vec![asset_creator_1_1.1]])
+            .append_query_results(vec![vec![asset_authority_1.1]])
+            .append_query_results(vec![vec![asset_data_2.1.clone()]])
+            .append_query_results(vec![vec![asset_2.1.clone()]])
+            .append_query_results(vec![vec![asset_creator_2_1.1]])
+            .append_query_results(vec![vec![asset_authority_2.1]])
+            .append_query_results(vec![vec![asset_grouping_2.1]])
+            .append_query_results(vec![vec![asset_data_3.1.clone()]])
+            .append_query_results(vec![vec![asset_3.1.clone()]])
+            .append_query_results(vec![vec![asset_creator_3_1.1]])
+            .append_query_results(vec![vec![asset_creator_3_2.1]])
+            .append_query_results(vec![vec![asset_authority_3.1]])
+            .append_query_results(vec![vec![asset_grouping_3.1]])
+            .append_query_results(vec![vec![
+                (asset_2.1.clone(), asset_data_2.1.clone()),
+                (asset_3.1.clone(), asset_data_3.1.clone()),
+            ]])
+            .into_connection();
 
-        let insert_result = asset_authority::Entity::insert(authority_3)
+        let insert_result = asset_data::Entity::insert(asset_data_1.0)
+            .exec(&db)
+            .await
+            .unwrap();
+        assert_eq!(insert_result.last_insert_id, 1);
+
+        let insert_result = asset::Entity::insert(asset_1.0).exec(&db).await.unwrap();
+        assert_eq!(insert_result.last_insert_id, id_1.to_bytes().to_vec());
+
+        let insert_result = asset_creators::Entity::insert(asset_creator_1_1.0)
+            .exec(&db)
+            .await
+            .unwrap();
+        assert_eq!(insert_result.last_insert_id, 1);
+
+        let insert_result = asset_authority::Entity::insert(asset_authority_1.0)
+            .exec(&db)
+            .await
+            .unwrap();
+        assert_eq!(insert_result.last_insert_id, 1);
+
+        let insert_result = asset_data::Entity::insert(asset_data_2.0)
+            .exec(&db)
+            .await
+            .unwrap();
+        assert_eq!(insert_result.last_insert_id, 2);
+
+        let insert_result = asset::Entity::insert(asset_2.0).exec(&db).await.unwrap();
+        assert_eq!(insert_result.last_insert_id, id_2.to_bytes().to_vec());
+
+        let insert_result = asset_creators::Entity::insert(asset_creator_2_1.0)
+            .exec(&db)
+            .await
+            .unwrap();
+        assert_eq!(insert_result.last_insert_id, 2);
+
+        let insert_result = asset_authority::Entity::insert(asset_authority_2.0)
+            .exec(&db)
+            .await
+            .unwrap();
+        assert_eq!(insert_result.last_insert_id, 2);
+
+        let insert_result = asset_grouping::Entity::insert(asset_grouping_2.0)
             .exec(&db)
             .await?;
+        assert_eq!(insert_result.last_insert_id, 1);
+
+        let insert_result = asset_data::Entity::insert(asset_data_3.0)
+            .exec(&db)
+            .await
+            .unwrap();
         assert_eq!(insert_result.last_insert_id, 3);
 
-        let grouping_3 = asset_grouping::ActiveModel {
-            asset_id: Set(id_3.to_bytes().to_vec()),
-            group_key: Set(String::from("collection")),
-            group_value: Set(bs58::encode(collection).into_string()),
-            ..Default::default()
-        };
+        let insert_result = asset::Entity::insert(asset_3.0).exec(&db).await.unwrap();
+        assert_eq!(insert_result.last_insert_id, id_3.to_bytes().to_vec());
 
-        let insert_result = asset_grouping::Entity::insert(grouping_3).exec(&db).await?;
+        let insert_result = asset_creators::Entity::insert(asset_creator_3_1.0)
+            .exec(&db)
+            .await
+            .unwrap();
+        assert_eq!(insert_result.last_insert_id, 3);
+
+        let insert_result = asset_creators::Entity::insert(asset_creator_3_2.0)
+            .exec(&db)
+            .await
+            .unwrap();
+        assert_eq!(insert_result.last_insert_id, 4);
+
+        let insert_result = asset_authority::Entity::insert(asset_authority_3.0)
+            .exec(&db)
+            .await
+            .unwrap();
+        assert_eq!(insert_result.last_insert_id, 3);
+
+        let insert_result = asset_grouping::Entity::insert(asset_grouping_3.0)
+            .exec(&db)
+            .await?;
         assert_eq!(insert_result.last_insert_id, 2);
 
         assert_eq!(
@@ -700,86 +342,8 @@ mod get_assets_by_group {
                 .all(&db)
                 .await?,
             vec![
-                (
-                    asset::Model {
-                        id: id_2.to_bytes().to_vec(),
-                        owner: owner_2.to_bytes().to_vec(),
-                        owner_type: OwnerType::Single,
-                        delegate: None,
-                        frozen: false,
-                        supply: 1,
-                        supply_mint: None,
-                        compressed: true,
-                        compressible: false,
-                        tree_id: None,
-                        specification_version: 1,
-                        nonce: (0 as i64),
-                        leaf: None,
-                        royalty_target_type: RoyaltyTargetType::Creators,
-                        royalty_target: None,
-                        royalty_amount: 100, //basis points
-                        chain_data_id: Some(2),
-                        burnt: false,
-                        created_at: None,
-                    },
-                    Some(asset_data::Model {
-                        id: 2,
-                        chain_data_mutability: ChainMutability::Mutable,
-                        schema_version: 1,
-                        chain_data: serde_json::to_value(ChainDataV1 {
-                            name: String::from("Test #2"),
-                            symbol: String::from("BUBBLE"),
-                            edition_nonce: None,
-                            primary_sale_happened: true,
-                            token_standard: Some(TokenStandard::NonFungible),
-                            uses: None,
-                        })
-                        .unwrap(),
-                        metadata_url: uri_2.to_string(),
-                        metadata_mutability: Mutability::Mutable,
-                        metadata: JsonValue::String("processing".to_string()),
-                    })
-                ),
-                (
-                    asset::Model {
-                        id: id_3.to_bytes().to_vec(),
-                        owner: owner_2.to_bytes().to_vec(),
-                        owner_type: OwnerType::Single,
-                        delegate: None,
-                        frozen: false,
-                        supply: 1,
-                        supply_mint: None,
-                        compressed: true,
-                        compressible: false,
-                        tree_id: None,
-                        specification_version: 1,
-                        nonce: (0 as i64),
-                        leaf: None,
-                        royalty_target_type: RoyaltyTargetType::Creators,
-                        royalty_target: None,
-                        royalty_amount: 100, //basis points
-                        chain_data_id: Some(3),
-                        burnt: false,
-                        created_at: None,
-                    },
-                    Some(asset_data::Model {
-                        id: 3,
-                        chain_data_mutability: ChainMutability::Mutable,
-                        schema_version: 1,
-                        chain_data: serde_json::to_value(ChainDataV1 {
-                            name: String::from("Test #3"),
-                            symbol: String::from("BUBBLE"),
-                            edition_nonce: None,
-                            primary_sale_happened: true,
-                            token_standard: Some(TokenStandard::NonFungible),
-                            uses: None,
-                        })
-                        .unwrap(),
-                        metadata_url: uri_3.to_string(),
-                        metadata_mutability: Mutability::Mutable,
-                        metadata: JsonValue::String("processing".to_string()),
-                    })
-                )
+                (asset_2.1.clone(), Some(asset_data_2.1.clone())),
+                (asset_3.1.clone(), Some(asset_data_3.1.clone()))
             ]
         );
 

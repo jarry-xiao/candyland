@@ -7,13 +7,13 @@ pub use get_asset_by_id::*;
 pub use get_assets_by_creator::*;
 pub use get_assets_by_group::*;
 pub use get_assets_by_owner::*;
-use sea_orm::{DatabaseConnection, EntityTrait, JsonValue, MockDatabase, Set};
-use solana_sdk::{pubkey::Pubkey, signature::Keypair, signer::Signer};
+use sea_orm::{JsonValue, Set};
+use solana_sdk::{signature::Keypair, signer::Signer, pubkey::Pubkey};
 
 use crate::{
     adapter::{Collection, Creator, TokenProgramVersion, TokenStandard, Uses},
     dao::{
-        asset, asset_authority, asset_creators, asset_data,
+        asset, asset_authority, asset_creators, asset_data, asset_grouping,
         sea_orm_active_enums::{ChainMutability, Mutability, OwnerType, RoyaltyTargetType},
     },
     json::ChainDataV1,
@@ -200,6 +200,27 @@ pub fn create_asset_authority(
             authority: update_authority,
             id: row_num,
             scopes: None,
+        },
+    )
+}
+
+pub fn create_asset_grouping(
+    asset_id: Vec<u8>,
+    collection: Pubkey,
+    row_num: i64,
+) -> (asset_grouping::ActiveModel, asset_grouping::Model) {
+    (
+        asset_grouping::ActiveModel {
+            asset_id: Set(asset_id.clone()),
+            group_key: Set(String::from("collection")),
+            group_value: Set(bs58::encode(collection).into_string()),
+            ..Default::default()
+        },
+        asset_grouping::Model {
+            asset_id,
+            group_value: bs58::encode(collection).into_string(),
+            id: row_num,
+            group_key: "collection".to_string(),
         },
     )
 }
