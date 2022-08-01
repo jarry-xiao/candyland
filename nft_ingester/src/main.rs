@@ -137,6 +137,7 @@ async fn service_transaction_stream<T: Messenger>(
 
         manager = setup_manager(manager, pool, tasks).await;
         let mut messenger = T::new(messenger_config).await.unwrap();
+        println!("Setting up transaction listener");
         loop {
             // This call to messenger.recv() blocks with no timeout until
             // a message is received on the stream.
@@ -157,7 +158,7 @@ async fn service_account_stream<T: Messenger>(
         let task_manager = TaskManager::new("background-tasks".to_string(), pool.clone()).unwrap();
         manager = setup_manager(manager, pool, tasks).await;
         let mut messenger = T::new(messenger_config).await.unwrap();
-
+        println!("Setting up account listener");
         loop {
             // This call to messenger.recv() blocks with no timeout until
             // a message is received on the stream.
@@ -180,6 +181,7 @@ async fn handle_account(manager: &ProgramHandlerManager<'static>, data: Vec<(i64
         };
         let program_id = account_update.owner();
         let parser = manager.match_program(program_id.unwrap());
+        statsd_count!("ingester.account_update_seen", 1);
         match parser {
             Some(p) if p.config().responds_to_account == true => {
                 let _ = p.handle_account(&account_update).map_err(|e| {
@@ -213,7 +215,12 @@ async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<
             }
             Ok(transaction) => transaction,
         };
-
+        if let Some(si) = transaction.slot_index() {
+            let slt_idx = format!("{}-{}", transaction.slot(), si);
+            statsd_count!("ingester.transaction_event_seen", 1, "slot-idx" => &slt_idx);
+        }
+        let seen_at = Utc::now();
+        statsd_time!("ingester.bus_ingest_time", (seen_at.timestamp_millis() - transaction.seen_at()) as u64);
         // Get account keys flatbuffers object.
         let keys = match transaction.account_keys() {
             None => {
@@ -236,7 +243,9 @@ async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<
             );
 
             let (program, instruction) = outer_ix;
-            let parser = manager.match_program(program.key().unwrap());
+            let program_id = program.key().unwrap();
+            let parser = manager.match_program(program_id);
+            let str_program_id = bs58::encode(program_id).into_string();
             match parser {
                 Some(p) if p.config().responds_to_instruction == true => {
                     let _ = p
@@ -252,9 +261,11 @@ async fn handle_transaction(manager: &ProgramHandlerManager<'static>, data: Vec<
                         .await
                         .map_err(|e| {
                             // Just for logging
-                            println!("Error in instruction handling {:?}", e);
+                            println!("Error in instruction handling onr program {} {:?}", str_program_id, e);
                             e
                         });
+                    let finished_at = Utc::now();
+                    statsd_time!("ingester.ix_process_time", (finished_at.timestamp_millis() - transaction.seen_at()) as u64, "program_id" => &str_program_id);
                 }
                 _ => {
                     println!("Program Handler not found for program id {:?}", program);
