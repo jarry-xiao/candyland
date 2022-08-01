@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod get_assets_by_creator {
+mod get_assets_by_group {
     use sea_orm::{
         entity::prelude::*, entity::*, Condition, ConnectionTrait, DatabaseBackend,
         FromQueryResult, JoinType, JsonValue, MockDatabase, MockExecResult, QuerySelect,
@@ -19,7 +19,9 @@ mod get_assets_by_creator {
 
     #[cfg(feature = "mock")]
     #[tokio::test]
-    async fn get_assets_by_creator() -> Result<(), DbErr> {
+    async fn get_assets_by_group() -> Result<(), DbErr> {
+        use crate::dao::asset_grouping;
+
         let id_1 = Keypair::new().pubkey();
         let owner_1 = Keypair::new().pubkey();
         let update_authority_1 = Keypair::new().pubkey();
@@ -36,6 +38,8 @@ mod get_assets_by_creator {
         let update_authority_3 = Keypair::new().pubkey();
         let creator_3 = Keypair::new().pubkey();
         let uri_3 = Keypair::new().pubkey();
+
+        let collection = Keypair::new().pubkey();
 
         let db = MockDatabase::new(DatabaseBackend::Postgres)
             .append_query_results(vec![vec![asset_data::Model {
@@ -140,6 +144,12 @@ mod get_assets_by_creator {
                 id: 2,
                 scopes: None,
             }]])
+            .append_query_results(vec![vec![asset_grouping::Model {
+                asset_id: id_2.to_bytes().to_vec(),
+                group_value: bs58::encode(collection).into_string(),
+                id: 1,
+                group_key: "collection".to_string(),
+            }]])
             .append_query_results(vec![vec![asset_data::Model {
                 id: 3,
                 chain_data_mutability: ChainMutability::Mutable,
@@ -178,7 +188,7 @@ mod get_assets_by_creator {
                 burnt: false,
                 created_at: None,
             }]])
-              .append_query_results(vec![vec![asset_creators::Model {
+            .append_query_results(vec![vec![asset_creators::Model {
                 id: 3,
                 asset_id: id_3.to_bytes().to_vec(),
                 creator: creator_2.to_bytes().to_vec(),
@@ -197,6 +207,12 @@ mod get_assets_by_creator {
                 authority: update_authority_3.to_bytes().to_vec(),
                 id: 3,
                 scopes: None,
+            }]])
+            .append_query_results(vec![vec![asset_grouping::Model {
+                asset_id: id_3.to_bytes().to_vec(),
+                group_value: bs58::encode(collection).into_string(),
+                id: 2,
+                group_key: "collection".to_string(),
             }]])
             .append_query_results(vec![vec![
                 (
@@ -516,6 +532,16 @@ mod get_assets_by_creator {
             .await?;
         assert_eq!(insert_result.last_insert_id, 2);
 
+        let grouping_2 = asset_grouping::ActiveModel {
+            asset_id: Set(id_2.to_bytes().to_vec()),
+            group_key: Set(String::from("collection")),
+            group_value: Set(bs58::encode(collection).into_string()),
+            ..Default::default()
+        };
+
+        let insert_result = asset_grouping::Entity::insert(grouping_2).exec(&db).await?;
+        assert_eq!(insert_result.last_insert_id, 1);
+
         let metadata_3 = MetadataArgs {
             name: String::from("Test #3"),
             symbol: String::from("BUBBLE"),
@@ -651,16 +677,25 @@ mod get_assets_by_creator {
             .await?;
         assert_eq!(insert_result.last_insert_id, 3);
 
+        let grouping_3 = asset_grouping::ActiveModel {
+            asset_id: Set(id_3.to_bytes().to_vec()),
+            group_key: Set(String::from("collection")),
+            group_value: Set(bs58::encode(collection).into_string()),
+            ..Default::default()
+        };
+
+        let insert_result = asset_grouping::Entity::insert(grouping_3).exec(&db).await?;
+        assert_eq!(insert_result.last_insert_id, 2);
+
         assert_eq!(
             asset::Entity::find()
                 .join(
                     JoinType::LeftJoin,
-                    asset::Entity::has_many(asset_creators::Entity).into(),
+                    asset::Entity::has_many(asset_grouping::Entity).into(),
                 )
-                .filter(
-                    Condition::any()
-                        .add(asset_creators::Column::Creator.eq(creator_2.to_bytes().to_vec())),
-                )
+                .filter(Condition::any().add(
+                    asset_grouping::Column::GroupValue.eq(bs58::encode(collection).into_string()),
+                ))
                 .find_also_related(AssetData)
                 .all(&db)
                 .await?,
