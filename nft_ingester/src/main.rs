@@ -5,27 +5,33 @@ mod parsers;
 mod tasks;
 mod utils;
 
-use crate::error::IngesterError;
-use crate::tasks::{BgTask, TaskManager};
-use messenger::MessengerConfig;
+use cadence_macros::statsd_time;
+use chrono::Utc;
 use {
     crate::{
         backfiller::backfiller,
         parsers::*,
         utils::{order_instructions, parse_logs},
     },
-    figment::{providers::Env, Figment},
     futures_util::TryFutureExt,
     messenger::{Messenger, RedisMessenger, ACCOUNT_STREAM, TRANSACTION_STREAM},
-    plerkle_serialization::{
-        account_info_generated::account_info::root_as_account_info,
-        transaction_info_generated::transaction_info::root_as_transaction_info,
-    },
-    serde::Deserialize,
+    plerkle_serialization::account_info_generated::account_info::root_as_account_info,
+    plerkle_serialization::transaction_info_generated::transaction_info::root_as_transaction_info,
     solana_sdk::pubkey::Pubkey,
     sqlx::{self, postgres::PgPoolOptions, Pool, Postgres},
     tokio::sync::mpsc::UnboundedSender,
+    serde::Deserialize,
+    figment::{Figment, providers::Env},
+    cadence_macros::{
+        set_global_default,
+        statsd_count,
+    },
+    cadence::{BufferedUdpMetricSink, QueuingMetricSink, StatsdClient},
+    std::net::UdpSocket,
 };
+use messenger::MessengerConfig;
+use crate::error::IngesterError;
+use crate::tasks::{BgTask, TaskManager};
 
 async fn setup_manager<'a, 'b>(
     mut manager: ProgramHandlerManager<'a>,
@@ -51,14 +57,29 @@ pub const RPC_COMMITMENT_KEY: &str = "commitment";
 // Struct used for Figment configuration items.
 #[derive(Deserialize, PartialEq, Debug, Clone)]
 pub struct IngesterConfig {
-    database_config: DatabaseConfig,
-    messenger_config: MessengerConfig,
-    rpc_config: RpcConfig,
+    pub database_config: DatabaseConfig,
+    pub messenger_config: MessengerConfig,
+    pub rpc_config: RpcConfig,
+    pub metrics_port: u16,
+    pub metrics_host: String,
+}
+
+fn setup_metrics(config: &IngesterConfig) {
+    let uri = config.metrics_host.clone();
+    let port = config.metrics_port.clone();
+    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    socket.set_nonblocking(true).unwrap();
+    let host = (uri, port);
+    let udp_sink = BufferedUdpMetricSink::from(host, socket).unwrap();
+    let queuing_sink = QueuingMetricSink::from(udp_sink);
+    let client = StatsdClient::from_sink("das_ingester", queuing_sink);
+    set_global_default(client);
 }
 
 #[tokio::main]
 async fn main() {
     // Read config.
+    println!("Starting DASgester");
     let config: IngesterConfig = Figment::new()
         .join(Env::prefixed("INGESTER_"))
         .extract()
@@ -76,6 +97,7 @@ async fn main() {
         })
         .unwrap();
     // Setup Postgres.
+    let mut tasks = vec![];
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect(&url)
@@ -84,16 +106,11 @@ async fn main() {
     let background_task_manager =
         TaskManager::new("background-tasks".to_string(), pool.clone()).unwrap();
     // Service streams as separate concurrent processes.
-    let mut tasks = vec![];
-    tasks.push(
-        service_transaction_stream::<RedisMessenger>(
-            pool.clone(),
-            background_task_manager.get_sender(),
-            config.messenger_config.clone(),
-        )
-        .await,
-    );
-    // Start up backfiller process.
+    println!("Setting up tasks");
+    setup_metrics(&config);
+    tasks.push(service_transaction_stream::<RedisMessenger>(pool.clone(), background_task_manager.get_sender(), config.messenger_config.clone()).await);
+    statsd_count!("ingester.startup", 1);
+
     tasks.push(backfiller::<RedisMessenger>(pool.clone(), config.clone()).await);
     // Wait for ctrl-c.
     match tokio::signal::ctrl_c().await {
@@ -130,14 +147,14 @@ async fn service_transaction_stream<T: Messenger>(
     })
 }
 
-async fn _service_account_stream<T: Messenger>(
+async fn service_account_stream<T: Messenger>(
     pool: Pool<Postgres>,
     tasks: UnboundedSender<Box<dyn BgTask>>,
     messenger_config: MessengerConfig,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut manager = ProgramHandlerManager::new();
-        let _task_manager = TaskManager::new("background-tasks".to_string(), pool.clone()).unwrap();
+        let task_manager = TaskManager::new("background-tasks".to_string(), pool.clone()).unwrap();
         manager = setup_manager(manager, pool, tasks).await;
         let mut messenger = T::new(messenger_config).await.unwrap();
 
@@ -145,13 +162,13 @@ async fn _service_account_stream<T: Messenger>(
             // This call to messenger.recv() blocks with no timeout until
             // a message is received on the stream.
             if let Ok(data) = messenger.recv(ACCOUNT_STREAM).await {
-                _handle_account(&manager, data).await
+                handle_account(&manager, data).await
             }
         }
     })
 }
 
-async fn _handle_account(manager: &ProgramHandlerManager<'static>, data: Vec<(i64, &[u8])>) {
+async fn handle_account(manager: &ProgramHandlerManager<'static>, data: Vec<(i64, &[u8])>) {
     for (_message_id, data) in data {
         // Get root of account info flatbuffers object.
         let account_update = match root_as_account_info(data) {
