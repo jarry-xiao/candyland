@@ -36,8 +36,8 @@ pub trait ApiContract: Send + Sync + 'static {
         after: String,
     ) -> Result<OfferList, DasApiError>;
     async fn get_assets_by_group(
-        &mut self,
-        group_expression: String,
+        &self,
+        group_expression: Vec<String>,
         sort_by: AssetSorting,
         limit: u32,
         page: u32,
@@ -102,6 +102,17 @@ impl<'a> RpcApiBuilder {
                     rpc_params.parse().unwrap();
                 rpc_context
                     .get_assets_by_creator(creator_expression, sort_by, limit, page, before, after)
+                    .await
+                    .map_err(Into::into)
+            },
+        )?;
+        module.register_async_method(
+            "get_assets_by_group",
+            |rpc_params, rpc_context| async move {
+                let (group_expression, sort_by, limit, page, before, after) =
+                    rpc_params.parse().unwrap();
+                rpc_context
+                    .get_assets_by_group(group_expression, sort_by, limit, page, before, after)
                     .await
                     .map_err(Into::into)
             },

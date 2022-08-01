@@ -34,19 +34,3 @@ pub struct MetadataArgs {
     pub token_program_version: TokenProgramVersion,
     pub creators: Vec<Creator>,
 }
-
-#[derive(FromQueryResult, Debug, Default, Clone, Eq, PartialEq)]
-pub struct CakeAndFillingCount {
-    asset_id: Vec<u8>,
-    creator: Vec<u8>,
-    id: i64,
-    // chain_data_id: i64,
-    owner: Vec<u8>,
-    share: i32,
-    verified: bool,
-}
-
-#[derive(FromQueryResult, Debug, Default, Clone, Eq, PartialEq)]
-pub struct Correct {
-    id: Vec<u8>,
-}

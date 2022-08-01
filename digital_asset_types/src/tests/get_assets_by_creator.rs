@@ -14,7 +14,7 @@ mod get_assets_by_creator {
             sea_orm_active_enums::{ChainMutability, Mutability, OwnerType, RoyaltyTargetType},
         },
         json::ChainDataV1,
-        tests::{CakeAndFillingCount, MetadataArgs},
+        tests::MetadataArgs,
     };
 
     #[cfg(feature = "mock")]
@@ -554,15 +554,16 @@ mod get_assets_by_creator {
         let insert_result = asset_creators::Entity::insert(creator).exec(&db).await?;
         assert_eq!(insert_result.last_insert_id, 3);
 
-        asset_creators::Entity::insert(asset_creators::ActiveModel {
+        let creator = asset_creators::ActiveModel {
             asset_id: Set(id_3.to_bytes().to_vec()),
             creator: Set(metadata_3.creators[1].address.to_bytes().to_vec()),
             share: Set(metadata_3.creators[1].share as i32),
             verified: Set(metadata_3.creators[1].verified),
             ..Default::default()
-        })
-        .exec(&db)
-        .await?;
+        };
+
+        let insert_result = asset_creators::Entity::insert(creator).exec(&db).await?;
+        assert_eq!(insert_result.last_insert_id, 4);
 
         let authority_3 = asset_authority::ActiveModel {
             asset_id: Set(id_3.to_bytes().to_vec()),
@@ -574,37 +575,6 @@ mod get_assets_by_creator {
             .exec(&db)
             .await?;
         assert_eq!(insert_result.last_insert_id, 3);
-
-        let thang = asset::Entity::find()
-            .select_only()
-            .column(asset::Column::Owner)
-            // .join_rev(
-            //     // construct `RelationDef` on the fly
-            //     JoinType::InnerJoin,
-            //     cake_filling::Entity::belongs_to(cake::Entity)
-            //         .from(cake_filling::Column::CakeId)
-            //         .to(cake::Column::Id)
-            //         .into(),
-            // )
-            // reuse a `Relation` from existing Entity
-            .join(
-                JoinType::LeftJoin,
-                asset::Entity::has_many(asset_creators::Entity).into(),
-            )
-            .group_by(asset::Column::Id)
-            .into_model::<CakeAndFillingCount>()
-            .all(&db)
-            .await?;
-
-        // println!(
-        //     "hello {:?}",
-        //     asset::Entity::find()
-        //         .left_join(asset_creators::Entity)
-        //         .all(&db)
-        //         .await?
-        // );
-
-        assert_eq!(thang, vec![]);
 
         Ok(())
     }

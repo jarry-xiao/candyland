@@ -7,9 +7,9 @@ use crate::rpc::{Asset as RpcAsset, Compression, Interface, Ownership, Royalty};
 use sea_orm::DatabaseConnection;
 use sea_orm::{entity::*, query::*, DbErr};
 
-pub async fn get_assets_by_creator(
+pub async fn get_assets_by_group(
     db: &DatabaseConnection,
-    creator_expression: Vec<Vec<u8>>,
+    creator_expression: Vec<String>,
     sort_by: AssetSorting,
     limit: u32,
     page: u32,
@@ -33,7 +33,7 @@ pub async fn get_assets_by_creator(
         let paginator = asset::Entity::find()
             .join(
                 JoinType::LeftJoin,
-                asset::Entity::has_many(asset_creators::Entity).into(),
+                asset::Entity::has_many(asset_grouping::Entity).into(),
             )
             .filter(conditions)
             .find_also_related(AssetData)
@@ -46,7 +46,7 @@ pub async fn get_assets_by_creator(
             .order_by_asc(sort_column)
             .join(
                 JoinType::LeftJoin,
-                asset::Entity::has_many(asset_creators::Entity).into(),
+                asset::Entity::has_many(asset_grouping::Entity).into(),
             )
             .filter(conditions)
             .cursor_by(asset_creators::Column::AssetId)
@@ -68,7 +68,7 @@ pub async fn get_assets_by_creator(
             .order_by_asc(sort_column)
             .join(
                 JoinType::LeftJoin,
-                asset::Entity::has_many(asset_creators::Entity).into(),
+                asset::Entity::has_many(asset_grouping::Entity).into(),
             )
             .filter(conditions)
             .cursor_by(asset_creators::Column::AssetId)
