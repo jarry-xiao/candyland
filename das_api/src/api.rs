@@ -1,6 +1,6 @@
 use crate::{DasApiError, RpcModule};
 use async_trait::async_trait;
-use digital_asset_types::rpc::filter::{AssetSorting, OfferSorting};
+use digital_asset_types::rpc::filter::{AssetSorting, ListingSorting, OfferSorting};
 use digital_asset_types::rpc::response::{AssetList, ListingsList, OfferList};
 use digital_asset_types::rpc::{Asset, AssetProof};
 
@@ -18,16 +18,16 @@ pub trait ApiContract: Send + Sync + 'static {
         after: String,
     ) -> Result<AssetList, DasApiError>;
     async fn get_listed_assets_by_owner(
-        &mut self,
+        &self,
         owner_address: String,
-        sort_by: AssetSorting,
+        sort_by: ListingSorting,
         limit: u32,
         page: u32,
         before: String,
         after: String,
     ) -> Result<ListingsList, DasApiError>;
     async fn get_offers_by_owner(
-        &mut self,
+        &self,
         owner_address: String,
         sort_by: OfferSorting,
         limit: u32,
@@ -113,6 +113,28 @@ impl<'a> RpcApiBuilder {
                     rpc_params.parse().unwrap();
                 rpc_context
                     .get_assets_by_group(group_expression, sort_by, limit, page, before, after)
+                    .await
+                    .map_err(Into::into)
+            },
+        )?;
+        module.register_async_method(
+            "get_listed_assets_by_owner",
+            |rpc_params, rpc_context| async move {
+                let (owner_address, sort_by, limit, page, before, after) =
+                    rpc_params.parse().unwrap();
+                rpc_context
+                    .get_listed_assets_by_owner(owner_address, sort_by, limit, page, before, after)
+                    .await
+                    .map_err(Into::into)
+            },
+        )?;
+        module.register_async_method(
+            "get_offers_by_owner",
+            |rpc_params, rpc_context| async move {
+                let (owner_address, sort_by, limit, page, before, after) =
+                    rpc_params.parse().unwrap();
+                rpc_context
+                    .get_offers_by_owner(owner_address, sort_by, limit, page, before, after)
                     .await
                     .map_err(Into::into)
             },

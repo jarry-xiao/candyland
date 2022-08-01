@@ -1,27 +1,23 @@
 use crate::dao::asset;
 use crate::dao::prelude::AssetData;
-use crate::rpc::filter::ListingSorting;
-use crate::rpc::response::ListingsList;
-use crate::rpc::AssetSale;
+use crate::rpc::filter::OfferSorting;
+use crate::rpc::response::OfferList;
+use crate::rpc::Offer;
 use sea_orm::DatabaseConnection;
 use sea_orm::{entity::*, query::*, DbErr};
 
-pub async fn get_listed_assets_by_owner(
+pub async fn get_offers_by_owner(
     db: &DatabaseConnection,
     owner_address: Vec<u8>,
-    sort_by: ListingSorting,
+    sort_by: OfferSorting,
     limit: u32,
     page: u32,
     before: Vec<u8>,
     after: Vec<u8>,
-) -> Result<ListingsList, DbErr> {
+) -> Result<OfferList, DbErr> {
     let assets = if page > 0 {
         let paginator = asset::Entity::find()
-            .filter(
-                Condition::all()
-                    .add(asset::Column::Owner.eq(owner_address.clone()))
-                    .add(asset::Column::Delegate.is_not_null()),
-            )
+            .filter(Condition::all().add(asset::Column::Owner.eq(owner_address.clone())))
             .find_also_related(AssetData)
             // .order_by_asc(sort_column)
             .paginate(db, limit.try_into().unwrap());
@@ -30,11 +26,7 @@ pub async fn get_listed_assets_by_owner(
     } else if !before.is_empty() {
         let rows = asset::Entity::find()
             // .order_by_asc(sort_column)
-            .filter(
-                Condition::all()
-                    .add(asset::Column::Owner.eq(owner_address.clone()))
-                    .add(asset::Column::Delegate.is_not_null()),
-            )
+            .filter(asset::Column::Owner.eq(owner_address.clone()))
             .cursor_by(asset::Column::Id)
             .before(before.clone())
             .first(limit.into())
@@ -52,11 +44,7 @@ pub async fn get_listed_assets_by_owner(
     } else {
         let rows = asset::Entity::find()
             // .order_by_asc(sort_column)
-            .filter(
-                Condition::all()
-                    .add(asset::Column::Owner.eq(owner_address.clone()))
-                    .add(asset::Column::Delegate.is_not_null()),
-            )
+            .filter(asset::Column::Owner.eq(owner_address.clone()))
             .cursor_by(asset::Column::Id)
             .after(after.clone())
             .first(limit.into())
@@ -81,13 +69,11 @@ pub async fn get_listed_assets_by_owner(
         })
         .collect();
     let build_listings_list = filter_assets?.into_iter().map(|(asset)| async move {
-        AssetSale {
-            listing_id: todo!(),
-            asset_id: todo!(),
+        Offer {
+            from: todo!(),
             amount: todo!(),
             price: todo!(),
             market_id: todo!(),
-            highest_offers: todo!(),
         }
     });
 
@@ -107,7 +93,7 @@ pub async fn get_listed_assets_by_owner(
         None
     };
 
-    Ok(ListingsList {
+    Ok(OfferList {
         total,
         limit,
         page,

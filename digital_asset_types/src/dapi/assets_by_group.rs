@@ -28,7 +28,6 @@ pub async fn get_assets_by_group(
     }
 
     // TODO: throw error if cursor and page pagination are included
-    // TODO: returning proper
     let assets = if page > 0 {
         let paginator = asset::Entity::find()
             .join(
