@@ -1,8 +1,8 @@
-
+use tokio::time::Instant;
 use {
     figment::{
         Figment,
-        providers::Env
+        providers::Env,
     },
     crate::{
         accounts_selector::AccountsSelector,
@@ -33,9 +33,14 @@ use {
         runtime::{Builder, Runtime},
         sync::mpsc::{self as mpsc, Sender},
     },
-    serde::Deserialize
+    serde::Deserialize,
+    messenger::MessengerConfig,
+    std::net::UdpSocket,
+    cadence::BufferedUdpMetricSink,
+    cadence::QueuingMetricSink,
+    cadence::StatsdClient,
+    cadence_macros::*,
 };
-use messenger::MessengerConfig;
 
 struct SerializedData<'a> {
     stream: &'static str,
@@ -49,12 +54,13 @@ pub(crate) struct Plerkle<'a, T: Messenger + Default> {
     transaction_selector: Option<TransactionSelector>,
     messenger: PhantomData<T>,
     sender: Option<Sender<SerializedData<'a>>>,
+    started_at: Option<Instant>,
 }
 
-#[derive(Deserialize,PartialEq,Debug)]
+#[derive(Deserialize, PartialEq, Debug)]
 pub struct PluginConfig {
     pub messenger_config: MessengerConfig,
-    pub config_reload_ttl: Option<i64>
+    pub config_reload_ttl: Option<i64>,
 }
 
 impl<'a, T: Messenger + Default> Plerkle<'a, T> {
@@ -98,6 +104,7 @@ impl<'a, T: Messenger + Default> Plerkle<'a, T> {
         let transaction_selector = &config["transaction_selector"];
 
         if transaction_selector.is_null() {
+            info!("TRANSACTION SELECTOR IS BROKEN");
             TransactionSelector::default()
         } else {
             let accounts = &transaction_selector["mentions"];
@@ -173,23 +180,36 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
         let mut file = File::open(config_file)?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
-
+        self.started_at = Some(Instant::now());
         // Setup accounts and transaction selectors based on config file JSON.
         let result = serde_json::from_str(&contents);
-        let (accounts_selector, transaction_selector) = match result {
-            Ok(config) => (
-                Self::create_accounts_selector_from_config(&config),
-                Self::create_transaction_selector_from_config(&config),
-            ),
+        match result {
+            Ok(config) => {
+                self.accounts_selector = Some(Self::create_accounts_selector_from_config(&config));
+                self.transaction_selector = Some(Self::create_transaction_selector_from_config(&config));
+
+
+                if config["enable_metrics"].as_bool().unwrap_or(false) {
+                    let uri = config["metrics_uri"].as_str().unwrap().to_string();
+                    let port = config["metrics_port"].as_u64().unwrap() as u16;
+                    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+                    socket.set_nonblocking(true).unwrap();
+
+                    let host = (uri, port);
+                    let udp_sink = BufferedUdpMetricSink::from(host, socket).unwrap();
+                    let queuing_sink = QueuingMetricSink::from(udp_sink);
+                    let client = StatsdClient::from_sink("plerkle", queuing_sink);
+                    set_global_default(client);
+                    statsd_count!("plugin.startup", 1);
+                }
+            }
             Err(err) => {
                 return Err(GeyserPluginError::ConfigFileReadError {
                     msg: format!("Could not read config file JSON: {:?}", err),
-                })
+                });
             }
-        };
+        }
 
-        self.accounts_selector = Some(accounts_selector);
-        self.transaction_selector = Some(transaction_selector);
 
         let runtime = Builder::new_multi_thread()
             .enable_all()
@@ -219,7 +239,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                 messenger.add_stream(BLOCK_STREAM).await;
                 messenger.set_buffer_size(ACCOUNT_STREAM, 5000).await;
                 messenger.set_buffer_size(SLOT_STREAM, 5000).await;
-                messenger.set_buffer_size(TRANSACTION_STREAM, 5000).await;
+                messenger.set_buffer_size(TRANSACTION_STREAM, 500000).await;
                 messenger.set_buffer_size(BLOCK_STREAM, 5000).await;
 
                 // Receive messages in a loop as long as at least one Sender is in scope.
@@ -246,7 +266,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
         is_startup: bool,
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
         match account {
-            ReplicaAccountInfoVersions::V0_0_1(account) => {
+            ReplicaAccountInfoVersions::V0_0_2(account) => {
                 // Check if account was selected in config.
                 if let Some(accounts_selector) = &self.accounts_selector {
                     if !accounts_selector.is_account_selected(account.pubkey, account.owner) {
@@ -263,7 +283,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                 // Serialize data.
                 let builder = FlatBufferBuilder::new();
                 let builder = serialize_account(builder, &account, slot, is_startup);
-
+                let owner = bs58::encode(account.owner).into_string();
                 // Send account info over channel.
                 runtime.spawn(async move {
                     let data = SerializedData {
@@ -272,6 +292,10 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                     };
                     let _ = sender.send(data).await;
                 });
+                statsd_count!("account_seen_event", 1, "owner" => &owner);
+            }
+            _ => {
+                error!("Old Transaction Replica Object")
             }
         }
 
@@ -281,6 +305,8 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
     fn notify_end_of_startup(
         &mut self,
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
+        statsd_time!("startup.timer", self.started_at.unwrap().elapsed());
+        info!("END OF STARTUP");
         Ok(())
     }
 
@@ -316,7 +342,8 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
         slot: u64,
     ) -> solana_geyser_plugin_interface::geyser_plugin_interface::Result<()> {
         match transaction_info {
-            ReplicaTransactionInfoVersions::V0_0_1(transaction_info) => {
+            ReplicaTransactionInfoVersions::V0_0_2(transaction_info) => {
+
                 // Don't log votes or transactions with error status.
                 if transaction_info.is_vote
                     || transaction_info.transaction_status_meta.status.is_err()
@@ -335,7 +362,6 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                 } else {
                     return Ok(());
                 }
-
                 // Get runtime and sender channel.
                 let runtime = self.get_runtime()?;
                 let sender = self.get_sender_clone()?;
@@ -343,7 +369,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                 // Serialize data.
                 let builder = FlatBufferBuilder::new();
                 let builder = serialize_transaction(builder, transaction_info, slot);
-
+                let slt_idx = format!("{}-{}", slot, transaction_info.index);
                 // Send transaction info over channel.
                 runtime.spawn(async move {
                     let data = SerializedData {
@@ -352,6 +378,10 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
                     };
                     let _ = sender.send(data).await;
                 });
+                statsd_count!("transaction_seen_event", 1, "slot-idx" => &slt_idx);
+            }
+            _ => {
+                error!("Old Transaction Replica Object")
             }
         }
 
@@ -393,9 +423,7 @@ impl<T: 'static + Messenger + Default + Send + Sync> GeyserPlugin for Plerkle<'s
     }
 
     fn transaction_notifications_enabled(&self) -> bool {
-        self.transaction_selector
-            .as_ref()
-            .map_or_else(|| false, |selector| selector.is_enabled())
+        true
     }
 }
 
