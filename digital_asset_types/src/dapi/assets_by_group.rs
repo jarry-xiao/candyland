@@ -27,7 +27,6 @@ pub async fn get_assets_by_group(
         conditions = conditions.add(asset_creators::Column::Creator.eq(creator.clone()));
     }
 
-    // TODO: throw error if cursor and page pagination are included
     let assets = if page > 0 {
         let paginator = asset::Entity::find()
             .join(
