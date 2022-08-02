@@ -70,33 +70,3 @@ export async function createAllocTreeIx(
     });
 }
 
-export async function getCreateTreeIxs(
-    connection: Connection,
-    maxBufferSize: number,
-    maxDepth: number,
-    canopyDepth: number,
-    payer: PublicKey,
-    merkleRoll: PublicKey,
-    authority: Keypair,
-): Promise<TransactionInstruction[]> {
-    const allocAccountIx = await createAllocTreeIx(
-        connection,
-        maxBufferSize,
-        maxDepth,
-        canopyDepth,
-        payer,
-        merkleRoll,
-    );
-    const initTreeIx = createInitEmptyGummyrollInstruction(
-      {
-        merkleRoll,
-        authority: authority.publicKey,
-        candyWrapper: CANDY_WRAPPER_PROGRAM_ID
-      },
-      {
-        maxDepth,
-        maxBufferSize
-      }
-    )
-    return [allocAccountIx, initTreeIx];
-} 

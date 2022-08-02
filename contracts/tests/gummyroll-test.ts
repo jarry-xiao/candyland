@@ -20,7 +20,6 @@ import {
 } from "./merkle-tree";
 import {
   createAllocTreeIx,
-  getCreateTreeIxs,
   getMerkleRollAccountSize,
   createInitGummyrollWithRootInstruction,
   createInitGummyrollWithRootWithProofInstruction,
