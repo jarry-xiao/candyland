@@ -300,6 +300,17 @@
     borsh "^0.7.0"
     chai "^4.3.4"
 
+"@sorend-solana/gummyroll@^0.0.6":
+  version "0.0.6"
+  resolved "https://registry.yarnpkg.com/@sorend-solana/gummyroll/-/gummyroll-0.0.6.tgz#1f95f67bb0f4ec09a0e9813237ff632646aae9f0"
+  integrity sha512-2v66GDvmbhZystKCO6eGD59OQcDkVHGyMxFTJXXSipbWQo2wx5uYaU1y5nQUTYlOBpgbjIPcV+LACSyXqrCx7A==
+  dependencies:
+    "@metaplex-foundation/beet" "^0.4.0"
+    "@metaplex-foundation/beet-solana" "^0.3.0"
+    "@project-serum/anchor" "0.24.2"
+    "@solana/web3.js" "^1.50.1"
+    "@sorend-solana/utils" "^0.0.5"
+
 "@sorend-solana/sugar-shack@^0.0.2":
   version "0.0.2"
   resolved "https://registry.yarnpkg.com/@sorend-solana/sugar-shack/-/sugar-shack-0.0.2.tgz#1ba330f7d520d1a2e5a3cbeac4fe25be17fa381a"

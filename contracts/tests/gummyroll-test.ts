@@ -32,7 +32,7 @@ import {
   createReplaceLeafWithProofInstruction,
   createTransferAuthorityInstruction,
   decodeMerkleRoll
-} from "@sorend-solana/gummyroll-solita";
+} from "@sorend-solana/gummyroll";
 import {
   assertOnChainMerkleRollProperties
 } from "./utils"

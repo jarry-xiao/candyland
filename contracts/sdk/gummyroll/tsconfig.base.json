@@ -15,7 +15,7 @@
     "downlevelIteration": true,
     "baseUrl": ".",
     "typeRoots": [
-      "src/types",
+      "src/generated/types",
       "node_modules/@types"
     ],
   }

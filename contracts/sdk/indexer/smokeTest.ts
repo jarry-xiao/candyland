@@ -1,7 +1,7 @@
 import { Program, web3 } from "@project-serum/anchor";
 import fetch from "node-fetch";
 import { Gummyroll } from "../../target/types/gummyroll";
-import { getMerkleRollAccountSize } from "@sorend-solana/gummyroll-solita";
+import { getMerkleRollAccountSize } from "@sorend-solana/gummyroll";
 import * as anchor from "@project-serum/anchor";
 import {
   AccountMeta,

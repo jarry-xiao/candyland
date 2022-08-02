@@ -3,7 +3,7 @@ import { TransactionInstruction, PublicKey, Connection, AccountInfo } from "@sol
 import { keccak_256 } from "js-sha3";
 import { Creator, Nonce, PROGRAM_ID } from './generated';
 import { CANDY_WRAPPER_PROGRAM_ID, bufferToArray, num16ToBuffer } from "@sorend-solana/utils";
-import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID, createAllocTreeIx } from "@sorend-solana/gummyroll-solita";
+import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID, createAllocTreeIx } from "@sorend-solana/gummyroll";
 import { createCreateTreeInstruction } from "./generated";
 
 export async function getBubblegumAuthorityPDA(merkleRollPubKey: PublicKey) {

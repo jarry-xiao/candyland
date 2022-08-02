@@ -10,7 +10,7 @@ import {
 import { assert } from "chai";
 import { Gummyroll } from "../target/types/gummyroll";
 import { buildTree, getProofOfLeaf, updateTree, Tree, getProofOfAssetFromServer, checkProof } from "./merkle-tree";
-import { decodeMerkleRoll, getMerkleRollAccountSize } from "@sorend-solana/gummyroll-solita";
+import { decodeMerkleRoll, getMerkleRollAccountSize } from "@sorend-solana/gummyroll";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 
 const HOST = "127.0.0.1";

@@ -12,7 +12,7 @@ import { Program, Provider } from '@project-serum/anchor';
 import {
     PROGRAM_ID as GUMMYROLL_PROGRAM_ID,
     getMerkleRollAccountSize
-} from "@sorend-solana/gummyroll-solita";
+} from "@sorend-solana/gummyroll";
 import { GUMMYROLL_CRUD_PROGRAM_ID } from '../../helpers/constants';
 import { confirmTxOrThrow } from '../../helpers/utils';
 import fetch from 'cross-fetch';

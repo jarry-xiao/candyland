@@ -1,8 +1,9 @@
-import { PublicKey, Connection } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import * as borsh from "borsh";
 import { BN } from "@project-serum/anchor";
-import { assert } from "chai";
 import { readPublicKey } from "@sorend-solana/utils";
+import { getMerkleRollAccountSize } from "../convenience";
+import { PathNode } from "../generated";
 
 /**
  * Manually create a model for MerkleRoll in order to deserialize correctly
@@ -27,12 +28,12 @@ export class OnChainMerkleRoll {
       for (const [lvl, key] of changeLog.pathNodes.entries()) {
         let nodeIdx = (1 << (pathLen - lvl)) + (changeLog.index >> lvl);
         pathNodes.push({
-          node: key,
+          node: Array.from(key.toBuffer()),
           index: nodeIdx,
         });
       }
       pathNodes.push({
-        node: changeLog.root,
+        node: Array.from(changeLog.root.toBuffer()),
         index: 1,
       });
       pathNodeList.push(pathNodes);
@@ -54,11 +55,6 @@ type MerkleRoll = {
   bufferSize: number; // u64
   changeLogs: ChangeLog[];
   rightMostPath: Path;
-};
-
-export type PathNode = {
-  node: PublicKey;
-  index: number;
 };
 
 type ChangeLog = {
@@ -137,56 +133,4 @@ export function decodeMerkleRoll(buffer: Buffer): OnChainMerkleRoll {
     );
   }
   return new OnChainMerkleRoll(header, roll);
-}
-
-export function getMerkleRollAccountSize(
-  maxDepth: number,
-  maxBufferSize: number,
-  canopyDepth?: number
-): number {
-  let headerSize = 8 + 32;
-  let changeLogSize = (maxDepth * 32 + 32 + 4 + 4) * maxBufferSize;
-  let rightMostPathSize = maxDepth * 32 + 32 + 4 + 4;
-  let merkleRollSize = 8 + 8 + 16 + changeLogSize + rightMostPathSize;
-  let canopySize = 0;
-  if (canopyDepth) {
-    canopySize = ((1 << canopyDepth + 1) - 2) * 32
-  }
-  return merkleRollSize + headerSize + canopySize;
-}
-
-export async function assertOnChainMerkleRollProperties(
-  connection: Connection,
-  expectedMaxDepth: number,
-  expectedMaxBufferSize: number,
-  expectedAuthority: PublicKey,
-  expectedRoot: PublicKey,
-  merkleRollPubkey: PublicKey
-) {
-  const merkleRoll = await connection.getAccountInfo(merkleRollPubkey);
-
-  if (!merkleRoll) {
-    throw new Error("Merkle Roll account data unexpectedly null!");
-  }
-
-  const merkleRollAcct = decodeMerkleRoll(merkleRoll.data);
-
-  assert(
-    merkleRollAcct.header.maxDepth === expectedMaxDepth,
-    `Max depth does not match ${merkleRollAcct.header.maxDepth}, expected ${expectedMaxDepth}`
-  );
-  assert(
-    merkleRollAcct.header.maxBufferSize === expectedMaxBufferSize,
-    `Max buffer size does not match ${merkleRollAcct.header.maxBufferSize}, expected ${expectedMaxBufferSize}`
-  );
-
-  assert(
-    merkleRollAcct.header.authority.equals(expectedAuthority),
-    "Failed to write auth pubkey"
-  );
-
-  assert(
-    merkleRollAcct.roll.changeLogs[0].root.equals(expectedRoot),
-    "On chain root does not match root passed in instruction"
-  );
 }

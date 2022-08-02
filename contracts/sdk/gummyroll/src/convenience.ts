@@ -1,9 +1,49 @@
 import { PublicKey, Keypair, TransactionInstruction, SystemProgram, Connection } from "@solana/web3.js";
-import { PROGRAM_ID } from ".";
-import { getMerkleRollAccountSize } from "./accounts";
+import { createInitEmptyGummyrollInstruction, PROGRAM_ID } from "./generated";
 import * as anchor from "@project-serum/anchor";
-import { Gummyroll } from "./types";
 import { CANDY_WRAPPER_PROGRAM_ID } from "@sorend-solana/utils";
+import { decodeMerkleRoll } from "./accounts";
+
+export function addProof(
+  instruction: TransactionInstruction,
+  nodeProof: Buffer[],
+): TransactionInstruction {
+  instruction.keys = instruction.keys.concat(
+      nodeProof.map((node) => {
+          return {
+              pubkey: new PublicKey(node),
+              isSigner: false,
+              isWritable: false,
+          };
+      })
+  )
+  return instruction;
+}
+
+export async function getRootOfOnChainMerkleRoot(connection: Connection, merkleRollAccountKey: PublicKey): Promise<Buffer> {
+  const merkleRootAcct = await connection.getAccountInfo(merkleRollAccountKey);
+  if (!merkleRootAcct) {
+      throw new Error("Merkle Root account data unexpectedly null!");
+  }
+  const merkleRoll = decodeMerkleRoll(merkleRootAcct.data);
+  return merkleRoll.roll.changeLogs[merkleRoll.roll.activeIndex].root.toBuffer();
+}
+
+export function getMerkleRollAccountSize(
+  maxDepth: number,
+  maxBufferSize: number,
+  canopyDepth?: number
+): number {
+  let headerSize = 8 + 32;
+  let changeLogSize = (maxDepth * 32 + 32 + 4 + 4) * maxBufferSize;
+  let rightMostPathSize = maxDepth * 32 + 32 + 4 + 4;
+  let merkleRollSize = 8 + 8 + 16 + changeLogSize + rightMostPathSize;
+  let canopySize = 0;
+  if (canopyDepth) {
+    canopySize = ((1 << canopyDepth + 1) - 2) * 32
+  }
+  return merkleRollSize + headerSize + canopySize;
+}
 
 export async function createAllocTreeIx(
     connection: Connection,
@@ -31,35 +71,32 @@ export async function createAllocTreeIx(
 }
 
 export async function getCreateTreeIxs(
-    gummyroll: anchor.Program<Gummyroll>,
+    connection: Connection,
     maxBufferSize: number,
     maxDepth: number,
     canopyDepth: number,
     payer: PublicKey,
     merkleRoll: PublicKey,
     authority: Keypair,
-    appendAuthority: PublicKey,
 ): Promise<TransactionInstruction[]> {
     const allocAccountIx = await createAllocTreeIx(
-        gummyroll.provider.connection,
+        connection,
         maxBufferSize,
         maxDepth,
         canopyDepth,
         payer,
         merkleRoll,
     );
-    const initIx = gummyroll.instruction.initEmptyGummyroll(
+    const initTreeIx = createInitEmptyGummyrollInstruction(
+      {
+        merkleRoll,
+        authority: authority.publicKey,
+        candyWrapper: CANDY_WRAPPER_PROGRAM_ID
+      },
+      {
         maxDepth,
-        maxBufferSize,
-        {
-            accounts: {
-                merkleRoll,
-                authority: authority.publicKey,
-                candyWrapper: CANDY_WRAPPER_PROGRAM_ID
-            },
-            signers: [authority],
-        },
+        maxBufferSize
+      }
     )
-
-    return [allocAccountIx, initIx];
-}
+    return [allocAccountIx, initTreeIx];
+} 

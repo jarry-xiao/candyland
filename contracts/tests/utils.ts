@@ -10,7 +10,7 @@ import {
   Connection as web3Connection,
 } from "@solana/web3.js";
 import { assert } from "chai";
-import { decodeMerkleRoll } from "@sorend-solana/gummyroll-solita";
+import { decodeMerkleRoll } from "@sorend-solana/gummyroll";
 
 export async function assertOnChainMerkleRollProperties(
   connection: Connection,

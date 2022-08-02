@@ -17,7 +17,7 @@ import { assert } from "chai";
 import { buildTree } from "./merkle-tree";
 import {
   getMerkleRollAccountSize,
-} from "@sorend-solana/gummyroll-solita";
+} from "@sorend-solana/gummyroll";
 import {
   assertOnChainMerkleRollProperties
 } from "./utils";

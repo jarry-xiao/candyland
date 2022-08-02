@@ -36,7 +36,7 @@ import {
 import { buildTree, Tree } from "./merkle-tree";
 import {
   getRootOfOnChainMerkleRoot,
-} from "@sorend-solana/gummyroll-solita";
+} from "@sorend-solana/gummyroll";
 import {
   assertOnChainMerkleRollProperties
 } from "./utils";
