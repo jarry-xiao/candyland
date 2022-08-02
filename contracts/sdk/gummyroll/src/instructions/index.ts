@@ -1,107 +1,45 @@
-import { Program } from "@project-serum/anchor";
-import { Gummyroll } from "../types";
 import { Keypair, PublicKey, TransactionInstruction } from '@solana/web3.js';
-import { CANDY_WRAPPER_PROGRAM_ID } from "@sorend-solana/utils";
+import { 
+  InitGummyrollWithRootInstructionArgs,
+  InitGummyrollWithRootInstructionAccounts,
+  createInitGummyrollWithRootInstruction,
+  VerifyLeafInstructionAccounts,
+  VerifyLeafInstructionArgs,
+  createVerifyLeafInstruction,
+  ReplaceLeafInstructionAccounts,
+  ReplaceLeafInstructionArgs,
+  createReplaceLeafInstruction
+} from "../generated"
+import {
+  addProof
+} from "../convenience"
 
-/**
- * Modifies given instruction
- */
-export function addProof(
-    instruction: TransactionInstruction,
-    nodeProof: Buffer[],
+export function createInitGummyrollWithRootWithProofInstruction(
+  accts: InitGummyrollWithRootInstructionAccounts,
+  args: InitGummyrollWithRootInstructionArgs,
+  proof: Buffer[]
 ): TransactionInstruction {
-    instruction.keys = instruction.keys.concat(
-        nodeProof.map((node) => {
-            return {
-                pubkey: new PublicKey(node),
-                isSigner: false,
-                isWritable: false,
-            };
-        })
-    )
-    return instruction;
+  let ix = createInitGummyrollWithRootInstruction(accts, args);
+  ix = addProof(ix, proof);
+  return ix
 }
 
-export function createReplaceIx(
-    gummyroll: Program<Gummyroll>,
-    authority: Keypair,
-    merkleRoll: PublicKey,
-    treeRoot: Buffer,
-    previousLeaf: Buffer,
-    newLeaf: Buffer,
-    index: number,
-    proof: Buffer[]
+export function createVerifyLeafWithProofInstruction(
+  accts: VerifyLeafInstructionAccounts,
+  args: VerifyLeafInstructionArgs,
+  proof: Buffer[]
 ): TransactionInstruction {
-    return addProof(gummyroll.instruction.replaceLeaf(
-        Array.from(treeRoot),
-        Array.from(previousLeaf),
-        Array.from(newLeaf),
-        index,
-        {
-            accounts: {
-                merkleRoll,
-                authority: authority.publicKey,
-                candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
-            },
-            signers: [authority],
-        }
-    ), proof);
+  let ix = createVerifyLeafInstruction(accts, args);
+  ix = addProof(ix, proof);
+  return ix
 }
 
-export function createAppendIx(
-    gummyroll: Program<Gummyroll>,
-    newLeaf: Buffer | ArrayLike<number>,
-    authority: Keypair,
-    merkleRoll: PublicKey,
+export function createReplaceLeafWithProofInstruction(
+  accts: ReplaceLeafInstructionAccounts,
+  args: ReplaceLeafInstructionArgs,
+  proof: Buffer[]
 ): TransactionInstruction {
-    return gummyroll.instruction.append(
-        Array.from(newLeaf),
-        {
-            accounts: {
-                merkleRoll,
-                authority: authority.publicKey,
-                candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
-            },
-            signers: [authority],
-        }
-    );
-}
-
-export function createTransferAuthorityIx(
-    gummyroll: Program<Gummyroll>,
-    authority: Keypair,
-    merkleRoll: PublicKey,
-    newAuthority: PublicKey,
-): TransactionInstruction {
-    return gummyroll.instruction.transferAuthority(
-        newAuthority,
-        {
-            accounts: {
-                merkleRoll,
-                authority: authority.publicKey,
-            },
-            signers: [authority],
-        }
-    );
-}
-
-export function createVerifyLeafIx(
-    gummyroll: Program<Gummyroll>,
-    merkleRoll: PublicKey,
-    root: Buffer,
-    leaf: Buffer,
-    index: number,
-    proof: Buffer[],
-): TransactionInstruction {
-    return addProof(gummyroll.instruction.verifyLeaf(
-        Array.from(root),
-        Array.from(leaf),
-        index,
-        {
-            accounts: {
-                merkleRoll
-            },
-            signers: [],
-        }
-    ), proof);
+  let ix = createReplaceLeafInstruction(accts, args);
+  ix = addProof(ix, proof);
+  return ix
 }
