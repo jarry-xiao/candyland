@@ -1,6 +1,10 @@
-use flatbuffers::{ForwardsUOffset, Vector};
-use plerkle_serialization::transaction_info_generated::transaction_info;
-use plerkle_serialization::transaction_info_generated::transaction_info::TransactionInfo;
+use {
+    flatbuffers::{ForwardsUOffset, Vector},
+    plerkle_serialization::{
+        transaction_info_generated::transaction_info,
+        transaction_info_generated::transaction_info::TransactionInfo,
+    },
+};
 
 pub type IxPair<'a> = (
     transaction_info::Pubkey<'a>,
