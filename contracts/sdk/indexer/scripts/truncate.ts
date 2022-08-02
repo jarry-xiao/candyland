@@ -26,7 +26,7 @@ import {
     LeafSchema,
     leafSchemaBeet
 } from "@sorend-solana/bubblegum";
-import { addProof, getMerkleRollAccountSize, PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from "@sorend-solana/gummyroll";
+import { addProof, getMerkleRollAccountSize, PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from "@sorend-solana/gummyroll-solita";
 import { hashCreators, hashMetadata } from "../indexer/utils";
 import { BN } from "@project-serum/anchor";
 import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";

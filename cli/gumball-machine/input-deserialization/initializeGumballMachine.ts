@@ -13,7 +13,7 @@ import {
 } from "@sorend-solana/gumball-machine";
 import {
   getMerkleRollAccountSize,
-} from "@sorend-solana/gummyroll";
+} from "@sorend-solana/gummyroll-solita";
 import {
     val,
     strToByteArray,

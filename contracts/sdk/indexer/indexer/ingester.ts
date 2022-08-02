@@ -3,7 +3,7 @@ import {
   OptionalInfo,
 } from "./utils";
 import { ParsedLog } from "./log/utils";
-import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID, PathNode } from "@sorend-solana/gummyroll";
+import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID, PathNode } from "@sorend-solana/gummyroll-solita";
 import {
   TokenProgramVersion,
   MetadataArgs,

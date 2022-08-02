@@ -25,7 +25,7 @@ import { keccak_256 } from "js-sha3";
 import * as beetSolana from '@metaplex-foundation/beet-solana';
 import * as beet from '@metaplex-foundation/beet';
 
-import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from "@sorend-solana/gummyroll";
+import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from "@sorend-solana/gummyroll-solita";
 import { PROGRAM_ID as GUMBALL_MACHINE_ID } from "@sorend-solana/gumball-machine";
 import { CANDY_WRAPPER_PROGRAM_ID } from "@sorend-solana/utils";
 

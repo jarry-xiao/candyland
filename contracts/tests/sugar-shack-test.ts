@@ -42,7 +42,7 @@ import {
   createAllocTreeIx,
   getMerkleRollAccountSize,
   getRootOfOnChainMerkleRoot
-} from "@sorend-solana/gummyroll";
+} from "@sorend-solana/gummyroll-solita";
 import {
   buildTree,
   hash,

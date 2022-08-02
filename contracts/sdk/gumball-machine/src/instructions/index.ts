@@ -21,7 +21,7 @@ import {
 import { getWillyWonkaPDAKey } from "../utils";
 import { CANDY_WRAPPER_PROGRAM_ID } from "@sorend-solana/utils";
 import { PROGRAM_ID as BUBBLEGUM_MACHINE_PROGRAM_ID, getBubblegumAuthorityPDA } from "@sorend-solana/bubblegum";
-import { PROGRAM_ID as GUMMYROLL_MACHINE_PROGRAM_ID } from "@sorend-solana/gummyroll";
+import { PROGRAM_ID as GUMMYROLL_MACHINE_PROGRAM_ID } from "@sorend-solana/gummyroll-solita";
 
 /**
  * Wrapper on top of Solita's createInitializeGumballMachineInstruction

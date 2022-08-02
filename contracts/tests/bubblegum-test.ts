@@ -35,13 +35,11 @@ import {
 } from "@sorend-solana/bubblegum";
 import { buildTree, Tree } from "./merkle-tree";
 import {
-  decodeMerkleRoll,
-  getMerkleRollAccountSize,
   getRootOfOnChainMerkleRoot,
-  assertOnChainMerkleRollProperties,
-  createTransferAuthorityIx,
-  createAllocTreeIx,
-} from "@sorend-solana/gummyroll";
+} from "@sorend-solana/gummyroll-solita";
+import {
+  assertOnChainMerkleRollProperties
+} from "./utils";
 import NodeWallet from "@project-serum/anchor/dist/cjs/nodewallet";
 import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
