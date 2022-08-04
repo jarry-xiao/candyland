@@ -20,6 +20,10 @@ address = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 [[test.validator.clone]]
 address = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
 
+[test]
+startup_wait = 10000
+
+
 [registry]
 url = "https://anchor.projectserum.com"
 

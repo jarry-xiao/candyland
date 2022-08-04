@@ -50,7 +50,6 @@ For more information on candy machine: `https://docs.metaplex.com/candy-machine-
 ### Sugar Shack - Example Marketplace Implementation for Compressed NFTs
 Sugar Shack is a mock implementation for how a Marketplace could faciliatate listings of compressed NFTs for purchase. Docs TBD.
 
-
 ## Running Tests
 
 `cd contracts; anchor test` will run tests.

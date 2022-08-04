@@ -8,13 +8,10 @@ import {
   TransactionInstruction,
   Connection,
 } from "@solana/web3.js";
-<<<<<<< HEAD:contracts/sdk/gumball-machine/instructions/index.ts
 import {
   getBubblegumAuthorityPDA,
   getMintRequestPDA,
 } from "../../bubblegum/src/convenience";
-=======
->>>>>>> main:contracts/sdk/gumball-machine/src/instructions/index.ts
 import {
   InitializeGumballMachineInstructionArgs,
   createInitializeGumballMachineInstruction,
@@ -23,12 +20,7 @@ import {
   DispenseNftSolInstructionArgs,
   DispenseNftTokenInstructionArgs,
   createInitializeIndicesChunkInstruction,
-<<<<<<< HEAD:contracts/sdk/gumball-machine/instructions/index.ts
 } from "../src/generated";
-=======
-  PROGRAM_ID as GUMBALL_MACHINE_PROGRAM_ID
-} from "../generated";
->>>>>>> main:contracts/sdk/gumball-machine/src/instructions/index.ts
 import { getWillyWonkaPDAKey } from "../utils";
 import { CANDY_WRAPPER_PROGRAM_ID } from "@sorend-solana/utils";
 import { PROGRAM_ID as BUBBLEGUM_MACHINE_PROGRAM_ID, getBubblegumAuthorityPDA } from "@sorend-solana/bubblegum";
