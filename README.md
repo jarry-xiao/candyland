@@ -50,6 +50,50 @@ For more information on candy machine: `https://docs.metaplex.com/candy-machine-
 ### Sugar Shack - Example Marketplace Implementation for Compressed NFTs
 Sugar Shack is a mock implementation for how a Marketplace could faciliatate listings of compressed NFTs for purchase. Docs TBD.
 
+<<<<<<< HEAD
+=======
+### Gumdrop - Airdrop compressed NFTs
+Copied from here: `https://github.com/metaplex-foundation/metaplex-program-library/tree/master/gumdrop`
+
+Additions to the MPL gumdrop: 
+- `new_distributor_compressed` ix (needed to setup `claim_bubblegum`)
+- `claim_bubblegum` ix (needed to claim NFTs into compressed tree)
+
+# Indexer
+
+This is the bread and butter of this project. Gummyroll relies on RPC indexers to store merkle tree leaf data off-chain. 
+
+| Portions | Description | Docs |
+| :------- | :------- | :--- |
+| `nft_ingester` | Service to ingest compressed NFT events from logs and insert into postgres database | tbd |
+| `nft_api` | REST api to serve proofs and other information from postgres database. Eventually will become JSON RPC api. | tbd |
+| `plerkle` | Generalized geyser plugin to store regular and compressed NFT information | tbd |
+| `plerkle_serialization` | Flatbuffer schemas for optimally transporting geyser plugin information | tbd |
+| `messenger` | Traits needed to generalize messaging bus for NFT related indexing | tbd |
+
+## Getting Started
+```
+cd candyland/
+git submodule update --init --recursive
+chmod +x link-local-sdks.sh
+./link-local-sdks.sh
+cd contracts/
+anchor build
+cd ..
+docker compose up --build --force-recreate
+```
+
+Note: link-local-sdks.sh will install all dependencies needed to work in `cli/` and `contracts`, and link all of the public NPM SDKs for your local changes to propagate immediately. If at any time you would rather just work with the releases available at the registry you can run `chmod +x unlink-local-sdks.sh && ./unlink-local-sdks.sh` which will unlink all of the public SDKs and re-install all dependencies for `contracts` and `cli` from the NPM registry.
+
+#### In another terminal:
+```
+cd candyland/contracts/
+yarn
+yarn run ts-mocha -t 1000000 tests/bubblegum-test-rpc.ts  //<--- this test actually hits the RPC node for proofs
+yarn run ts-mocha -t 1000000 tests/continuous_gummyroll-test.ts
+```
+
+>>>>>>> main
 ## Running Tests
 
 `cd contracts; anchor test` will run tests.

@@ -1,0 +1,19 @@
+{
+  "name": "cli",
+  "version": "1.0.0",
+  "description": "cli to drive gummyroll",
+  "main": "index.ts",
+  "license": "MIT",
+  "dependencies": {
+    "@project-serum/anchor": "0.24.2",
+    "@solana/web3.js": "^1.50.1",
+    "@sorend-solana/gummyroll": "^0.0.5",
+    "@sorend-solana/utils": "^0.0.5",
+    "@sorend-solana/gumball-machine": "^0.0.5",
+    "commander": "^9.2.0",
+    "csv-parse": "^5.0.4",
+    "csv-writer": "^1.6.0",
+    "loglevel": "^1.8.0",
+    "path": "^0.12.7"
+  }
+}
