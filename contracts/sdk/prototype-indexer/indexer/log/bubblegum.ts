@@ -13,7 +13,7 @@ import {
     NFTDecompressionEvent
 } from "../ingester";
 import { ParsedLog, endRegEx, startRegEx, ixRegEx, dataRegEx } from './utils';
-import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "@sorend-solana/bubblegum";
+import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "../../../bubblegum/src/generated";
 import { findGummyrollEvent } from './gummyroll';
 
 function findBubblegumEvents(
@@ -266,6 +266,8 @@ export async function parseBubblegumLog(
             break;
         case "Delegate":
             await parseBubblegumReplaceLeaf(db, parsedLog.logs, slot, parser, optionalInfo);
+            break;
+        default:
             break;
     }
 }

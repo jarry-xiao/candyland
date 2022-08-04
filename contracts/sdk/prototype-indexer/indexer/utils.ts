@@ -3,7 +3,6 @@ import { CompiledInnerInstruction, CompiledInstruction, Context, Logs, PublicKey
 import { readFileSync } from "fs";
 import { Bubblegum } from "../../../target/types/bubblegum";
 import { Gummyroll } from "../../../target/types/gummyroll";
-import { GumballMachine } from "../../../target/types/gumball_machine";
 import { NFTDatabaseConnection } from "../db";
 import { parseBubblegumInstruction } from "./instruction/bubblegum";
 import { parseBubblegumInnerInstructions } from "./innerInstruction/bubblegum";
@@ -17,17 +16,17 @@ import {
   metadataArgsBeet,
   TokenProgramVersion,
   TokenStandard,
-  PROGRAM_ID as BUBBLEGUM_PROGRAM_ID,
-  getLeafAssetId
-} from "@sorend-solana/bubblegum";
+} from "../../bubblegum/src/generated";
 import { NewLeafEvent, LeafSchemaEvent } from "./ingester";
 import { keccak_256 } from "js-sha3";
-import * as beetSolana from '@metaplex-foundation/beet-solana';
-import * as beet from '@metaplex-foundation/beet';
+import { getLeafAssetId } from "../../bubblegum/src/convenience";
+import * as beetSolana from '@metaplex-foundation/beet-solana'
+import * as beet from '@metaplex-foundation/beet'
 
-import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from "@sorend-solana/gummyroll";
-import { PROGRAM_ID as GUMBALL_MACHINE_ID } from "@sorend-solana/gumball-machine";
-import { CANDY_WRAPPER_PROGRAM_ID } from "@sorend-solana/utils";
+import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID } from "../../gummyroll";
+import { PROGRAM_ID as BUBBLEGUM_PROGRAM_ID } from "../../bubblegum/src/generated";
+import { GumballMachine, PROGRAM_ID as GUMBALL_MACHINE_ID } from "../../gumball-machine";
+import { CANDY_WRAPPER_PROGRAM_ID } from "../../utils";
 
 export type ParserState = {
   Gummyroll: anchor.Program<Gummyroll>;

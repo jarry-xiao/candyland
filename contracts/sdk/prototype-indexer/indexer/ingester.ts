@@ -3,11 +3,11 @@ import {
   OptionalInfo,
 } from "./utils";
 import { ParsedLog } from "./log/utils";
-import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID, PathNode } from "@sorend-solana/gummyroll";
+import { PROGRAM_ID as GUMMYROLL_PROGRAM_ID, PathNode } from "../../gummyroll";
 import {
   TokenProgramVersion,
   MetadataArgs,
-} from "@sorend-solana/bubblegum";
+} from "../../bubblegum/src/generated/types";
 import { BN, } from "@project-serum/anchor";
 import { NFTDatabaseConnection } from "../db";
 import { PublicKey } from "@solana/web3.js";

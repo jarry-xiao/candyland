@@ -4,7 +4,7 @@ import { PublicKey, SystemProgram } from "@solana/web3.js";
 import { keccak_256 } from "js-sha3";
 import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
 import { BN } from "@project-serum/anchor";
-import { Creator } from "@sorend-solana/bubblegum";
+import { Creator } from "../bubblegum/src/generated";
 import { LeafSchemaEvent, NewLeafEvent, ChangeLogEvent } from "./indexer/ingester";
 let fs = require("fs");
 
