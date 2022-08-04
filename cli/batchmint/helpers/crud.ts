@@ -4,15 +4,17 @@ import {
     Transaction,
     SystemProgram
 } from '@solana/web3.js';
+import {
+    getMerkleRollAccountSize
+} from '../../../contracts/sdk/gummyroll';
 import { hash, getProofOfAssetFromServer, checkProof } from '../../../contracts/tests/merkle-tree';
 import { Gummyroll, IDL as GUMMYROLL_IDL } from '../../../target/types/gummyroll';
 import { GummyrollCrud, IDL as GUMMYROLL_CRUD_IDL } from '../../../target/types/gummyroll_crud';
 import log from 'loglevel';
 import { Program, Provider } from '@project-serum/anchor';
 import {
-    PROGRAM_ID as GUMMYROLL_PROGRAM_ID,
-    getMerkleRollAccountSize
-} from "@sorend-solana/gummyroll";
+    PROGRAM_ID as GUMMYROLL_PROGRAM_ID
+} from "../../../contracts/sdk/gummyroll/index"
 import { GUMMYROLL_CRUD_PROGRAM_ID } from '../../helpers/constants';
 import { confirmTxOrThrow } from '../../helpers/utils';
 import fetch from 'cross-fetch';

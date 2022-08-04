@@ -20,7 +20,7 @@ import {
     createUpdateHeaderMetadataInstruction,
     createDestroyInstruction,
     initializeGumballMachineIndices,
-} from "@sorend-solana/gumball-machine";
+} from "../../contracts/sdk/gumball-machine";
 import {
     deserializeInitJson
 } from "./input-deserialization/initializeGumballMachine";
@@ -41,7 +41,7 @@ import {
 } from "./input-deserialization/dispenseNFTForTokens";
 import {
     execute
-} from "@sorend-solana/utils";
+} from "../../contracts/sdk/utils";
 import {
     readFileSync
 } from "fs";
