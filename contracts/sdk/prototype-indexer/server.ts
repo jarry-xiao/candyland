@@ -41,7 +41,7 @@ app.get("/proof", async (req, res) => {
   const assetId = req.query.assetId;
   const treeId = req.query.treeId;
   try {
-    let proof = await nftDb.getInferredProof(assetId, treeId, false);
+    let proof = await nftDb.getInferredProof(assetId, treeId, true);
     if (proof) {
       res.send(stringifyProof(proof));
     } else {

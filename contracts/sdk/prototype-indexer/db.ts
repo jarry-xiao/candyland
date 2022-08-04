@@ -705,6 +705,7 @@ export class NFTDatabaseConnection {
   }
 
   verifyProof(proof: Proof) {
+    console.log("Verifying Proof");
     let node = this.generateRoot(proof);
     const rehashed = new PublicKey(node).toString();
     const received = new PublicKey(proof.root).toString();

@@ -134,11 +134,16 @@ export function destructureBubblegumMintAccounts(
   accountKeys: PublicKey[],
   instruction: CompiledInstruction
 ) {
-  return {
+  let keys = {
     owner: accountKeys[instruction.accounts[4]],
     delegate: accountKeys[instruction.accounts[5]],
-    merkleSlab: accountKeys[instruction.accounts[6]],
+    merkleSlab: accountKeys[instruction.accounts[7]],
   }
+  for (const [k, v] of Object.entries(keys)) {
+    console.log(k, v.toBase58())
+  }
+
+  return keys
 }
 
 
@@ -226,7 +231,9 @@ export function hashMetadata(message: MetadataArgs) {
     console.log(serialized.length);
     console.error("Unable to serialize metadata args properly")
   }
-  return digest(serialized)
+  const initBuffer = digest(serialized);
+  let bps = Uint8Array.from(new anchor.BN(message.sellerFeeBasisPoints).toArray("le", 2));
+  return digest(Buffer.concat([initBuffer, bps]));
 }
 
 type UnverifiedCreator = {
