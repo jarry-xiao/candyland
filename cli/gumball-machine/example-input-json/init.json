@@ -1,0 +1,30 @@
+{
+  "args": {
+    "maxDepth": 3,
+    "maxBufferSize": 8,
+    "urlBase": "https://arweave.net",
+    "nameBase": "GUMBALL",
+    "symbol": "GUMBALL",
+    "sellerFeeBasisPoints": 100,
+    "isMutable": true,
+    "retainAuthority": true,
+    "encodeMethod": 1,
+    "price": 10,
+    "goLiveDate": 1234.0,
+    "botWallet": "H8DWGKyCSaKtgh1GjyqexVcMe8FPyKQoBhKH79QnhDWx",
+    "receiver": "H8DWGKyCSaKtgh1GjyqexVcMe8FPyKQoBhKH79QnhDWx",
+    "authority": "5RomdRbiZ3UYwpojr9j3SQptjJQULmx6rpU1Bfbr7mpG",
+    "collectionKey": null,
+    "extensionLen": 28,
+    "maxMintSize": 6,
+    "maxItems": 8,
+    "creatorKeys": [
+      "H8DWGKyCSaKtgh1GjyqexVcMe8FPyKQoBhKH79QnhDWx",
+      "Es1EV724ihL7mYzjEiUV1QgcNdwoTpGByLiWSwKFRsAb"
+    ],
+    "creatorShares": [20, 80]
+  },
+  "optionals": {
+    "canopyDepth": 2
+  }
+}
