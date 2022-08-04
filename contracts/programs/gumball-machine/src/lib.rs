@@ -1,11 +1,11 @@
 use anchor_lang::{
     prelude::*,
     solana_program::{
-        instruction::Instruction, program::invoke_signed, keccak::hashv, program::invoke, pubkey::Pubkey,
-        system_instruction, sysvar, sysvar::instructions::load_instruction_at_checked,
-        sysvar::SysvarId,
+        instruction::Instruction, keccak::hashv, program::invoke, program::invoke_signed,
+        pubkey::Pubkey, system_instruction, sysvar,
+        sysvar::instructions::load_instruction_at_checked, sysvar::SysvarId,
     },
-    InstructionData
+    InstructionData,
 };
 use anchor_spl::token::{transfer, Mint, Token, TokenAccount, Transfer};
 use bubblegum::program::Bubblegum;
@@ -347,7 +347,7 @@ fn find_and_mint_compressed_nfts<'info>(
             mint_authority_request: mint_request.key(),
         }
         .to_account_metas(Some(true));
-        accounts[1].is_signer = true;
+        accounts[0].is_signer = true;
         let data = bubblegum::instruction::MintV1 { message }.data();
         let mint_ix = Instruction {
             program_id: bubblegum.key(),
