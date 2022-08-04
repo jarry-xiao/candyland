@@ -1,3 +1,4 @@
+import { BN, Program } from "@project-serum/anchor";
 import {
   PublicKey,
   Keypair,
@@ -11,7 +12,7 @@ import {
 import {
   getBubblegumAuthorityPDA,
   getMintRequestPDA,
-} from "../../../bubblegum/src/convenience";
+} from "../../bubblegum/src/convenience";
 import {
   InitializeGumballMachineInstructionArgs,
   createInitializeGumballMachineInstruction,
@@ -22,9 +23,10 @@ import {
   createInitializeIndicesChunkInstruction,
 } from "../src/generated";
 import { getWillyWonkaPDAKey } from "../utils";
-import { CANDY_WRAPPER_PROGRAM_ID } from "@sorend-solana/utils";
-import { PROGRAM_ID as BUBBLEGUM_MACHINE_PROGRAM_ID, getBubblegumAuthorityPDA } from "../../../bubblegum/src/convenience";
-import { PROGRAM_ID as GUMMYROLL_MACHINE_PROGRAM_ID } from "@sorend-solana/gummyroll";
+import { CANDY_WRAPPER_PROGRAM_ID } from "../../utils";
+import { PROGRAM_ID as GUMBALL_MACHINE_PROGRAM_ID } from "../src/generated";
+import { PROGRAM_ID as BUBBLEGUM_MACHINE_PROGRAM_ID } from "../../bubblegum/src/generated";
+import { PROGRAM_ID as GUMMYROLL_MACHINE_PROGRAM_ID } from "../../gummyroll";
 
 /**
  * Wrapper on top of Solita's createInitializeGumballMachineInstruction

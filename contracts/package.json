@@ -5,7 +5,8 @@
     "chai": "^4.3.4",
     "mocha": "^9.0.3",
     "ts-mocha": "^10.0.0",
-    "typescript": "^4.3.5"
+    "typescript": "^4.3.5",
+    "@solana/spl-token": "^0.1.8"
   },
   "scripts": {
     "update-deps": "cd deps/metaplex-program-library; git fetch; git checkout 7e2810a; cd ../solana-program-library; git fetch; cd ../..",
