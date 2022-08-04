@@ -41,7 +41,7 @@ import {
 } from "./input-deserialization/dispenseNFTForTokens";
 import {
     execute
-} from "@sorend-solana/utils";
+} from "../../contracts/sdk/utils";
 import {
     readFileSync
 } from "fs";
@@ -56,7 +56,7 @@ program
     .description('CLI for the Gumball Machine SDK')
     .version('0.0.1');
 
-log.setLevel("DEBUG");
+log.setLevel("debug");
 
 function createCommand(commandName) {
     return program.command(commandName)
@@ -104,14 +104,16 @@ createCommand("init")
         log.info(`Created Merkle Roll Publickey: ${merkleRollKeypair.publicKey.toString()}`);
 
         // Creator funds creation of gumballMachine and merkleRoll accounts
-        await provider.connection.confirmTransaction(
-            await provider.connection.requestAirdrop(
-                creatorKeypair.publicKey,
-                75 * LAMPORTS_PER_SOL
-            ),
-            "confirmed"
-        );
+        // await provider.connection.confirmTransaction(
+        //     await provider.connection.requestAirdrop(
+        //         creatorKeypair.publicKey,
+        //         1 * LAMPORTS_PER_SOL
+        //     ),
+        //     "confirmed"
+        // );
+        // console.log("Confirmed creator airdrop")
 
+        console.log("create ixs")
         const initializeGumballMachineInstrs =
             await createInitializeGumballMachineIxs(
                 creatorKeypair.publicKey,
@@ -123,6 +125,7 @@ createCommand("init")
                 mintPublicKey,
                 provider.connection
             );
+        console.log("Created ixs");
         const txId = await execute(provider, initializeGumballMachineInstrs, [creatorKeypair, gumballMachineKeypair, merkleRollKeypair], true, true);
         log.info(`TX Completed Successfully: ${txId}`);
     });

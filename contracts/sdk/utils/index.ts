@@ -1,7 +1,7 @@
-import { PublicKey, TransactionInstruction, Transaction, Signer } from "@solana/web3.js";
+import { PublicKey, TransactionInstruction, Transaction, Signer, Connection } from "@solana/web3.js";
 import * as borsh from "borsh";
 import { bignum } from "@metaplex-foundation/beet";
-import { BN, Provider } from "@project-serum/anchor";
+import { AnchorProvider, BN, Provider } from "@project-serum/anchor";
 
 export const CANDY_WRAPPER_PROGRAM_ID = new PublicKey("WRAPYChf58WFCnyjXKJHtrPgzKXgHp6MD9aVDqJBbGh");
 
@@ -29,9 +29,11 @@ export async function execute(
 
   let txid: string | null = null;
   try {
+    console.log("sent tx");
     txid = await provider.sendAndConfirm!(tx, signers, {
       skipPreflight,
     })
+    console.log(`\t${txid}`);
   } catch (e) {
     console.log("Tx error!", e.logs)
     throw e;
