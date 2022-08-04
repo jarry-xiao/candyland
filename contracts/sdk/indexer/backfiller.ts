@@ -224,6 +224,10 @@ export async function backfillTreeHistory(
 ): Promise<number> {
   const treeAddress = new PublicKey(treeId);
   const merkleRoll = decodeMerkleRoll(await (await connection.getAccountInfo(treeAddress)).data);
+  if (!fromSlot) {
+    fromSlot = merkleRoll.header.creationSlot;
+  }
+
   const maxSeq = merkleRoll.roll.sequenceNumber.toNumber();
 
   // When synced up, on-chain seq # is going to be maxSeq + 1

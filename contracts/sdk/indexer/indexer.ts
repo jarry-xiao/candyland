@@ -8,7 +8,8 @@ import { bootstrap, NFTDatabaseConnection } from "./db";
 import { fetchAndPlugGaps, plugGapsFromSlot, validateTree } from "./backfiller";
 
 // const url = "http://api.explorer.mainnet-beta.solana.com";
-const url = "http://127.0.0.1:8899";
+// const url = "http://127.0.0.1:8899";
+const url = "http://api.devnet.solana.com";
 
 async function handleLogSubscription(
   connection: Connection,

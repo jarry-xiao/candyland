@@ -56,7 +56,7 @@ pub fn get_metadata_args(
     MetadataArgs {
         name: name_base.to_owned() + " #" + &index.to_string(),
         symbol: symbol.to_string(),
-        uri: uri_base.to_owned() + "/" + &config,
+        uri: uri_base.to_owned() + &config,
         seller_fee_basis_points,
         primary_sale_happened: true,
         is_mutable,
