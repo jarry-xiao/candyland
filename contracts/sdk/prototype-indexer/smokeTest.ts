@@ -112,24 +112,26 @@ async function main() {
       authority: authority,
       gummyrollProgram: GummyrollCtx.programId,
       merkleSlab: merkleRollKeypair.publicKey,
-      candyWrapper: CANDY_WRAPPER_PROGRAM_ID
+      candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
     },
     {
       maxDepth,
       maxBufferSize: maxSize,
     }
   );
-  let mintAuthorityRequest = await getDefaultMintRequestPDA(merkleRollKeypair.publicKey);
+  let mintAuthorityRequest = await getDefaultMintRequestPDA(
+    merkleRollKeypair.publicKey
+  );
   let requestIx = createCreateDefaultMintRequestInstruction(
     {
       mintAuthorityRequest,
       payer: payer.publicKey,
       merkleSlab: merkleRollKeypair.publicKey,
       creator: payer.publicKey,
-      treeAuthority: authority, 
+      treeAuthority: authority,
     },
     {
-      mintCapacity: 1 << maxDepth
+      mintCapacity: 1 << maxDepth,
     }
   );
   let approveIx = createApproveMintAuthorityRequestInstruction(
@@ -137,22 +139,21 @@ async function main() {
       mintAuthorityRequest,
       merkleSlab: merkleRollKeypair.publicKey,
       treeDelegate: payer.publicKey,
-      treeAuthority: authority, 
+      treeAuthority: authority,
     },
     {
-      numMintsToApprove: 1 << maxDepth
+      numMintsToApprove: 1 << maxDepth,
     }
   );
   let tx = new Transaction();
   tx = tx.add(allocAccountIx).add(createTreeIx).add(requestIx).add(approveIx);
-  let txId = await BubblegumCtx.provider.connection.sendTransaction(
-    tx,
+  await execute(
+    BubblegumCtx.provider,
+    [allocAccountIx, createTreeIx, requestIx, approveIx],
     [payer, merkleRollKeypair],
-    {
-      skipPreflight: true,
-    }
+    true,
+    true
   );
-  await logTx(BubblegumCtx.provider, txId);
   let numMints = 0;
   while (1) {
     let i = Math.floor(Math.random() * wallets.length);
@@ -163,34 +164,34 @@ async function main() {
     if (Math.random() < 0.5) {
       console.log("MINT");
       const mintIx = createMintV1Instruction(
-          {
-            mintAuthorityRequest: mintAuthorityRequest,
-            mintAuthority: authority,
-            authority: authority,
-            merkleSlab: merkleRollKeypair.publicKey,
-            gummyrollProgram: GummyrollCtx.programId,
-            owner: wallets[i].publicKey,
-            delegate: wallets[i].publicKey,
-            candyWrapper: CANDY_WRAPPER_PROGRAM_ID
+        {
+          mintAuthorityRequest: mintAuthorityRequest,
+          mintAuthority: authority,
+          authority: authority,
+          merkleSlab: merkleRollKeypair.publicKey,
+          gummyrollProgram: GummyrollCtx.programId,
+          owner: wallets[i].publicKey,
+          delegate: wallets[i].publicKey,
+          candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
+        },
+        {
+          message: {
+            name: `BUBBLE #${numMints}`,
+            symbol: "BUBBLE",
+            uri: Keypair.generate().publicKey.toBase58(),
+            sellerFeeBasisPoints: 100,
+            primarySaleHappened: true,
+            isMutable: true,
+            editionNonce: null,
+            tokenStandard: null,
+            collection: null,
+            uses: null,
+            tokenProgramVersion: TokenProgramVersion.Original,
+            creators: [
+              { address: payer.publicKey, share: 100, verified: true },
+            ],
           },
-          {
-            message: {
-              name: `BUBBLE #${numMints}`,
-              symbol: "BUBBLE",
-              uri: Keypair.generate().publicKey.toBase58(),
-              sellerFeeBasisPoints: 100,
-              primarySaleHappened: true,
-              isMutable: true,
-              editionNonce: null,
-              tokenStandard: null,
-              collection: null,
-              uses: null,
-              tokenProgramVersion: TokenProgramVersion.Original,
-              creators: [
-                { address: payer.publicKey, share: 100, verified: true },
-              ],
-            },
-          }
+        }
       );
       await execute(BubblegumCtx.provider, [mintIx], [], true);
       numMints++;
@@ -251,7 +252,12 @@ async function main() {
       replaceIx.keys[1].isSigner = true;
       replaceIx.keys = [...replaceIx.keys, ...proofNodes];
       try {
-        let txId = await execute(BubblegumCtx.provider, [replaceIx], [wallets[i]], true);
+        let txId = await execute(
+          BubblegumCtx.provider,
+          [replaceIx],
+          [wallets[i]],
+          true
+        );
         let res = await BubblegumCtx.provider.connection.confirmTransaction(
           txId,
           "confirmed"
@@ -260,7 +266,8 @@ async function main() {
           let txSize = tx.serialize().length;
           console.log("Transaction Size", txSize);
           console.log(
-            `Successfully transferred asset (${assets[k].leafHash} from tree: ${assets[k].treeId
+            `Successfully transferred asset (${assets[k].leafHash} from tree: ${
+              assets[k].treeId
             }) - ${wallets[i].publicKey.toBase58()} -> ${wallets[
               j
             ].publicKey.toBase58()}`
@@ -270,7 +277,7 @@ async function main() {
           await logTx(BubblegumCtx.provider, txId);
         }
       } catch (e) {
-          console.log("Encountered Error when transferring");
+        console.log("Encountered Error when transferring");
       }
     }
   }
