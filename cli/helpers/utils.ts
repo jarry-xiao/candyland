@@ -14,7 +14,7 @@ export async function getProvider(endpoint: string, payer: Keypair) {
             skipPreflight: true,
         }
     )
-    await connection.requestAirdrop(payer.publicKey, 25e9);
+    // await connection.requestAirdrop(payer.publicKey, 25e9);
     return provider;
 }
 

@@ -12,7 +12,7 @@ import {
 import {
   createInitializeIndicesInstructions
 } from "../instructions";
-import { execute } from "@sorend-solana/utils";
+import { execute } from "../../../utils";
 
 /**
  * 
@@ -27,6 +27,7 @@ export async function initializeGumballMachineIndices(
   gumballMachine: PublicKey,
   verbose: boolean = false
 ) {
+  console.log("Init Indices")
   let initializeIndexInstructions = createInitializeIndicesInstructions(maxItems, authority.publicKey, gumballMachine);
   for (let i = 0; i < initializeIndexInstructions.length; i++) {
     const instructions = [ComputeBudgetProgram.requestUnits({ units: 1.4e6, additionalFee: 0 }), initializeIndexInstructions[i]];

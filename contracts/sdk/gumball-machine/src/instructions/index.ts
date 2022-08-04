@@ -22,9 +22,9 @@ import {
   createInitializeIndicesChunkInstruction,
 } from "../src/generated";
 import { getWillyWonkaPDAKey } from "../utils";
-import { CANDY_WRAPPER_PROGRAM_ID } from "@sorend-solana/utils";
+import { CANDY_WRAPPER_PROGRAM_ID } from "../../../utils";
 import { PROGRAM_ID as BUBBLEGUM_MACHINE_PROGRAM_ID, getBubblegumAuthorityPDA } from "../../../bubblegum/src/convenience";
-import { PROGRAM_ID as GUMMYROLL_MACHINE_PROGRAM_ID } from "@sorend-solana/gummyroll";
+import { PROGRAM_ID as GUMMYROLL_MACHINE_PROGRAM_ID } from "../../../gummyroll";
 
 /**
  * Wrapper on top of Solita's createInitializeGumballMachineInstruction

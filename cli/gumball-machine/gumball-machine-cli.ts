@@ -121,13 +121,13 @@ createCommand("init")
         log.info(`Created Merkle Roll Publickey: ${merkleRollKeypair.publicKey.toString()}`);
 
         // Creator funds creation of gumballMachine and merkleRoll accounts
-        await provider.connection.confirmTransaction(
-            await provider.connection.requestAirdrop(
-                creatorKeypair.publicKey,
-                75 * LAMPORTS_PER_SOL
-            ),
-            "confirmed"
-        );
+        // await provider.connection.confirmTransaction(
+        //     await provider.connection.requestAirdrop(
+        //         creatorKeypair.publicKey,
+        //         75 * LAMPORTS_PER_SOL
+        //     ),
+        //     "confirmed"
+        // );
 
         const initializeGumballMachineInstrs =
             await createInitializeGumballMachineIxs(
@@ -161,14 +161,18 @@ createCommand("init-indices")
     .action(async (options) => {
         const { url, payerKeypairPath, authorityKeypairPath, gumballMachinePubkey, jsonConfigFilepath } = options;
 
+        console.log("A")
         const payerKeypair = loadWalletKey(payerKeypairPath);
         const authorityKeypair = loadWalletKey(authorityKeypairPath);
         const gumballMachinePublicKey = new PublicKey(gumballMachinePubkey);
 
+        console.log("B")
         const inputObject = JSON.parse(readFileSync(resolve(__dirname, jsonConfigFilepath)).toString());
         const initIndicesArgs = deserializeInitIndicesJson(inputObject);
 
+        console.log("Creating provider");
         const provider = await getProvider(url, payerKeypair);
+        console.log("\tcreated");
 
         await initializeGumballMachineIndices(provider, initIndicesArgs.maxItems, authorityKeypair, gumballMachinePublicKey, true);
     });
