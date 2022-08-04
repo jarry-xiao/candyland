@@ -1,1 +1,1 @@
-export { Gummyroll } from "../../../target/types/gummyroll";
+export type { Gummyroll } from "../../../target/types/gummyroll";

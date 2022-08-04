@@ -10,7 +10,7 @@ export async function logTx(provider: Provider, txId: string, verbose: boolean =
   const tx = await provider.connection.confirmTransaction(txId, "confirmed");
   if (tx.value.err || verbose) {
     console.log(
-      (await provider.connection.getConfirmedTransaction(txId, "confirmed")).meta
+      (await provider.connection.getConfirmedTransaction(txId, "confirmed"))!.meta!
         .logMessages
     );
   }
@@ -31,19 +31,19 @@ export async function execute(
   let tx = new Transaction();
   instructions.map((ix) => { tx = tx.add(ix) });
 
-  let txid = null;
+  let txid: string | null = null;
   try {
-    txid = await provider.sendAndConfirm(tx, signers, {
+    txid = await provider.sendAndConfirm!(tx, signers, {
       skipPreflight,
     })
-  } catch (e) { 
+  } catch (e: any) {
     console.log("Tx error!", e.logs)
     throw e;
   }
 
-  if (verbose) {
+  if (verbose && txid) {
     console.log(
-      (await provider.connection.getConfirmedTransaction(txid, "confirmed")).meta
+      (await provider.connection.getConfirmedTransaction(txid, "confirmed"))!.meta!
         .logMessages
     );
   }
@@ -67,7 +67,7 @@ export function val(num: bignum): BN {
 /// Convert a string to a byte array, stored as an array of numbers
 export function strToByteArray(str: string, padTo?: number): number[] {
   let buf: Buffer = Buffer.from(
-    [...str].reduce((acc, c, ind) => acc.concat([str.charCodeAt(ind)]), [])
+    [...str].reduce((acc: number[], c, ind) => acc.concat([str.charCodeAt(ind)]), [])
   );
   if (padTo) {
     buf = Buffer.concat([buf], padTo);
@@ -78,7 +78,7 @@ export function strToByteArray(str: string, padTo?: number): number[] {
 /// Convert a string to a byte array, stored in a Uint8Array
 export function strToByteUint8Array(str: string): Uint8Array {
   return Uint8Array.from(
-    [...str].reduce((acc, c, ind) => acc.concat([str.charCodeAt(ind)]), [])
+    [...str].reduce((acc: number[], c, ind) => acc.concat([str.charCodeAt(ind)]), [])
   );
 }
 
@@ -105,7 +105,7 @@ export function num16ToBuffer(num: number) {
 }
 
 /// Check if two Array types contain the same values in order
-export function arrayEquals(a, b) {
+export function arrayEquals(a: any, b: any) {
   return Array.isArray(a) &&
     Array.isArray(b) &&
     a.length === b.length &&

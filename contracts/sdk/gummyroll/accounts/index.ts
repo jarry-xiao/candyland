@@ -164,6 +164,7 @@ export async function assertOnChainMerkleRollProperties(
   merkleRollPubkey: PublicKey
 ) {
   const merkleRoll = await connection.getAccountInfo(merkleRollPubkey);
+  if (!merkleRoll) { throw new Error("Could not find on-chain merkle roll") }
   const merkleRollAcct = decodeMerkleRoll(merkleRoll.data);
 
   assert(
