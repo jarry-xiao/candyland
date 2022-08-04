@@ -86,8 +86,16 @@ createCommand("init")
         "-j, --json-config-filepath <string>",
         "File path to JSON file with initialization args"
     )
+    .option(
+        "-a, --authority <string>",
+        "Gumball Machine Authority"
+    )
+    .option(
+        "-b, --bot-wallet <string>",
+        "Gumball Machine Bot Wallet"
+    )
     .action(async (options) => {
-        const { url, payerKeypairPath, creatorKeypairPath, mintPubkey, jsonConfigFilepath } = options;
+        const { url, payerKeypairPath, creatorKeypairPath, mintPubkey, jsonConfigFilepath, authority, botWallet } = options;
 
         const payerKeypair = loadWalletKey(payerKeypairPath);
         const mintPublicKey = new PublicKey(mintPubkey);
@@ -95,7 +103,16 @@ createCommand("init")
         const creatorKeypair = loadWalletKey(creatorKeypairPath);
 
         const inputObject = JSON.parse(readFileSync(resolve(__dirname, jsonConfigFilepath)).toString());
-        const [gumballMachineInitArgs, gumballMachineAcctSize, merkleRollAcctSize] = deserializeInitJson(inputObject);
+        let [gumballMachineInitArgs, gumballMachineAcctSize, merkleRollAcctSize] = deserializeInitJson(inputObject);
+
+        if (authority) {
+            gumballMachineInitArgs.authority = new PublicKey(authority);
+        }
+        
+        if (botWallet) {
+            gumballMachineInitArgs.receiver = new PublicKey(botWallet);
+            gumballMachineInitArgs.botWallet = new PublicKey(botWallet);
+        }
 
         const gumballMachineKeypair = Keypair.generate();
         log.info(`Created Gumball Machine Pubkey: ${gumballMachineKeypair.publicKey.toString()}`);
