@@ -1,6 +1,6 @@
 {
   "args": {
-    "maxItems": 8
+    "maxItems": 500000
   },
   "optionals": {}
 }
