@@ -25,8 +25,6 @@ graph TD;
 | `bubblegum` | Token transfer and metadata functionality built on top of gummyroll | tbd | tbd | `BGUMAp9Gq7iTEuizy4pqaxsTyUCBK68MDfK752saRPUY` |
 | `gumball-machine` | Candy machine built for bubblegum | tbd | tbd | `GBALLoMcmimUutWvtNdFFGH5oguS7ghUUV6toQPppuTW` |
 | `sugar-shack` | Example Marketplace Implementation for Compressed NFTs | tbd | tbd | `9T5Xv2cJRydUBqvdK7rLGuNGqhkA8sU8Yq1rGN7hExNK` |
-| `gumdrop` | Forked version of mpl gumdrop, with support for bubblegum | tbd | tbd | `gdrpGjVffourzkdDRrQmySw4aTHr8a3xmQzzxSwFD1a` | 
-| (deprecated) `gummyroll-CRUD` | an example messaging (CRUD) program built on top of gummyroll | deprecated | deprecated | deprecated |
 
 ### Gummyroll - Merkle Tree 
 
@@ -52,68 +50,11 @@ For more information on candy machine: `https://docs.metaplex.com/candy-machine-
 ### Sugar Shack - Example Marketplace Implementation for Compressed NFTs
 Sugar Shack is a mock implementation for how a Marketplace could faciliatate listings of compressed NFTs for purchase. Docs TBD.
 
-### Gumdrop - Airdrop compressed NFTs
-Copied from here: `https://github.com/metaplex-foundation/metaplex-program-library/tree/master/gumdrop`
-
-Additions to the MPL gumdrop: 
-- `new_distributor_compressed` ix (needed to setup `claim_bubblegum`)
-- `claim_bubblegum` ix (needed to claim NFTs into compressed tree)
-
-# Indexer
-
-This is the bread and butter of this project. Gummyroll relies on RPC indexers to store merkle tree leaf data off-chain. 
-
-| Portions | Description | Docs |
-| :------- | :------- | :--- |
-| `nft_ingester` | Service to ingest compressed NFT events from logs and insert into postgres database | tbd |
-| `nft_api` | REST api to serve proofs and other information from postgres database. Eventually will become JSON RPC api. | tbd |
-| `plerkle` | Generalized geyser plugin to store regular and compressed NFT information | tbd |
-| `plerkle_serialization` | Flatbuffer schemas for optimally transporting geyser plugin information | tbd |
-| `messenger` | Traits needed to generalize messaging bus for NFT related indexing | tbd |
-
-## Getting Started
-```
-cd candyland/
-git submodule update --init --recursive
-yarn install
-cd contracts/
-anchor build
-cd ..
-docker compose up --build --force-recreate
-```
-
-#### In another terminal:
-```
-cd candyland/contracts/
-yarn
-yarn run ts-mocha -t 1000000 tests/bubblegum-test-rpc.ts  //<--- this test actually hits the RPC node for proofs
-yarn run ts-mocha -t 1000000 tests/continuous_gummyroll-test.ts
-```
-
 ## Running Tests
 
-`anchor test` will run tests.
-
-Note: all tests will pass locally except `continuous_gummyroll-test.ts` which requires a server to point it's connection to.
-
-If you get an error referencing a missing path in `deps/anchor/tests`, then cd into that test repo and build it.
-
-For example: `cd deps/anchor/tests/misc && anchor build`
+`cd contracts; anchor test` will run tests.
 
 If tests are failing by timing out, then this likely means that certain programs are not loaded in the local validator.
 This is remedied by adding the program & address to a `[[test.genesis]]` entry in `Anchor.toml`.
 You can tell if this is the issue by turning `skipPreflight` to `false`. Simulation error will show programId not found.
-
-## Generating typesafe query types
-Follow this guide Follow this guide https://www.sea-ql.org/SeaORM/docs/generate-entity/sea-orm-cli for setup
-```
-cd digital_asset_types
-cargo install sea-orm-cli
-```
-
-make sure you `docker compose up db`. and have a ENV var setup `DATABASE_URL=postgres://solana:solana@localhost/solana`
-
-`
-sea-orm-cli generate entity -o entity/src --database-url $DATABASE_URL --expanded-format --with-serde both
-`
 
