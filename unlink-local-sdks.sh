@@ -40,8 +40,8 @@ cd contracts/tests
 yarn
 cd ../../
 
-rm -rf contracts/sdk/indexer/node_modules
-cd contracts/sdk/indexer
+rm -rf contracts/sdk/prototype-indexer/node_modules
+cd contracts/sdk/prototype-indexer
 yarn
 cd ../../
 

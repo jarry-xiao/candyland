@@ -15,12 +15,19 @@ async function handleLogSubscription(
   db: NFTDatabaseConnection,
   logs: Logs,
   ctx: Context,
-  parserState: ParserState,
+  parserState: ParserState
 ) {
   const result = handleLogsAtomic(db, logs, ctx, parserState);
   if (result === ParseResult.LogTruncated) {
-    console.log("\t\tLOG TRUNCATED\n\n\n\n")
-    await plugGapsFromSlot(connection, db, parserState, ctx.slot, 0, Number.MAX_SAFE_INTEGER);
+    console.log("\t\tLOG TRUNCATED\n\n\n\n");
+    await plugGapsFromSlot(
+      connection,
+      db,
+      parserState,
+      ctx.slot,
+      0,
+      Number.MAX_SAFE_INTEGER
+    );
   }
 }
 
@@ -28,16 +35,21 @@ async function main() {
   const endpoint = url;
   const connection = new Connection(endpoint, "confirmed");
   const payer = Keypair.generate();
-  const provider = new anchor.AnchorProvider(connection, new NodeWallet(payer), {
-    commitment: "confirmed",
-  });
+  const provider = new anchor.AnchorProvider(
+    connection,
+    new NodeWallet(payer),
+    {
+      commitment: "confirmed",
+    }
+  );
   let db = await bootstrap();
   console.log("Finished bootstrapping DB");
   const parserState = loadPrograms(provider);
   console.log("loaded programs...");
   let subscriptionId = connection.onLogs(
     BUBBLEGUM_PROGRAM_ID,
-    (logs, ctx) => handleLogSubscription(connection, db, logs, ctx, parserState),
+    (logs, ctx) =>
+      handleLogSubscription(connection, db, logs, ctx, parserState),
     "confirmed"
   );
   while (true) {
@@ -45,14 +57,21 @@ async function main() {
       const trees = await db.getTrees();
       for (const [treeId, depth] of trees) {
         console.log("Scanning for gaps");
-        let maxSeq = await fetchAndPlugGaps(connection, db, 0, treeId, parserState, 5);
+        let maxSeq = await fetchAndPlugGaps(
+          connection,
+          db,
+          0,
+          treeId,
+          parserState,
+          5
+        );
         console.log("Validation:");
         console.log(
           `    Off-chain tree ${treeId} is consistent: ${await validateTree(
             db,
             depth,
             treeId,
-            0,
+            0
           )}`
         );
         console.log("Moving to next tree");

@@ -6,7 +6,7 @@ rm -rf cli/node_modules
 
 rm -rf contracts/node_modules
 
-rm -rf contracts/sdk/indexer/node_modules
+rm -rf contracts/sdk/prototype-indexer/node_modules
 
 rm -rf contracts/sdk/utils/node_modules
 cd contracts/sdk/utils/
@@ -69,7 +69,7 @@ yarn link "@sorend-solana/sugar-shack"
 yarn
 cd ../../
 
-cd contracts/sdk/indexer
+cd contracts/sdk/prototype-indexer
 yarn link "@sorend-solana/utils"
 yarn link "@sorend-solana/gummyroll"
 yarn link "@sorend-solana/bubblegum"

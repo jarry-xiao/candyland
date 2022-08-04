@@ -58,13 +58,19 @@ export async function plugGapsFromSlot(
   slot: number,
   startSeq: number,
   endSeq: number,
-  treeKey?: PublicKey,
+  treeKey?: PublicKey
 ) {
   const blockData = await connection.getBlock(slot, {
     commitment: "confirmed",
   });
   for (const tx of blockData.transactions) {
-    if (treeKey && tx.transaction.message.accountKeys.every((pk) => !pk.equals(treeKey) && !pk.equals(parserState.Bubblegum.programId))) {
+    if (
+      treeKey &&
+      tx.transaction.message.accountKeys.every(
+        (pk) =>
+          !pk.equals(treeKey) && !pk.equals(parserState.Bubblegum.programId)
+      )
+    ) {
       continue;
     }
     if (tx.meta.err) {
@@ -88,7 +94,7 @@ export async function plugGapsFromSlot(
         accountKeys: tx.transaction.message.accountKeys,
         instructions: tx.transaction.message.instructions,
         innerInstructions: tx.meta.innerInstructions,
-      }
+      };
       handleInstructionsAtomic(
         nftDb,
         instructionInfo,
@@ -103,9 +109,9 @@ export async function plugGapsFromSlot(
 }
 
 type BatchedGapRequest = {
-  slot: number,
-  startSeq: number,
-  endSeq: number
+  slot: number;
+  startSeq: number;
+  endSeq: number;
 };
 
 async function plugGapsFromSlotBatched(
@@ -114,7 +120,7 @@ async function plugGapsFromSlotBatched(
   parserState: ParserState,
   treeId: string,
   requests: BatchedGapRequest[],
-  batchSize: number = 20,
+  batchSize: number = 20
 ) {
   const treeKey = new PublicKey(treeId);
   let idx = 0;
@@ -122,7 +128,9 @@ async function plugGapsFromSlotBatched(
     const batchJobs = [];
     for (let i = 0; i < batchSize; i += 1) {
       const requestIdx = idx + i;
-      if (requestIdx >= requests.length) { break }
+      if (requestIdx >= requests.length) {
+        break;
+      }
       const request = requests[requestIdx];
       batchJobs.push(
         plugGapsFromSlot(
@@ -132,11 +140,10 @@ async function plugGapsFromSlotBatched(
           request.slot,
           request.startSeq,
           request.endSeq,
-          treeKey,
-        )
-          .catch((e) => {
-            console.error(`Failed to plug gap from slot: ${request.slot}`, e);
-          })
+          treeKey
+        ).catch((e) => {
+          console.error(`Failed to plug gap from slot: ${request.slot}`, e);
+        })
       );
     }
     await Promise.all(batchJobs);
@@ -164,7 +171,7 @@ async function plugGaps(
         slot,
         startSeq,
         endSeq,
-        treeKey,
+        treeKey
       );
     } catch (e) {
       console.error(`Failed to plug gap from slot: ${slot}`, e);
@@ -180,7 +187,7 @@ export async function getAllTreeSlots(
   connection: Connection,
   treeId: string,
   afterSig?: string,
-  untilSig?: string,
+  untilSig?: string
 ): Promise<number[]> {
   const treeAddress = new PublicKey(treeId);
   // todo: paginate
@@ -193,7 +200,10 @@ export async function getAllTreeSlots(
     let opts = lastAddress ? { before: lastAddress } : {};
     const finalOpts = { ...baseOpts, ...opts };
     console.log(finalOpts);
-    const rawSigs = (await connection.getSignaturesForAddress(treeAddress, finalOpts))
+    const rawSigs = await connection.getSignaturesForAddress(
+      treeAddress,
+      finalOpts
+    );
     if (rawSigs.length === 0) {
       return [];
     } else if (rawSigs.length < 1000) {
@@ -206,7 +216,7 @@ export async function getAllTreeSlots(
     lastAddress = sigs[sigs.length - 1].signature;
     sigs.map((sigInfo) => {
       history.push(sigInfo.slot);
-    })
+    });
   }
 
   return history.reverse().filter(onlyUnique);
@@ -220,10 +230,14 @@ export async function backfillTreeHistory(
   parserState: ParserState,
   treeId: string,
   startSeq: number,
-  fromSlot: number | null,
+  fromSlot: number | null
 ): Promise<number> {
   const treeAddress = new PublicKey(treeId);
-  const merkleRoll = decodeMerkleRoll(await (await connection.getAccountInfo(treeAddress)).data);
+  const merkleRoll = decodeMerkleRoll(
+    await (
+      await connection.getAccountInfo(treeAddress)
+    ).data
+  );
   const maxSeq = merkleRoll.roll.sequenceNumber.toNumber();
 
   // When synced up, on-chain seq # is going to be maxSeq + 1
@@ -251,9 +265,9 @@ export async function backfillTreeHistory(
           treeHistory[historyIndex],
           0,
           maxSeq + 1,
-          treeAddress,
+          treeAddress
         )
-      )
+      );
     }
     await Promise.all(batchJobs);
     numProcessed += batchJobs.length;
@@ -268,7 +282,7 @@ async function plugGapsBatched(
   connection: Connection,
   nftDb: NFTDatabaseConnection,
   parserState: ParserState,
-  treeId: string,
+  treeId: string
 ) {
   let numProcessed = 0;
   while (numProcessed < missingData.length) {
@@ -289,7 +303,7 @@ async function plugGapsBatched(
           missingData[index].prevSeq,
           missingData[index].currSeq
         )
-      )
+      );
     }
     numProcessed += batchJobs.length;
     await Promise.all(batchJobs);
@@ -304,7 +318,7 @@ export async function fetchAndPlugGaps(
   minSeq: number,
   treeId: string,
   parserState: ParserState,
-  batchSize?: number,
+  batchSize?: number
 ) {
   let [missingData, maxDbSeq, maxDbSlot] = await nftDb.getMissingData(
     minSeq,
@@ -339,7 +353,7 @@ export async function fetchAndPlugGaps(
     connection,
     nftDb,
     parserState,
-    treeId,
+    treeId
   );
   console.log("Done");
   return maxDbSeq;
@@ -364,7 +378,7 @@ async function findMissingTxSlots(
   while (txSlotIdx < txSlots.length && gapIdx < missingData.length) {
     const slot = txSlots[txSlotIdx];
     const currGap = missingData[gapIdx];
-    console.log(slot, currGap)
+    console.log(slot, currGap);
     if (slot > currGap.currSlot) {
       gapIdx += 1;
     } else if (slot < currGap.prevSlot) {
@@ -373,13 +387,16 @@ async function findMissingTxSlots(
       // throw new Error("tx slot is beneath current gap slot range, very likely that something is not sorted properly")
     } else {
       txSlotIdx += 1;
-      missingTxSlots.push({ slot, startSeq: currGap.prevSeq, endSeq: currGap.currSeq });
+      missingTxSlots.push({
+        slot,
+        startSeq: currGap.prevSeq,
+        endSeq: currGap.currSeq,
+      });
     }
   }
 
   return missingTxSlots;
 }
-
 
 function calculateMissingData(missingData: GapInfo[]) {
   let missingSlots = 0;
@@ -397,10 +414,10 @@ export async function fillGapsTx(
   connection: Connection,
   db: NFTDatabaseConnection,
   parserState: ParserState,
-  treeId: string,
+  treeId: string
 ) {
   const trees = await db.getTrees();
-  const treeInfo = trees.filter((tree) => (tree[0] === treeId));
+  const treeInfo = trees.filter((tree) => tree[0] === treeId);
   let startSeq = 0;
   let startSlot: number | null = null;
   if (treeInfo) {
@@ -412,24 +429,27 @@ export async function fillGapsTx(
     console.log("Missing seqs:", missingSeqs);
     console.log("Missing slots:", missingSlots);
 
-    missingData.prevSlot
+    missingData.prevSlot;
     if (missingData.length) {
-      const txIdSlotPairs = await findMissingTxSlots(connection, treeId, missingData);
+      const txIdSlotPairs = await findMissingTxSlots(
+        connection,
+        treeId,
+        missingData
+      );
       console.log("Num slots to fetch:", txIdSlotPairs.length);
       await plugGapsFromSlotBatched(
         connection,
         db,
         parserState,
         treeId,
-        txIdSlotPairs,
+        txIdSlotPairs
       );
     } else {
-      console.log("No gaps found!")
+      console.log("No gaps found!");
     }
     startSlot = maxDbSlot;
     startSeq = maxDbSeq;
   }
 
-  return { maxSeq: startSeq, maxSeqSlot: startSlot }
+  return { maxSeq: startSeq, maxSeqSlot: startSlot };
 }
-
