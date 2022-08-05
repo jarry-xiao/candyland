@@ -1,8 +1,8 @@
 # Smart Contracts
 
-`gumdrop` will be managed by solana-labs 
+`gummyroll` will be managed by solana-labs 
 
-`bubblegum`, `gumball-machine` and `gumdrop` are managed by metaplex-foundation
+`bubblegum`, `gumball-machine` and `sugar-shack` are managed by metaplex-foundation
 
 ### Testing
 

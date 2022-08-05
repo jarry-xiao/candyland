@@ -16,7 +16,7 @@ cpi = ["no-entrypoint"]
 default = []
 
 [dependencies]
-anchor-lang = { path="../../../deps/anchor/lang" }
+anchor-lang = { version="0.25.0" }
 bytemuck = "1.8.0"
 concurrent-merkle-tree = { path="../../../lib/concurrent-merkle-tree", features = [ "sol-log" ]}
 candy-wrapper = { path="../candy-wrapper", features = [ "no-entrypoint" ]}

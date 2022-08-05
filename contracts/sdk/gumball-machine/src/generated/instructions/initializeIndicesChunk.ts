@@ -46,27 +46,30 @@ export const initializeIndicesChunkInstructionDiscriminator = [
  * @category generated
  */
 export function createInitializeIndicesChunkInstruction(
-  accounts: InitializeIndicesChunkInstructionAccounts,
-  programId = new web3.PublicKey('GBALLoMcmimUutWvtNdFFGH5oguS7ghUUV6toQPppuTW')
+  accounts: InitializeIndicesChunkInstructionAccounts
 ) {
+  const { gumballMachine, authority } = accounts
+
   const [data] = initializeIndicesChunkStruct.serialize({
     instructionDiscriminator: initializeIndicesChunkInstructionDiscriminator,
   })
   const keys: web3.AccountMeta[] = [
     {
-      pubkey: accounts.gumballMachine,
+      pubkey: gumballMachine,
       isWritable: true,
       isSigner: false,
     },
     {
-      pubkey: accounts.authority,
+      pubkey: authority,
       isWritable: false,
       isSigner: true,
     },
   ]
 
   const ix = new web3.TransactionInstruction({
-    programId,
+    programId: new web3.PublicKey(
+      'GBALLoMcmimUutWvtNdFFGH5oguS7ghUUV6toQPppuTW'
+    ),
     keys,
     data,
   })

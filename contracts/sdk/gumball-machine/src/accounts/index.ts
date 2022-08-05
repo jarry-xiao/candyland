@@ -1,5 +1,5 @@
 import * as borsh from "borsh";
-import { val } from "@sorend-solana/utils";
+import { val } from "../../../utils";
 import { GumballMachineHeader, gumballMachineHeaderBeet } from '../generated/types/GumballMachineHeader';
 
 /**

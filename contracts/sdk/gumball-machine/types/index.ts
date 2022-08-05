@@ -1,0 +1,1 @@
+export type { GumballMachine } from "../../../target/types/gumball_machine";

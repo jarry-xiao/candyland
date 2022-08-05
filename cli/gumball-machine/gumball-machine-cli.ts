@@ -20,7 +20,7 @@ import {
     createUpdateHeaderMetadataInstruction,
     createDestroyInstruction,
     initializeGumballMachineIndices,
-} from "@sorend-solana/gumball-machine";
+} from "../../contracts/sdk/gumball-machine";
 import {
     deserializeInitJson
 } from "./input-deserialization/initializeGumballMachine";
@@ -41,7 +41,7 @@ import {
 } from "./input-deserialization/dispenseNFTForTokens";
 import {
     execute
-} from "@sorend-solana/utils";
+} from "../../contracts/sdk/utils";
 import {
     readFileSync
 } from "fs";
@@ -86,8 +86,16 @@ createCommand("init")
         "-j, --json-config-filepath <string>",
         "File path to JSON file with initialization args"
     )
+    .option(
+        "-a, --authority <string>",
+        "Gumball Machine Authority"
+    )
+    .option(
+        "-b, --bot-wallet <string>",
+        "Gumball Machine Bot Wallet"
+    )
     .action(async (options) => {
-        const { url, payerKeypairPath, creatorKeypairPath, mintPubkey, jsonConfigFilepath } = options;
+        const { url, payerKeypairPath, creatorKeypairPath, mintPubkey, jsonConfigFilepath, authority, botWallet } = options;
 
         const payerKeypair = loadWalletKey(payerKeypairPath);
         const mintPublicKey = new PublicKey(mintPubkey);
@@ -95,7 +103,16 @@ createCommand("init")
         const creatorKeypair = loadWalletKey(creatorKeypairPath);
 
         const inputObject = JSON.parse(readFileSync(resolve(__dirname, jsonConfigFilepath)).toString());
-        const [gumballMachineInitArgs, gumballMachineAcctSize, merkleRollAcctSize] = deserializeInitJson(inputObject);
+        let [gumballMachineInitArgs, gumballMachineAcctSize, merkleRollAcctSize] = deserializeInitJson(inputObject);
+
+        if (authority) {
+            gumballMachineInitArgs.authority = new PublicKey(authority);
+        }
+        
+        if (botWallet) {
+            gumballMachineInitArgs.receiver = new PublicKey(botWallet);
+            gumballMachineInitArgs.botWallet = new PublicKey(botWallet);
+        }
 
         const gumballMachineKeypair = Keypair.generate();
         log.info(`Created Gumball Machine Pubkey: ${gumballMachineKeypair.publicKey.toString()}`);
@@ -104,13 +121,13 @@ createCommand("init")
         log.info(`Created Merkle Roll Publickey: ${merkleRollKeypair.publicKey.toString()}`);
 
         // Creator funds creation of gumballMachine and merkleRoll accounts
-        await provider.connection.confirmTransaction(
-            await provider.connection.requestAirdrop(
-                creatorKeypair.publicKey,
-                75 * LAMPORTS_PER_SOL
-            ),
-            "confirmed"
-        );
+        // await provider.connection.confirmTransaction(
+        //     await provider.connection.requestAirdrop(
+        //         creatorKeypair.publicKey,
+        //         75 * LAMPORTS_PER_SOL
+        //     ),
+        //     "confirmed"
+        // );
 
         const initializeGumballMachineInstrs =
             await createInitializeGumballMachineIxs(
@@ -144,14 +161,18 @@ createCommand("init-indices")
     .action(async (options) => {
         const { url, payerKeypairPath, authorityKeypairPath, gumballMachinePubkey, jsonConfigFilepath } = options;
 
+        console.log("A")
         const payerKeypair = loadWalletKey(payerKeypairPath);
         const authorityKeypair = loadWalletKey(authorityKeypairPath);
         const gumballMachinePublicKey = new PublicKey(gumballMachinePubkey);
 
+        console.log("B")
         const inputObject = JSON.parse(readFileSync(resolve(__dirname, jsonConfigFilepath)).toString());
         const initIndicesArgs = deserializeInitIndicesJson(inputObject);
 
+        console.log("Creating provider");
         const provider = await getProvider(url, payerKeypair);
+        console.log("\tcreated");
 
         await initializeGumballMachineIndices(provider, initIndicesArgs.maxItems, authorityKeypair, gumballMachinePublicKey, true);
     });

@@ -64,28 +64,31 @@ export const updateConfigLinesInstructionDiscriminator = [
  */
 export function createUpdateConfigLinesInstruction(
   accounts: UpdateConfigLinesInstructionAccounts,
-  args: UpdateConfigLinesInstructionArgs,
-  programId = new web3.PublicKey('GBALLoMcmimUutWvtNdFFGH5oguS7ghUUV6toQPppuTW')
+  args: UpdateConfigLinesInstructionArgs
 ) {
+  const { gumballMachine, authority } = accounts
+
   const [data] = updateConfigLinesStruct.serialize({
     instructionDiscriminator: updateConfigLinesInstructionDiscriminator,
     ...args,
   })
   const keys: web3.AccountMeta[] = [
     {
-      pubkey: accounts.gumballMachine,
+      pubkey: gumballMachine,
       isWritable: true,
       isSigner: false,
     },
     {
-      pubkey: accounts.authority,
+      pubkey: authority,
       isWritable: false,
       isSigner: true,
     },
   ]
 
   const ix = new web3.TransactionInstruction({
-    programId,
+    programId: new web3.PublicKey(
+      'GBALLoMcmimUutWvtNdFFGH5oguS7ghUUV6toQPppuTW'
+    ),
     keys,
     data,
   })

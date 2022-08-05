@@ -7,12 +7,16 @@ export const CANDY_WRAPPER_PROGRAM_ID = new PublicKey("WRAPYChf58WFCnyjXKJHtrPgz
 
 /// Wait for a transaction of a certain id to confirm and optionally log its messages
 export async function logTx(provider: Provider, txId: string, verbose: boolean = true) {
-  await provider.connection.confirmTransaction(txId, "confirmed");
-  if (verbose) {
+  const tx = await provider.connection.confirmTransaction(txId, "confirmed");
+  if (tx.value.err || verbose) {
     console.log(
       (await provider.connection.getConfirmedTransaction(txId, "confirmed"))!.meta!
         .logMessages
     );
+  }
+  if (tx.value.err) {
+    console.log("Transaction failed");
+    throw new Error(JSON.stringify(tx.value.err));
   }
 };
 
@@ -24,7 +28,7 @@ export async function execute(
   skipPreflight: boolean = false,
   verbose: boolean = false,
 ): Promise<string> {
-  let tx: Transaction = new Transaction();
+  let tx = new Transaction();
   instructions.map((ix) => { tx = tx.add(ix) });
 
   let txid: string | null = null;
@@ -32,16 +36,12 @@ export async function execute(
     txid = await provider.sendAndConfirm!(tx, signers, {
       skipPreflight,
     })
-  } catch (e) {
+  } catch (e: any) {
     console.log("Tx error!", e.logs)
     throw e;
   }
 
-  if (!txid) {
-    throw new Error("txid unexpectedly null!");
-  }
-
-  if (verbose) {
+  if (verbose && txid) {
     console.log(
       (await provider.connection.getConfirmedTransaction(txid, "confirmed"))!.meta!
         .logMessages
@@ -105,7 +105,7 @@ export function num16ToBuffer(num: number) {
 }
 
 /// Check if two Array types contain the same values in order
-export function arrayEquals(a: any[], b: any[]) {
+export function arrayEquals(a: any, b: any) {
   return Array.isArray(a) &&
     Array.isArray(b) &&
     a.length === b.length &&
@@ -114,7 +114,7 @@ export function arrayEquals(a: any[], b: any[]) {
 
 /// Convert Buffer to Uint8Array
 export function bufferToArray(buffer: Buffer): number[] {
-  const nums: number[] = [];
+  const nums = [];
   for (let i = 0; i < buffer.length; i++) {
     nums.push(buffer[i]);
   }
