@@ -892,7 +892,7 @@ pub mod bubblegum {
                             &spl_token::id(),
                             &ctx.accounts.mint.key(),
                             &ctx.accounts.mint_authority.key(),
-                            None,
+                            Some(&ctx.accounts.mint_authority.key()),
                             0,
                         )?,
                         &[
