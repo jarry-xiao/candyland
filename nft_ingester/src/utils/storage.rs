@@ -1,7 +1,7 @@
-use std::fs::File;
-use std::io::Write;
-
-use crate::error::IngesterError;
+use {
+    crate::error::IngesterError,
+    std::{fs::File, io::Write},
+};
 
 #[derive(sqlx::FromRow, Clone, Debug)]
 pub struct AppSpecificRev {

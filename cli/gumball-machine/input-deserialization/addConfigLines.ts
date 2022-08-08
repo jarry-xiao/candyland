@@ -1,6 +1,6 @@
 import {
     AddConfigLinesInstructionArgs
-} from "../../../contracts/sdk/gumball-machine";
+} from "@sorend-solana/gumball-machine";
 import {
   getBufferFromStringArr
 } from "./utils";

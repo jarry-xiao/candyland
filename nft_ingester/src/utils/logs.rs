@@ -1,7 +1,9 @@
-use flatbuffers::{ForwardsUOffset, Vector};
-use lazy_static::lazy_static;
-use regex::{Captures, Regex};
-use solana_sdk::pubkey::Pubkey;
+use {
+    flatbuffers::{ForwardsUOffset, Vector},
+    lazy_static::lazy_static,
+    regex::{Captures, Regex},
+    solana_sdk::pubkey::Pubkey,
+};
 
 pub fn filter_events_from_logs(log_messages: &Vec<&str>) -> Result<Vec<String>, ()> {
     lazy_static! {

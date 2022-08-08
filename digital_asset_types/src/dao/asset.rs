@@ -35,6 +35,7 @@ pub struct Model {
     pub chain_data_id: Option<i64>,
     pub created_at: Option<DateTimeWithTimeZone>,
     pub burnt: bool,
+    pub seq: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveColumn)]
@@ -58,6 +59,7 @@ pub enum Column {
     ChainDataId,
     CreatedAt,
     Burnt,
+    Seq,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DerivePrimaryKey)]
@@ -103,6 +105,7 @@ impl ColumnTrait for Column {
             Self::ChainDataId => ColumnType::BigInteger.def().null(),
             Self::CreatedAt => ColumnType::TimestampWithTimeZone.def().null(),
             Self::Burnt => ColumnType::Boolean.def(),
+            Self::Seq => ColumnType::BigInteger.def(),
         }
     }
 }

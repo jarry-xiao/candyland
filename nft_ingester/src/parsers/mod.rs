@@ -4,16 +4,16 @@ mod gummyroll;
 pub use self::bubblegum::*;
 pub use self::gummyroll::*;
 
-use async_trait::async_trait;
-use flatbuffers::{ForwardsUOffset, Vector};
-use plerkle_serialization::account_info_generated::account_info;
-use solana_sdk::pubkey::Pubkey;
-use std::collections::HashMap;
-
-use crate::error::IngesterError;
-use crate::utils::IxPair;
-use plerkle_serialization::transaction_info_generated::transaction_info::{
-    self, CompiledInstruction,
+use {
+    crate::{error::IngesterError, utils::IxPair},
+    async_trait::async_trait,
+    flatbuffers::{ForwardsUOffset, Vector},
+    plerkle_serialization::{
+        account_info_generated::account_info,
+        transaction_info_generated::transaction_info::{self, CompiledInstruction},
+    },
+    solana_sdk::pubkey::Pubkey,
+    std::collections::HashMap,
 };
 
 pub struct ProgramHandlerManager<'a> {

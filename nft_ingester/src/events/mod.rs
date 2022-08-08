@@ -1,6 +1,4 @@
-use crate::error::IngesterError;
-use anchor_client::anchor_lang;
-use base64;
+use {crate::error::IngesterError, anchor_client::anchor_lang, base64};
 
 pub fn handle_event<T: anchor_lang::Event + anchor_lang::AnchorDeserialize>(
     data: String,

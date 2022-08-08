@@ -52,7 +52,9 @@ impl ProgramHandler for GummyRollHandler {
     }
 
     async fn handle_instruction(&self, bundle: &InstructionBundle) -> Result<(), IngesterError> {
-        handle_gummyroll_instruction(&bundle.instruction_logs, bundle.slot, &self.storage).await
+        let _ = handle_gummyroll_instruction(&bundle.instruction_logs, bundle.slot, &self.storage)
+            .await?;
+        Ok(())
     }
 }
 
@@ -88,27 +90,28 @@ pub async fn save_changelog_events(
     gummy_roll_events: Vec<ChangeLogEvent>,
     slot: u64,
     txn: &DatabaseTransaction,
-) -> Result<(), IngesterError> {
+) -> Result<Vec<u64>, IngesterError> {
+    let mut seq_nums = Vec::with_capacity(gummy_roll_events.len());
     for change_log_event in gummy_roll_events {
-        gummyroll_change_log_event_to_database(change_log_event, slot, txn, false)
-            .await
-            .map(|_| ())?
+        gummyroll_change_log_event_to_database(&change_log_event, slot, txn, false).await?;
+
+        seq_nums.push(change_log_event.seq);
     }
-    Ok(())
+    Ok(seq_nums)
 }
 
 pub async fn handle_gummyroll_instruction(
     logs: &Vec<&str>,
     slot: u64,
     db: &DatabaseConnection,
-) -> Result<(), IngesterError> {
+) -> Result<Vec<u64>, IngesterError> {
     // map to owned vec to avoid static lifetime issues, instead of moving logs into Box
     let events = get_gummy_roll_events(logs)?;
     db.transaction::<_, _, IngesterError>(|txn| {
         Box::pin(async move { save_changelog_events(events, slot, txn).await })
     })
     .await
-    .map_err(|db_err| IngesterError::StorageWriteError(db_err.to_string()))
+    .map_err(Into::into)
 }
 
 fn node_idx_to_leaf_idx(index: i64, tree_height: u32) -> i64 {
@@ -116,7 +119,7 @@ fn node_idx_to_leaf_idx(index: i64, tree_height: u32) -> i64 {
 }
 
 pub async fn gummyroll_change_log_event_to_database(
-    change_log_event: ChangeLogEvent,
+    change_log_event: &ChangeLogEvent,
     slot: u64,
     txn: &DatabaseTransaction,
     filling: bool,
@@ -124,7 +127,7 @@ pub async fn gummyroll_change_log_event_to_database(
     let mut i: i64 = 0;
     let depth = change_log_event.path.len() - 1;
     let tree_id = change_log_event.id.as_ref();
-    for p in change_log_event.path.into_iter() {
+    for p in change_log_event.path.iter() {
         let node_idx = p.index as i64;
         println!(
             "seq {}, index {} level {}, node {:?}",

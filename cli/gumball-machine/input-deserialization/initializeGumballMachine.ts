@@ -1,5 +1,3 @@
-import log from 'loglevel';
-import { BN, Provider, Program } from "@project-serum/anchor";
 import {
   PublicKey,
   Keypair,
@@ -12,16 +10,15 @@ import {
     gumballMachineHeaderBeet,
     InitializeGumballMachineInstructionArgs,
     EncodeMethod
-} from "../../../contracts/sdk/gumball-machine";
-import { NATIVE_MINT } from "@solana/spl-token";
+} from "@sorend-solana/gumball-machine";
 import {
   getMerkleRollAccountSize,
-} from "../../../contracts/sdk/gummyroll";
+} from "@sorend-solana/gummyroll";
 import {
     val,
     strToByteArray,
     strToByteUint8Array
-} from "../../../contracts/sdk/utils/index";
+} from "@sorend-solana/utils";
 import {
   assertInRangeAndReturnNum,
   assertLengthAndConvertByteArray,

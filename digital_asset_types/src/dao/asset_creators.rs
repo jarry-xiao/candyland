@@ -19,6 +19,7 @@ pub struct Model {
     pub creator: Vec<u8>,
     pub share: i32,
     pub verified: bool,
+    pub seq: i64,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveColumn)]
@@ -28,6 +29,7 @@ pub enum Column {
     Creator,
     Share,
     Verified,
+    Seq,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DerivePrimaryKey)]
@@ -56,6 +58,7 @@ impl ColumnTrait for Column {
             Self::Creator => ColumnType::Binary.def(),
             Self::Share => ColumnType::Integer.def(),
             Self::Verified => ColumnType::Boolean.def(),
+            Self::Seq => ColumnType::BigInteger.def(),
         }
     }
 }

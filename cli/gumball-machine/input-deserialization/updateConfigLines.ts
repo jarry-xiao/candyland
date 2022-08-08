@@ -1,7 +1,6 @@
-import { BN } from "@project-serum/anchor";
 import {
     UpdateConfigLinesInstructionArgs
-} from "../../../contracts/sdk/gumball-machine";
+} from "@sorend-solana/gumball-machine";
 import {
   getBufferFromStringArr,
   assertNonNegativeAndConvertToBN

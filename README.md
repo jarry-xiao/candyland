@@ -75,12 +75,15 @@ This is the bread and butter of this project. Gummyroll relies on RPC indexers t
 ```
 cd candyland/
 git submodule update --init --recursive
-yarn install
+chmod +x link-local-sdks.sh
+./link-local-sdks.sh
 cd contracts/
 anchor build
 cd ..
 docker compose up --build --force-recreate
 ```
+
+Note: link-local-sdks.sh will install all dependencies needed to work in `cli/` and `contracts`, and link all of the public NPM SDKs for your local changes to propagate immediately. If at any time you would rather just work with the releases available at the registry you can run `chmod +x unlink-local-sdks.sh && ./unlink-local-sdks.sh` which will unlink all of the public SDKs and re-install all dependencies for `contracts` and `cli` from the NPM registry.
 
 #### In another terminal:
 ```
