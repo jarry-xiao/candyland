@@ -6,6 +6,7 @@ use digital_asset_types::rpc::{Asset, AssetProof};
 
 #[async_trait]
 pub trait ApiContract: Send + Sync + 'static {
+    async fn check_health(&self) -> Result<(), DasApiError>;
     async fn get_asset_proof(&self, asset_id: String) -> Result<AssetProof, DasApiError>;
     async fn get_asset(&self, asset_id: String) -> Result<Asset, DasApiError>;
     async fn get_assets_by_owner(
@@ -71,6 +72,14 @@ impl<'a> RpcApiBuilder {
         contract: Box<dyn ApiContract>,
     ) -> Result<RpcModule<Box<dyn ApiContract>>, DasApiError> {
         let mut module = RpcModule::new(contract);
+
+        module.register_async_method("healthz", |rpc_params, rpc_context| async move {
+            println!("Checking Health");
+            rpc_context.check_health()
+                .await
+                .map_err(Into::into)
+        })?;
+
         module.register_async_method("get_asset_proof", |rpc_params, rpc_context| async move {
             let asset_id = rpc_params.one::<String>()?;
             println!("Asset Id {}", asset_id);

@@ -1,3 +1,4 @@
+
 use {
     flatbuffers::FlatBufferBuilder,
     plerkle_serialization::{
@@ -9,14 +10,16 @@ use {
         },
     },
     solana_geyser_plugin_interface::geyser_plugin_interface::{
-        ReplicaAccountInfo, ReplicaBlockInfo, ReplicaTransactionInfo, SlotStatus,
+        ReplicaBlockInfo, SlotStatus,
+        ReplicaAccountInfoV2, ReplicaTransactionInfoV2
     },
     solana_runtime::bank::RewardType,
+    chrono::{DateTime, Utc}
 };
 
 pub fn serialize_account<'a>(
     mut builder: FlatBufferBuilder<'a>,
-    account: &ReplicaAccountInfo,
+    account: &ReplicaAccountInfoV2,
     slot: u64,
     is_startup: bool,
 ) -> FlatBufferBuilder<'a> {
@@ -76,7 +79,7 @@ pub fn serialize_slot_status<'a>(
 
 pub fn serialize_transaction<'a>(
     mut builder: FlatBufferBuilder<'a>,
-    transaction_info: &ReplicaTransactionInfo,
+    transaction_info: &ReplicaTransactionInfoV2,
     slot: u64,
 ) -> FlatBufferBuilder<'a> {
     // Flatten and serialize account keys.
@@ -173,9 +176,10 @@ pub fn serialize_transaction<'a>(
     } else {
         None
     };
-
+    let slot_idx = builder.create_string(&format!("{}-{}", slot, transaction_info.index));
+    let seen_at = Utc::now();
     // Serialize everything into Transaction Info table.
-    let transaction_info = TransactionInfo::create(
+    let transaction_info_ser = TransactionInfo::create(
         &mut builder,
         &TransactionInfoArgs {
             is_vote: transaction_info.is_vote,
@@ -184,11 +188,13 @@ pub fn serialize_transaction<'a>(
             inner_instructions,
             outer_instructions,
             slot,
+            slot_index: Some(slot_idx),
+            seen_at: seen_at.timestamp_millis()
         },
     );
 
     // Finalize buffer and return to caller.
-    builder.finish(transaction_info, None);
+    builder.finish(transaction_info_ser, None);
     builder
 }
 

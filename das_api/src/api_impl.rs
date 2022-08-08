@@ -1,3 +1,5 @@
+use sea_orm::{ConnectionTrait, DbBackend, Statement};
+use tokio_postgres::types::ToSql;
 use {
     crate::api::ApiContract,
     crate::config::Config,
@@ -42,6 +44,11 @@ pub fn not_found(asset_id: &String) -> DbErr {
 
 #[async_trait]
 impl ApiContract for DasApi {
+    async fn check_health(self: &DasApi) -> Result<(), DasApiError> {
+        &self.db_connection.execute(Statement::from_string(DbBackend::Postgres, "SELECT 1".to_string())).await?;
+        Ok(())
+    }
+
     async fn get_asset_proof(self: &DasApi, asset_id: String) -> Result<AssetProof, DasApiError> {
         let id = validate_pubkey(asset_id.clone())?;
         let id_bytes = id.to_bytes().to_vec();
