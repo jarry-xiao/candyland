@@ -11,7 +11,8 @@ import {
   SystemProgram,
   Transaction,
   Connection as web3Connection,
-  SYSVAR_RENT_PUBKEY, AccountMeta,
+  SYSVAR_RENT_PUBKEY,
+  AccountMeta,
 } from "@solana/web3.js";
 import { assert } from "chai";
 import {
@@ -22,11 +23,7 @@ import {
   createRedeemInstruction,
   createCancelRedeemInstruction,
   createCreateTreeInstruction,
-  computeDataHash,
-  computeCreatorHash,
-  TokenProgramVersion, 
-  Version
-} from "@sorend-solana/bubblegum";
+} from "../sdk/bubblegum/src/generated";
 
 import { buildTree, checkProof, Tree } from "./merkle-tree";
 import {
@@ -44,36 +41,39 @@ import {
 import { sleep } from "@metaplex-foundation/amman/dist/utils";
 import { verbose } from "sqlite3";
 import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
-import { CANDY_WRAPPER_PROGRAM_ID, execute, logTx, num16ToBuffer, bufferToArray } from "@sorend-solana/utils";
-
+import {
+  CANDY_WRAPPER_PROGRAM_ID,
+  execute,
+  logTx,
+  num16ToBuffer,
+  bufferToArray,
+} from "../sdk/utils";
 // TODO: cleanup this test file using the convenience methods and remove all .send calls
+import {
+  computeDataHash,
+  computeCreatorHash,
+} from "../sdk/bubblegum/src/convenience";
 
 // @ts-ignore
 let Bubblegum;
 // @ts-ignore
 let GummyrollProgramId;
 
-/// Converts to Uint8Array
-function bufferToArray(buffer: Buffer): number[] {
-  const nums = [];
-  for (let i = 0; i < buffer.length; i++) {
-    nums.push(buffer[i]);
-  }
-  return nums;
-}
-
-interface TreeProof  {
-  root: string,
-  proof: AccountMeta[]
+interface TreeProof {
+  root: string;
+  proof: AccountMeta[];
 }
 
 async function getProof(asset: PublicKey): Promise<TreeProof> {
   let resp = await fetch("http://localhost:9090", {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      jsonrpc: "2.0", id: "stupid", method: "get_asset_proof", params: [asset.toBase58()]
-    })
+      jsonrpc: "2.0",
+      id: "stupid",
+      method: "get_asset_proof",
+      params: [asset.toBase58()],
+    }),
   });
   let js = await resp.json();
   const proofNodes: Array<AccountMeta> = js.result.proof.map((key) => {
@@ -85,7 +85,7 @@ async function getProof(asset: PublicKey): Promise<TreeProof> {
   });
   return {
     root: js.result.root,
-    proof: proofNodes
+    proof: proofNodes,
   };
 }
 
@@ -166,11 +166,11 @@ describe("bubblegum", () => {
         payer: payer.publicKey,
         authority: authority,
         gummyrollProgram: GummyrollProgramId,
-        merkleSlab: merkleRollKeypair.publicKey
+        merkleSlab: merkleRollKeypair.publicKey,
       },
       {
         maxDepth: MAX_DEPTH,
-        maxBufferSize: MAX_SIZE
+        maxBufferSize: MAX_SIZE,
       }
     );
 
@@ -205,7 +205,7 @@ describe("bubblegum", () => {
         if (i > stop) {
           return (stop - i) % stop;
         }
-        return i
+        return i;
       }
 
       for (let i = 0; i < 10000; i++) {
@@ -255,7 +255,11 @@ describe("bubblegum", () => {
           new BN(1)
         );
         let [asset] = await PublicKey.findProgramAddress(
-          [Buffer.from("asset", "utf8"), merkleRollKeypair.publicKey.toBuffer(), leafNonce.toBuffer("le", 8)],
+          [
+            Buffer.from("asset", "utf8"),
+            merkleRollKeypair.publicKey.toBuffer(),
+            leafNonce.toBuffer("le", 8),
+          ],
           Bubblegum.programId
         );
         {
@@ -346,7 +350,7 @@ describe("bubblegum", () => {
           [
             Buffer.from("voucher", "utf8"),
             merkleRollKeypair.publicKey.toBuffer(),
-            leafNonce.toBuffer("le", 8)
+            leafNonce.toBuffer("le", 8),
           ],
           Bubblegum.programId
         );
@@ -392,9 +396,10 @@ describe("bubblegum", () => {
             let { root, proof } = await getProof(asset);
             console.log("rpc root ", root);
 
-
-            console.log("on chain roots ")
-            merkleRoll.roll.changeLogs.map(cl => console.log(cl.root.toBase58()))
+            console.log("on chain roots ");
+            merkleRoll.roll.changeLogs.map((cl) =>
+              console.log(cl.root.toBase58())
+            );
 
             const cancelRedeemIx = createCancelRedeemInstruction(
               {
@@ -450,7 +455,7 @@ describe("bubblegum", () => {
             );
           }
 
-          console.log("Decompressing - ", asset.toBase58())
+          console.log("Decompressing - ", asset.toBase58());
 
           let [mintAuthority] = await PublicKey.findProgramAddress(
             [asset.toBuffer()],
@@ -462,7 +467,11 @@ describe("bubblegum", () => {
           ): Promise<anchor.web3.PublicKey> => {
             return (
               await anchor.web3.PublicKey.findProgramAddress(
-                [Buffer.from("metadata"), PROGRAM_ID.toBuffer(), mint.toBuffer()],
+                [
+                  Buffer.from("metadata"),
+                  PROGRAM_ID.toBuffer(),
+                  mint.toBuffer(),
+                ],
                 PROGRAM_ID
               )
             )[0];

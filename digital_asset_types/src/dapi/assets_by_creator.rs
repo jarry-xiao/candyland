@@ -1,20 +1,11 @@
 use crate::dao::prelude::AssetData;
 use crate::dao::{asset, asset_authority, asset_creators, asset_grouping};
 use crate::dapi::asset::{get_content, to_authority, to_creators, to_grouping};
-use crate::dapi::assets_by_creator::asset::Relation::AssetCreators;
-use crate::dapi::assets_by_creator::asset_creators::Relation::Asset;
 use crate::rpc::filter::AssetSorting;
 use crate::rpc::response::AssetList;
 use crate::rpc::{Asset as RpcAsset, Compression, Interface, Ownership, Royalty};
-use sea_orm::{entity::*, query::*, DbErr, FromQueryResult};
-use sea_orm::{DatabaseConnection, DbBackend};
-
-#[derive(FromQueryResult)]
-struct CakeAndFillingCount {
-    id: i32,
-    name: String,
-    count: i32,
-}
+use sea_orm::DatabaseConnection;
+use sea_orm::{entity::*, query::*, DbErr};
 
 pub async fn get_assets_by_creator(
     db: &DatabaseConnection,
@@ -31,29 +22,18 @@ pub async fn get_assets_by_creator(
         AssetSorting::RecentAction => todo!(),
     };
 
-    // TODO: throw error if cursor and page pagination are included
-    // TODO: returning proper
-    let assets = if page > 0 {
-        let mut cake_pages = asset_creators::Entity::find()
-            .from_raw_sql(Statement::from_sql_and_values(
-                DbBackend::Postgres,
-                r#"SELECT "ac"."asset_id", "ac"."creator" FROM "asset_creators" AS "ac"
-                    LEFT OUTER JOIN "asset" AS "a" ON "a"."id" = "ac"."asset_id" 
-                     WHERE "ac"."creator" = $1"#,
-                vec![1.into()],
-            ))
-            .into_model::<CakeAndFillingCount>()
-            .paginate(db, 50);
+    let mut conditions = Condition::any();
+    for creator in creator_expression {
+        conditions = conditions.add(asset_creators::Column::Creator.eq(creator.clone()));
+    }
 
+    let assets = if page > 0 {
         let paginator = asset::Entity::find()
             .join(
                 JoinType::LeftJoin,
                 asset::Entity::has_many(asset_creators::Entity).into(),
             )
-            .filter(
-                sea_orm::Condition::any()
-                    .add(asset_creators::Column::Creator.eq(creator_expression[0].clone())),
-            )
+            .filter(conditions)
             .find_also_related(AssetData)
             .order_by_asc(sort_column)
             .paginate(db, limit.try_into().unwrap());
@@ -66,12 +46,9 @@ pub async fn get_assets_by_creator(
                 JoinType::LeftJoin,
                 asset::Entity::has_many(asset_creators::Entity).into(),
             )
-            .filter(
-                Condition::all()
-                    .add(asset_creators::Column::Creator.eq(creator_expression[0].clone())), // .add(asset_creators::Column::Creator.eq(creator_expression[1].clone())),
-            )
+            .filter(conditions)
             .cursor_by(asset_creators::Column::AssetId)
-            .before(before)
+            .before(before.clone())
             .first(limit.into())
             .all(db)
             .await?
@@ -91,12 +68,9 @@ pub async fn get_assets_by_creator(
                 JoinType::LeftJoin,
                 asset::Entity::has_many(asset_creators::Entity).into(),
             )
-            .filter(
-                Condition::all()
-                    .add(asset_creators::Column::Creator.eq(creator_expression[0].clone())), // .add(asset_creators::Column::Creator.eq(creator_expression[1].clone())),
-            )
+            .filter(conditions)
             .cursor_by(asset_creators::Column::AssetId)
-            .after(after)
+            .after(after.clone())
             .first(limit.into())
             .all(db)
             .await?
@@ -182,12 +156,24 @@ pub async fn get_assets_by_creator(
 
     let total = built_assets.len() as u32;
 
+    let page = if page > 0 { Some(page) } else { None };
+    let before = if !before.is_empty() {
+        Some(String::from_utf8(before).unwrap())
+    } else {
+        None
+    };
+    let after = if !after.is_empty() {
+        Some(String::from_utf8(after).unwrap())
+    } else {
+        None
+    };
+
     Ok(AssetList {
         total,
         limit,
-        page: Some(page),
-        before: None,
-        after: None,
+        page,
+        before,
+        after,
         items: built_assets,
     })
 }

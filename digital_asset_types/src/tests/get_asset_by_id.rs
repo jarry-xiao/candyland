@@ -1,8 +1,6 @@
 #[cfg(test)]
-mod starter {
-    use sea_orm::{
-        entity::prelude::*, entity::*, DatabaseBackend, JsonValue, MockDatabase, MockExecResult,
-    };
+mod get_asset_by_id {
+    use sea_orm::{entity::prelude::*, DatabaseBackend, MockDatabase};
     use solana_sdk::{signature::Keypair, signer::Signer};
 
     use crate::{
@@ -10,10 +8,12 @@ mod starter {
         dao::{
             asset, asset_authority, asset_creators, asset_data,
             prelude::AssetData,
-            sea_orm_active_enums::{ChainMutability, Mutability, OwnerType, RoyaltyTargetType},
+            sea_orm_active_enums::{OwnerType, RoyaltyTargetType},
         },
-        json::ChainDataV1,
-        tests::MetadataArgs,
+        tests::{
+            create_asset, create_asset_authority, create_asset_creator, create_asset_data,
+            MetadataArgs,
+        },
     };
 
     #[cfg(feature = "mock")]
@@ -24,104 +24,6 @@ mod starter {
         let update_authority = Keypair::new().pubkey();
         let creator_1 = Keypair::new().pubkey();
         let uri = Keypair::new().pubkey();
-
-        let db = MockDatabase::new(DatabaseBackend::Postgres)
-            .append_query_results(vec![vec![asset_data::Model {
-                id: 1,
-                chain_data_mutability: ChainMutability::Mutable,
-                schema_version: 1,
-                chain_data: serde_json::to_value(ChainDataV1 {
-                    name: String::from("Test #1"),
-                    symbol: String::from("BUBBLE"),
-                    edition_nonce: None,
-                    primary_sale_happened: true,
-                    token_standard: Some(TokenStandard::NonFungible),
-                    uses: None,
-                })
-                .unwrap(),
-                metadata_url: Keypair::new().pubkey().to_string(),
-                metadata_mutability: Mutability::Mutable,
-                metadata: JsonValue::String("processing".to_string()),
-            }]])
-            .append_query_results(vec![vec![asset::Model {
-                id: id.to_bytes().to_vec(),
-                owner: owner.to_bytes().to_vec(),
-                owner_type: OwnerType::Single,
-                delegate: None,
-                frozen: false,
-                supply: 1,
-                supply_mint: None,
-                compressed: true,
-                compressible: false,
-                tree_id: None,
-                specification_version: 1,
-                nonce: (0 as i64),
-                leaf: None,
-                royalty_target_type: RoyaltyTargetType::Creators,
-                royalty_target: None,
-                royalty_amount: 100, //basis points
-                chain_data_id: Some(1),
-                burnt: false,
-                created_at: None,
-            }]])
-            .append_query_results(vec![vec![asset_creators::Model {
-                id: 1,
-                asset_id: id.to_bytes().to_vec(),
-                creator: creator_1.to_bytes().to_vec(),
-                share: 100,
-                verified: true,
-            }]])
-            .append_query_results(vec![vec![asset_authority::Model {
-                asset_id: id.to_bytes().to_vec(),
-                authority: update_authority.to_bytes().to_vec(),
-                id: 1,
-                scopes: None,
-            }]])
-            .append_query_results(vec![vec![(
-                asset::Model {
-                    id: id.to_bytes().to_vec(),
-                    owner: owner.to_bytes().to_vec(),
-                    owner_type: OwnerType::Single,
-                    delegate: None,
-                    frozen: false,
-                    supply: 1,
-                    supply_mint: None,
-                    compressed: true,
-                    compressible: false,
-                    tree_id: None,
-                    specification_version: 1,
-                    nonce: (0 as i64),
-                    leaf: None,
-                    royalty_target_type: RoyaltyTargetType::Creators,
-                    royalty_target: None,
-                    royalty_amount: 100, //basis points
-                    chain_data_id: Some(1),
-                    burnt: false,
-                    created_at: None,
-                },
-                asset_data::Model {
-                    id: 1,
-                    chain_data_mutability: ChainMutability::Mutable,
-                    schema_version: 1,
-                    chain_data: serde_json::to_value(ChainDataV1 {
-                        name: String::from("Test #1"),
-                        symbol: String::from("BUBBLE"),
-                        edition_nonce: None,
-                        primary_sale_happened: true,
-                        token_standard: Some(TokenStandard::NonFungible),
-                        uses: None,
-                    })
-                    .unwrap(),
-                    metadata_url: uri.to_string(),
-                    metadata_mutability: Mutability::Mutable,
-                    metadata: JsonValue::String("processing".to_string()),
-                },
-            )]])
-            .append_exec_results(vec![MockExecResult {
-                last_insert_id: 1,
-                rows_affected: 1,
-            }])
-            .into_connection();
 
         let metadata_1 = MetadataArgs {
             name: String::from("Test #1"),
@@ -143,101 +45,68 @@ mod starter {
             seller_fee_basis_points: 100,
         };
 
-        let chain_data_1 = ChainDataV1 {
-            name: metadata_1.name,
-            symbol: metadata_1.symbol,
-            edition_nonce: metadata_1.edition_nonce,
-            primary_sale_happened: metadata_1.primary_sale_happened,
-            token_standard: metadata_1.token_standard,
-            uses: None,
-        };
-
-        let chain_data_json = serde_json::to_value(chain_data_1).unwrap();
-
-        let chain_mutability = match metadata_1.is_mutable {
-            true => ChainMutability::Mutable,
-            false => ChainMutability::Immutable,
-        };
-
-        let data_1 = asset_data::ActiveModel {
-            chain_data_mutability: Set(chain_mutability),
-            schema_version: Set(1),
-            chain_data: Set(chain_data_json),
-            metadata_url: Set(metadata_1.uri),
-            metadata: Set(JsonValue::String("processing".to_string())),
-            metadata_mutability: Set(Mutability::Mutable),
-            ..Default::default()
-        };
-
-        let insert_result = asset_data::Entity::insert(data_1).exec(&db).await?;
-        assert_eq!(insert_result.last_insert_id, 1);
-
-        let asset_1 = asset::ActiveModel {
-            id: Set(id.to_bytes().to_vec()),
-            owner: Set(owner.to_bytes().to_vec()),
-            owner_type: Set(OwnerType::Single),
-            delegate: Set(None),
-            frozen: Set(false),
-            supply: Set(1),
-            supply_mint: Set(None),
-            compressed: Set(true),
-            compressible: Set(false),
-            tree_id: Set(None),
-            specification_version: Set(1),
-            nonce: Set(0 as i64),
-            leaf: Set(None),
-            royalty_target_type: Set(RoyaltyTargetType::Creators),
-            royalty_target: Set(None),
-            royalty_amount: Set(metadata_1.seller_fee_basis_points as i32), //basis points
-            chain_data_id: Set(Some(insert_result.last_insert_id)),
-            ..Default::default()
-        };
-
-        assert_eq!(
-            asset_1.insert(&db).await?,
-            asset::Model {
-                id: id.to_bytes().to_vec(),
-                owner: owner.to_bytes().to_vec(),
-                owner_type: OwnerType::Single,
-                delegate: None,
-                frozen: false,
-                supply: 1,
-                supply_mint: None,
-                compressed: true,
-                compressible: false,
-                tree_id: None,
-                specification_version: 1,
-                nonce: (0 as i64),
-                leaf: None,
-                royalty_target_type: RoyaltyTargetType::Creators,
-                royalty_target: None,
-                royalty_amount: 100, //basis points
-                chain_data_id: Some(1),
-                burnt: false,
-                created_at: None,
-            }
+        let asset_data_1 = create_asset_data(metadata_1.clone(), 1);
+        let asset_1 = create_asset(
+            id.to_bytes().to_vec(),
+            owner.to_bytes().to_vec(),
+            OwnerType::Single,
+            None,
+            false,
+            1,
+            None,
+            true,
+            false,
+            None,
+            1,
+            0 as i64,
+            None,
+            RoyaltyTargetType::Creators,
+            None,
+            metadata_1.seller_fee_basis_points as i32,
+            Some(1),
         );
 
-        let creator = asset_creators::ActiveModel {
-            asset_id: Set(id.to_bytes().to_vec()),
-            creator: Set(metadata_1.creators[0].address.to_bytes().to_vec()),
-            share: Set(metadata_1.creators[0].share as i32),
-            verified: Set(metadata_1.creators[0].verified),
-            ..Default::default()
-        };
+        let asset_creator_1_1 = create_asset_creator(
+            id.to_bytes().to_vec(),
+            metadata_1.creators[0].address.to_bytes().to_vec(),
+            100,
+            true,
+            1,
+        );
 
-        let insert_result = asset_creators::Entity::insert(creator).exec(&db).await?;
+        let asset_authority_1 = create_asset_authority(
+            id.to_bytes().to_vec(),
+            update_authority.to_bytes().to_vec(),
+            1,
+        );
+
+        let db = MockDatabase::new(DatabaseBackend::Postgres)
+            .append_query_results(vec![vec![asset_data_1.1.clone()]])
+            .append_query_results(vec![vec![asset_1.1.clone()]])
+            .append_query_results(vec![vec![asset_creator_1_1.1]])
+            .append_query_results(vec![vec![asset_authority_1.1]])
+            .append_query_results(vec![vec![(asset_1.1.clone(), asset_data_1.1.clone())]])
+            .into_connection();
+
+        let insert_result = asset_data::Entity::insert(asset_data_1.0)
+            .exec(&db)
+            .await
+            .unwrap();
         assert_eq!(insert_result.last_insert_id, 1);
 
-        let authority_1 = asset_authority::ActiveModel {
-            asset_id: Set(id.to_bytes().to_vec()),
-            authority: Set(update_authority.to_bytes().to_vec()),
-            ..Default::default()
-        };
+        let insert_result = asset::Entity::insert(asset_1.0).exec(&db).await.unwrap();
+        assert_eq!(insert_result.last_insert_id, id.to_bytes().to_vec());
 
-        let insert_result = asset_authority::Entity::insert(authority_1)
+        let insert_result = asset_creators::Entity::insert(asset_creator_1_1.0)
             .exec(&db)
-            .await?;
+            .await
+            .unwrap();
+        assert_eq!(insert_result.last_insert_id, 1);
+
+        let insert_result = asset_authority::Entity::insert(asset_authority_1.0)
+            .exec(&db)
+            .await
+            .unwrap();
         assert_eq!(insert_result.last_insert_id, 1);
 
         assert_eq!(
@@ -245,46 +114,7 @@ mod starter {
                 .find_also_related(AssetData)
                 .one(&db)
                 .await?,
-            Some((
-                asset::Model {
-                    id: id.to_bytes().to_vec(),
-                    owner: owner.to_bytes().to_vec(),
-                    owner_type: OwnerType::Single,
-                    delegate: None,
-                    frozen: false,
-                    supply: 1,
-                    supply_mint: None,
-                    compressed: true,
-                    compressible: false,
-                    tree_id: None,
-                    specification_version: 1,
-                    nonce: (0 as i64),
-                    leaf: None,
-                    royalty_target_type: RoyaltyTargetType::Creators,
-                    royalty_target: None,
-                    royalty_amount: 100, //basis points
-                    chain_data_id: Some(1),
-                    burnt: false,
-                    created_at: None,
-                },
-                Some(asset_data::Model {
-                    id: 1,
-                    chain_data_mutability: ChainMutability::Mutable,
-                    schema_version: 1,
-                    chain_data: serde_json::to_value(ChainDataV1 {
-                        name: String::from("Test #1"),
-                        symbol: String::from("BUBBLE"),
-                        edition_nonce: None,
-                        primary_sale_happened: true,
-                        token_standard: Some(TokenStandard::NonFungible),
-                        uses: None,
-                    })
-                    .unwrap(),
-                    metadata_url: uri.to_string(),
-                    metadata_mutability: Mutability::Mutable,
-                    metadata: JsonValue::String("processing".to_string()),
-                })
-            ))
+            Some((asset_1.1.clone(), Some(asset_data_1.1.clone())))
         );
 
         Ok(())

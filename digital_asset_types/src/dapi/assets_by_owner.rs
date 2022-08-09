@@ -36,7 +36,7 @@ pub async fn get_assets_by_owner(
             .order_by_asc(sort_column)
             .filter(asset::Column::Owner.eq(owner_address.clone()))
             .cursor_by(asset::Column::Id)
-            .before(before)
+            .before(before.clone())
             .first(limit.into())
             .all(db)
             .await?
@@ -54,7 +54,7 @@ pub async fn get_assets_by_owner(
             .order_by_asc(sort_column)
             .filter(asset::Column::Owner.eq(owner_address.clone()))
             .cursor_by(asset::Column::Id)
-            .after(after)
+            .after(after.clone())
             .first(limit.into())
             .all(db)
             .await?
@@ -133,12 +133,24 @@ pub async fn get_assets_by_owner(
 
     let total = built_assets.len() as u32;
 
+    let page = if page > 0 { Some(page) } else { None };
+    let before = if !before.is_empty() {
+        Some(String::from_utf8(before).unwrap())
+    } else {
+        None
+    };
+    let after = if !after.is_empty() {
+        Some(String::from_utf8(after).unwrap())
+    } else {
+        None
+    };
+
     Ok(AssetList {
         total,
         limit,
-        page: Some(page),
-        before: None,
-        after: None,
+        page,
+        before,
+        after,
         items: built_assets,
     })
 }
