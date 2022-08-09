@@ -11,7 +11,7 @@ import {
   val,
   strToByteArray,
   strToByteUint8Array
-} from "../../../contracts/sdk/utils/index";
+} from "@sorend-solana/utils";
 
 export function getBufferFromStringArr(stringArray: string[]): Buffer {
   const buffer = stringArray.reduce(

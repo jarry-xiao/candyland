@@ -1,7 +1,7 @@
 //! Backfiller that fills gaps in trees by detecting gaps in sequence numbers
 //! in the `backfill_items` table.  Inspired by backfiller.ts/backfill.ts.
-
 use {
+    chrono::Utc,
     crate::{
         error::IngesterError, parsers::*, IngesterConfig, DATABASE_LISTENER_CHANNEL_KEY,
         RPC_COMMITMENT_KEY, RPC_URL_KEY,
@@ -15,6 +15,7 @@ use {
     sea_orm::{
         entity::*,
         query::*,
+        TryGetableMany,
         sea_query::{Expr, Query},
         DatabaseConnection, DbBackend, DbErr, FromQueryResult, SqlxPostgresConnector,
     },
@@ -706,6 +707,7 @@ fn serialize_transaction<'a>(
     };
 
     // Serialize everything into Transaction Info table.
+    let seen_at = Utc::now();
     let transaction_info = TransactionInfo::create(
         &mut builder,
         &TransactionInfoArgs {
@@ -715,6 +717,8 @@ fn serialize_transaction<'a>(
             inner_instructions,
             outer_instructions,
             slot,
+            seen_at: seen_at.timestamp_millis(),
+            slot_index: None
         },
     );
 
