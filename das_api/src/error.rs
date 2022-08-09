@@ -14,6 +14,8 @@ pub enum DasApiError {
     ValidationError(String),
     #[error("Database Error {0}")]
     DatabaseError(#[from] sea_orm::DbErr),
+    #[error("Pagination Error. Only one pagination parameter supported per query.")]
+    PaginationError,
 }
 
 impl Into<RpcError> for DasApiError {

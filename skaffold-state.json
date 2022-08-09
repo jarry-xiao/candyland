@@ -1,1 +1,16 @@
-{"builds":[{"imageName":"public.ecr.aws/k2z7t6t6/metaplex-rpc-load-generator","tag":"public.ecr.aws/k2z7t6t6/metaplex-rpc-load-generator:365eaa5-dirty@sha256:1b90a95ec07400762548e36cf151e3816d90026cb3e414880c58a3d47ec1bbf1"},{"imageName":"public.ecr.aws/k2z7t6t6/metaplex-rpc-api","tag":"public.ecr.aws/k2z7t6t6/metaplex-rpc-api:365eaa5-dirty@sha256:cb37fffe0edff7c40ecbd0e9080ce9c2b42f0cf43879cac263e2a642a58b49e3"},{"imageName":"public.ecr.aws/k2z7t6t6/metaplex-rpc-ingest","tag":"public.ecr.aws/k2z7t6t6/metaplex-rpc-ingest:365eaa5-dirty@sha256:b58e2d7d548f21a942fc13baa76436cfea3a823d0294700c724f71677cf18507"}]}
+{
+  "builds": [
+    {
+      "imageName": "public.ecr.aws/k2z7t6t6/metaplex-rpc-load-generator",
+      "tag": "public.ecr.aws/k2z7t6t6/metaplex-rpc-load-generator:365eaa5-dirty@sha256:1b90a95ec07400762548e36cf151e3816d90026cb3e414880c58a3d47ec1bbf1"
+    },
+    {
+      "imageName": "public.ecr.aws/k2z7t6t6/metaplex-rpc-api",
+      "tag": "public.ecr.aws/k2z7t6t6/metaplex-rpc-api:365eaa5-dirty@sha256:cb37fffe0edff7c40ecbd0e9080ce9c2b42f0cf43879cac263e2a642a58b49e3"
+    },
+    {
+      "imageName": "public.ecr.aws/k2z7t6t6/metaplex-rpc-ingest",
+      "tag": "public.ecr.aws/k2z7t6t6/metaplex-rpc-ingest:365eaa5-dirty@sha256:b58e2d7d548f21a942fc13baa76436cfea3a823d0294700c724f71677cf18507"
+    }
+  ]
+}

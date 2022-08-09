@@ -5,19 +5,17 @@ mod error;
 mod validation;
 
 use {
-    std::net::UdpSocket,
+    crate::api::RpcApiBuilder,
     crate::api_impl::DasApi,
     crate::config::load_config,
+    crate::config::Config,
     crate::error::DasApiError,
-    jsonrpsee::{
-        http_server::{HttpServerBuilder, RpcModule},
-    },
-    std::net::SocketAddr,
-    tokio,
-    cadence_macros::set_global_default,
     cadence::{BufferedUdpMetricSink, QueuingMetricSink, StatsdClient},
-    crate::api::RpcApiBuilder,
-    crate::config::Config
+    cadence_macros::set_global_default,
+    jsonrpsee::http_server::{HttpServerBuilder, RpcModule},
+    std::net::SocketAddr,
+    std::net::UdpSocket,
+    tokio,
 };
 
 fn setup_metrics(config: &Config) {
@@ -36,7 +34,10 @@ fn setup_metrics(config: &Config) {
 async fn main() -> Result<(), DasApiError> {
     let config = load_config()?;
     let addr = SocketAddr::from(([0, 0, 0, 0], config.server_port));
-    let server = HttpServerBuilder::default().health_api("/healthz", "healthz")?.build(addr).await?;
+    let server = HttpServerBuilder::default()
+        .health_api("/healthz", "healthz")?
+        .build(addr)
+        .await?;
     setup_metrics(&config);
     let api = DasApi::from_config(config).await?;
     let rpc = RpcApiBuilder::build(Box::new(api))?;

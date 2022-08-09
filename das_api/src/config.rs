@@ -9,7 +9,7 @@ pub struct Config {
     pub database_url: String,
     pub metrics_port: u16,
     pub metrics_host: String,
-    pub server_port: u16
+    pub server_port: u16,
 }
 
 pub fn load_config() -> Result<Config, DasApiError> {

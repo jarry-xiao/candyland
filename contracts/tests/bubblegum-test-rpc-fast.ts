@@ -1,19 +1,20 @@
 import * as anchor from "@project-serum/anchor";
-import {keccak_256} from "js-sha3";
-import {BN, Provider, Program} from "@project-serum/anchor";
-import {Bubblegum} from "../target/types/bubblegum";
-import {Gummyroll} from "../target/types/gummyroll";
+import { keccak_256 } from "js-sha3";
+import { BN, Provider, Program } from "@project-serum/anchor";
+import { Bubblegum } from "../target/types/bubblegum";
+import { Gummyroll } from "../target/types/gummyroll";
 import fetch from "node-fetch";
-import {PROGRAM_ID} from "@metaplex-foundation/mpl-token-metadata";
+import { PROGRAM_ID } from "@metaplex-foundation/mpl-token-metadata";
 import {
   PublicKey,
   Keypair,
   SystemProgram,
   Transaction,
   Connection as web3Connection,
-  SYSVAR_RENT_PUBKEY, AccountMeta,
+  SYSVAR_RENT_PUBKEY,
+  AccountMeta,
 } from "@solana/web3.js";
-import {assert} from "chai";
+import { assert } from "chai";
 import {
   createMintV1Instruction,
   createDecompressV1Instruction,
@@ -21,10 +22,10 @@ import {
   createDelegateInstruction,
   createRedeemInstruction,
   createCancelRedeemInstruction,
-  createCreateTreeInstruction
+  createCreateTreeInstruction,
 } from "../sdk/bubblegum/src/generated";
 
-import {buildTree, checkProof, Tree} from "./merkle-tree";
+import { buildTree, checkProof, Tree } from "./merkle-tree";
 import {
   decodeMerkleRoll,
   getMerkleRollAccountSize,
@@ -37,12 +38,12 @@ import {
   TOKEN_PROGRAM_ID,
   Token,
 } from "@solana/spl-token";
-import {CANDY_WRAPPER_PROGRAM_ID, execute, logTx} from "../sdk/utils";
-import {TokenProgramVersion, Version} from "../sdk/bubblegum/src/generated";
-import {sleep} from "@metaplex-foundation/amman/dist/utils";
-import {bs58} from "@project-serum/anchor/dist/cjs/utils/bytes";
-import  retry from "retry-as-promised";
-import {as} from "pg-promise";
+import { CANDY_WRAPPER_PROGRAM_ID, execute, logTx } from "../sdk/utils";
+import { TokenProgramVersion, Version } from "../sdk/bubblegum/src/generated";
+import { sleep } from "@metaplex-foundation/amman/dist/utils";
+import { bs58 } from "@project-serum/anchor/dist/cjs/utils/bytes";
+import retry from "retry-as-promised";
+import { as } from "pg-promise";
 // @ts-ignore
 let Bubblegum;
 // @ts-ignore
@@ -58,17 +59,20 @@ function bufferToArray(buffer: Buffer): number[] {
 }
 
 interface TreeProof {
-  root: string,
-  proof: AccountMeta[]
+  root: string;
+  proof: AccountMeta[];
 }
 
 async function getAsset(asset: PublicKey): Promise<any> {
   let resp = await fetch("https://rpc.aws.metaplex.com", {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      jsonrpc: "2.0", id: "stupid", method: "get_asset", params: [asset.toBase58()]
-    })
+      jsonrpc: "2.0",
+      id: "stupid",
+      method: "get_asset",
+      params: [asset.toBase58()],
+    }),
   });
   let js = await resp.json();
 
@@ -77,11 +81,14 @@ async function getAsset(asset: PublicKey): Promise<any> {
 
 async function getProof(asset: PublicKey): Promise<TreeProof> {
   let resp = await fetch("https://rpc.aws.metaplex.com", {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      jsonrpc: "2.0", id: "stupid", method: "get_asset_proof", params: [asset.toBase58()]
-    })
+      jsonrpc: "2.0",
+      id: "stupid",
+      method: "get_asset_proof",
+      params: [asset.toBase58()],
+    }),
   });
   let js = await resp.json();
   const proofNodes: Array<AccountMeta> = js.result.proof.map((key) => {
@@ -93,7 +100,7 @@ async function getProof(asset: PublicKey): Promise<TreeProof> {
   });
   return {
     root: js.result.root,
-    proof: proofNodes
+    proof: proofNodes,
   };
 }
 
@@ -104,15 +111,18 @@ let merkleRollKeypair: Keypair;
 
 const MAX_SIZE = 64;
 const MAX_DEPTH = 20;
-const p_seed = new TextEncoder().encode(process.env["SEED"] + "p")
-const d_seed = new TextEncoder().encode(process.env["SEED"] + "d")
+const p_seed = new TextEncoder().encode(process.env["SEED"] + "p");
+const d_seed = new TextEncoder().encode(process.env["SEED"] + "d");
 let payer = Keypair.fromSeed(p_seed);
 let destination = Keypair.fromSeed(d_seed);
-console.log(payer.publicKey.toBase58())
-console.log(destination.publicKey.toBase58())
-let connection = new web3Connection("https://liquid.testnet.rpcpool.com/5ebea512d12be102f53d319dafc8", {
-  commitment: "confirmed",
-});
+console.log(payer.publicKey.toBase58());
+console.log(destination.publicKey.toBase58());
+let connection = new web3Connection(
+  "https://liquid.testnet.rpcpool.com/5ebea512d12be102f53d319dafc8",
+  {
+    commitment: "confirmed",
+  }
+);
 let wallet = new NodeWallet(payer);
 anchor.setProvider(
   new Provider(connection, wallet, {
@@ -124,7 +134,7 @@ Bubblegum = anchor.workspace.Bubblegum as Program<Bubblegum>;
 GummyrollProgramId = anchor.workspace.Gummyroll.programId;
 
 async function createTreeOnChain(
-  payer: Keypair,
+  payer: Keypair
 ): Promise<[Keypair, Tree, PublicKey]> {
   const merkleRollKeypair = Keypair.generate();
   const requiredSpace = getMerkleRollAccountSize(MAX_DEPTH, MAX_SIZE);
@@ -154,11 +164,11 @@ async function createTreeOnChain(
       payer: payer.publicKey,
       authority: authority,
       gummyrollProgram: GummyrollProgramId,
-      merkleSlab: merkleRollKeypair.publicKey
+      merkleSlab: merkleRollKeypair.publicKey,
     },
     {
       maxDepth: MAX_DEPTH,
-      maxBufferSize: MAX_SIZE
+      maxBufferSize: MAX_SIZE,
     }
   );
 
@@ -181,47 +191,53 @@ async function createTreeOnChain(
   return [merkleRollKeypair, tree, authority];
 }
 
-
 function rngf(stop, i) {
   if (i > stop) {
     return (stop - i) % stop;
   }
-  return i
+  return i;
 }
 
-async function transfer(index, treeAuthority, data, payer, destination, merkleRollKeypair, leafNonce, root, proof) {
-  const dataHash = bufferToArray(
-    Buffer.from(keccak_256.digest(data.slice(8)))
-  );
+async function transfer(
+  index,
+  treeAuthority,
+  data,
+  payer,
+  destination,
+  merkleRollKeypair,
+  leafNonce,
+  root,
+  proof
+) {
+  const dataHash = bufferToArray(Buffer.from(keccak_256.digest(data.slice(8))));
   const creatorHash = bufferToArray(Buffer.from(keccak_256.digest([])));
 
-    console.log("Got new proof")
-    let transferIx = createTransferInstruction(
-      {
-        authority: treeAuthority,
-        candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
-        owner: payer.publicKey,
-        delegate: payer.publicKey,
-        newOwner: destination.publicKey,
-        gummyrollProgram: GummyrollProgramId,
-        merkleSlab: merkleRollKeypair.publicKey,
-      },
-      {
-        root: bufferToArray(bs58.decode(root)),
-        dataHash,
-        creatorHash,
-        nonce: leafNonce,
-        index: index,
-      }
-    );
-    transferIx.keys[1].isSigner = true;
-    transferIx.keys = [...transferIx.keys, ...proof];
-    await execute(Bubblegum.provider, [transferIx], [payer], true);
-    console.log(" - Transferred Ownership");
+  console.log("Got new proof");
+  let transferIx = createTransferInstruction(
+    {
+      authority: treeAuthority,
+      candyWrapper: CANDY_WRAPPER_PROGRAM_ID,
+      owner: payer.publicKey,
+      delegate: payer.publicKey,
+      newOwner: destination.publicKey,
+      gummyrollProgram: GummyrollProgramId,
+      merkleSlab: merkleRollKeypair.publicKey,
+    },
+    {
+      root: bufferToArray(bs58.decode(root)),
+      dataHash,
+      creatorHash,
+      nonce: leafNonce,
+      index: index,
+    }
+  );
+  transferIx.keys[1].isSigner = true;
+  transferIx.keys = [...transferIx.keys, ...proof];
+  await execute(Bubblegum.provider, [transferIx], [payer], true);
+  console.log(" - Transferred Ownership");
 }
 
 async function main() {
-
   let [computedMerkleRoll, computedOffChainTree, computedTreeAuthority] =
     await createTreeOnChain(payer);
   merkleRollKeypair = computedMerkleRoll;
@@ -253,20 +269,16 @@ async function main() {
         delegate: payer.publicKey,
         merkleSlab: merkleRollKeypair.publicKey,
       },
-      {message: metadata}
+      { message: metadata }
     );
     console.log(" - Minting to tree");
-    await Bubblegum.provider.send(
-      new Transaction().add(mintIx),
-      [payer],
-      {
-        skipPreflight: true,
-        commitment: "confirmed",
-      }
-    );
+    await Bubblegum.provider.send(new Transaction().add(mintIx), [payer], {
+      skipPreflight: true,
+      commitment: "confirmed",
+    });
     await sleep(1000);
     for (let j = 0; j < 1000; j++) {
-      let tx = async function() {
+      let tx = async function () {
         try {
           const nonceInfo = await (
             Bubblegum.provider.connection as web3Connection
@@ -275,31 +287,44 @@ async function main() {
             new BN(1)
           );
           let [asset] = await PublicKey.findProgramAddress(
-            [Buffer.from("asset", "utf8"), merkleRollKeypair.publicKey.toBuffer(), leafNonce.toBuffer("le", 8)],
+            [
+              Buffer.from("asset", "utf8"),
+              merkleRollKeypair.publicKey.toBuffer(),
+              leafNonce.toBuffer("le", 8),
+            ],
             Bubblegum.programId
           );
-          let {root, proof} = await getProof(asset);
+          let { root, proof } = await getProof(asset);
           let assetObj = await getAsset(asset);
-          console.log(assetObj)
+          console.log(assetObj);
           let localPayer, localDest;
-          if(assetObj.result.ownership.owner != payer.publicKey.toBase58()) {
-            localPayer = destination
+          if (assetObj.result.ownership.owner != payer.publicKey.toBase58()) {
+            localPayer = destination;
             localDest = payer;
           } else {
             localPayer = payer;
             localDest = destination;
           }
-          console.log("Attempting Transfer")
-          await transfer(i, treeAuthority, mintIx.data, localPayer, localDest, merkleRollKeypair, leafNonce, root, proof)
+          console.log("Attempting Transfer");
+          await transfer(
+            i,
+            treeAuthority,
+            mintIx.data,
+            localPayer,
+            localDest,
+            merkleRollKeypair,
+            leafNonce,
+            root,
+            proof
+          );
         } catch (e) {
-          console.log("Error", e)
-          throw e
+          console.log("Error", e);
+          throw e;
         }
-      }
-      await retry(tx, {max: 5})
+      };
+      await retry(tx, { max: 5 });
     }
   }
 }
 
-
-main()
+main();
