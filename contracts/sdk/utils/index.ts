@@ -1,20 +1,31 @@
-import { PublicKey, TransactionInstruction, Transaction, Signer } from "@solana/web3.js";
+import {
+  PublicKey,
+  TransactionInstruction,
+  Transaction,
+  Signer,
+} from "@solana/web3.js";
 import * as borsh from "borsh";
 import { bignum } from "@metaplex-foundation/beet";
 import { BN, Provider } from "@project-serum/anchor";
 
-export const CANDY_WRAPPER_PROGRAM_ID = new PublicKey("WRAPYChf58WFCnyjXKJHtrPgzKXgHp6MD9aVDqJBbGh");
+export const CANDY_WRAPPER_PROGRAM_ID = new PublicKey(
+  "WRAPYChf58WFCnyjXKJHtrPgzKXgHp6MD9aVDqJBbGh"
+);
 
 /// Wait for a transaction of a certain id to confirm and optionally log its messages
-export async function logTx(provider: Provider, txId: string, verbose: boolean = true) {
+export async function logTx(
+  provider: Provider,
+  txId: string,
+  verbose: boolean = true
+) {
   await provider.connection.confirmTransaction(txId, "confirmed");
   if (verbose) {
     console.log(
-    (await provider.connection.getTransaction(txId, {commitment: "confirmed"})).meta
-        .logMessages
+      (await provider.connection.getConfirmedTransaction(txId, "confirmed"))!
+        .meta!.logMessages
     );
   }
-};
+}
 
 /// Execute a series of instructions in a txn
 export async function execute(
@@ -22,18 +33,20 @@ export async function execute(
   instructions: TransactionInstruction[],
   signers: Signer[],
   skipPreflight: boolean = false,
-  verbose: boolean = false,
+  verbose: boolean = false
 ): Promise<string> {
   let tx: Transaction = new Transaction();
-  instructions.map((ix) => { tx = tx.add(ix) });
+  instructions.map((ix) => {
+    tx = tx.add(ix);
+  });
 
   let txid: string | null = null;
   try {
     txid = await provider.sendAndConfirm!(tx, signers, {
       skipPreflight,
-    })
+    });
   } catch (e) {
-    console.log("Tx error!", e.logs)
+    console.log("Tx error!", e.logs);
     throw e;
   }
 
@@ -43,8 +56,8 @@ export async function execute(
 
   if (verbose) {
     console.log(
-      (await provider.connection.getConfirmedTransaction(txid, "confirmed"))!.meta!
-        .logMessages
+      (await provider.connection.getConfirmedTransaction(txid, "confirmed"))!
+        .meta!.logMessages
     );
   }
 
@@ -67,7 +80,10 @@ export function val(num: bignum): BN {
 /// Convert a string to a byte array, stored as an array of numbers
 export function strToByteArray(str: string, padTo?: number): number[] {
   let buf: Buffer = Buffer.from(
-    [...str].reduce((acc: number[], c, ind) => acc.concat([str.charCodeAt(ind)]), [])
+    [...str].reduce(
+      (acc: number[], c, ind) => acc.concat([str.charCodeAt(ind)]),
+      []
+    )
   );
   if (padTo) {
     buf = Buffer.concat([buf], padTo);
@@ -78,15 +94,18 @@ export function strToByteArray(str: string, padTo?: number): number[] {
 /// Convert a string to a byte array, stored in a Uint8Array
 export function strToByteUint8Array(str: string): Uint8Array {
   return Uint8Array.from(
-    [...str].reduce((acc: number[], c, ind) => acc.concat([str.charCodeAt(ind)]), [])
+    [...str].reduce(
+      (acc: number[], c, ind) => acc.concat([str.charCodeAt(ind)]),
+      []
+    )
   );
 }
 
 /// Convert a 32 bit number to a buffer of bytes
 export function num32ToBuffer(num: number) {
-  const isU32 = (num >= 0 && num < Math.pow(2, 32));
+  const isU32 = num >= 0 && num < Math.pow(2, 32);
   if (!isU32) {
-    throw new Error("Attempted to convert non 32 bit integer to byte array")
+    throw new Error("Attempted to convert non 32 bit integer to byte array");
   }
   const b = Buffer.alloc(4);
   b.writeInt32LE(num);
@@ -95,9 +114,9 @@ export function num32ToBuffer(num: number) {
 
 /// Convert a 16 bit number to a buffer of bytes
 export function num16ToBuffer(num: number) {
-  const isU16 = (num >= 0 && num < Math.pow(2, 16));
+  const isU16 = num >= 0 && num < Math.pow(2, 16);
   if (!isU16) {
-    throw new Error("Attempted to convert non 16 bit integer to byte array")
+    throw new Error("Attempted to convert non 16 bit integer to byte array");
   }
   const b = Buffer.alloc(2);
   b.writeUInt16LE(num);
@@ -106,10 +125,12 @@ export function num16ToBuffer(num: number) {
 
 /// Check if two Array types contain the same values in order
 export function arrayEquals(a: any[], b: any[]) {
-  return Array.isArray(a) &&
+  return (
+    Array.isArray(a) &&
     Array.isArray(b) &&
     a.length === b.length &&
-    a.every((val, index) => val === b[index]);
+    a.every((val, index) => val === b[index])
+  );
 }
 
 /// Convert Buffer to Uint8Array
@@ -123,5 +144,5 @@ export function bufferToArray(buffer: Buffer): number[] {
 
 /// Remove null characters from a string. Useful for comparring byte-padded on-chain strings with off-chain values
 export const trimStringPadding = (str: string): string => {
-  return str.replace(/\0/g, '')
-}
+  return str.replace(/\0/g, "");
+};

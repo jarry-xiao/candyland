@@ -23,7 +23,11 @@ import {
   createRedeemInstruction,
   createCancelRedeemInstruction,
   createCreateTreeInstruction,
-} from "../sdk/bubblegum/src/generated";
+  computeDataHash,
+  computeCreatorHash,
+  TokenProgramVersion,
+  Version,
+} from "@sorend-solana/bubblegum";
 
 import { buildTree, checkProof, Tree } from "./merkle-tree";
 import {
@@ -47,12 +51,9 @@ import {
   logTx,
   num16ToBuffer,
   bufferToArray,
-} from "../sdk/utils";
+} from "@sorend-solana/utils";
+
 // TODO: cleanup this test file using the convenience methods and remove all .send calls
-import {
-  computeDataHash,
-  computeCreatorHash,
-} from "../sdk/bubblegum/src/convenience";
 
 // @ts-ignore
 let Bubblegum;
