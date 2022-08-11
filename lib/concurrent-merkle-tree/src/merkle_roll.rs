@@ -206,7 +206,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
     ) -> Result<Node, CMTError> {
         check_bounds(MAX_DEPTH, MAX_BUFFER_SIZE);
         // TODO: consider adding check that the subtree is not empty (but will omit for now)
-        //       note: it will be more time consuming to check that the root subtree_root is not an empty_root, because it requires applying O(depth) hashes of trivial nodes
+        //       note: it will be more time consuming to check that the subtree_root is not a root to an empty tree, because it requires applying O(depth) hashes of trivial nodes
         if self.rightmost_proof.index >= 1 << MAX_DEPTH {
             return Err(CMTError::TreeFull);
         }
@@ -217,7 +217,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             return Err(CMTError::CannotInitializeWithSubtreeAppend);
         }
 
-        // Confirm that subtree_rightmost_proof hashes to subtree_root
+        // Confirm that subtree_rightmost_proof is valid
         if recompute(
             subtree_rightmost_leaf,
             &subtree_rightmost_proof[..],
@@ -257,7 +257,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
                 );
                 self.rightmost_proof.proof[i] = subtree_rightmost_proof[i];
             } else if i == intersection {
-                // Compute the where the new node intersects the main tree
+                // Compute where the new node intersects the main tree
                 hash_to_parent(&mut node, &intersection_node, false);
                 self.rightmost_proof.proof[intersection] = intersection_node;
             } else {

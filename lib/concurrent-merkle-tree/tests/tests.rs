@@ -141,7 +141,7 @@ async fn test_append_incomplete_subtree() {
     onchain_subtree.initialize().unwrap();
 
     // append leaves to the subtree, and also append them to the off-chain tree
-    // note: this gives us a partially filled tree, the other two leaves are trivially empty nodes
+    // note: this gives us a partially filled tree, the other two leaves are empty nodes
     for i in 4..6 {
         let leaf = rng.gen::<[u8; 32]>();
         onchain_subtree.append(leaf).unwrap();
