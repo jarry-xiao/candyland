@@ -197,7 +197,6 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
     }
 
     /// Append subtree to current tree
-    /// TODO(sorend): consider changing this function to just take in a merkle_roll argument rather than each of these component pieces. Might be hard with all of the different possible merkle roll dpeth, buffer size combinations
     pub fn append_subtree(&mut self, subtree_root: Node, subtree_rightmost_leaf: Node, subtree_rightmost_index: u32, subtree_rightmost_proof: Vec<Node>) -> Result<Node, CMTError> {
         check_bounds(MAX_DEPTH, MAX_BUFFER_SIZE);
         // TODO: consider adding check that the subtree is not empty (but will omit for now)
