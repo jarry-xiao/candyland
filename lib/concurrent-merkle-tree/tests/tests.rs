@@ -26,6 +26,7 @@ fn setup() -> (MerkleRoll<DEPTH, BUFFER_SIZE>, MerkleTree) {
     (merkle, reference_tree)
 }
 
+/*
 #[tokio::test(threaded_scheduler)]
 async fn test_initialize() {
     let (mut merkle_roll, off_chain_tree) = setup();
@@ -59,8 +60,120 @@ async fn test_append() {
         merkle_roll.buffer_size, BUFFER_SIZE as u64,
         "Merkle roll buffer size is wrong"
     );
+}*/
+
+
+#[tokio::test(threaded_scheduler)]
+async fn test_subtree_append() {
+    let (mut merkle_roll, mut off_chain_tree) = setup();
+    let mut rng = thread_rng();
+    merkle_roll.initialize().unwrap();
+
+    // insert eight leaves into the large tree
+    let mut first_leaves = vec![];
+    for i in 0..8 {
+        let leaf = rng.gen::<[u8; 32]>();
+        first_leaves.push(leaf);
+        merkle_roll.append(leaf).unwrap();
+        off_chain_tree.add_leaf(leaf, i);
+        assert_eq!(
+            merkle_roll.get_change_log().root,
+            off_chain_tree.get_root(),
+            "On chain tree failed to update properly on an append",
+        );
+    }
+
+    println!(
+        "testing"
+    );
+
+    // create a simple subtree to append of depth three
+    let mut onchain_subtree = MerkleRoll::<3, 8>::new();
+    onchain_subtree.initialize().unwrap();
+    
+    // append leaves to the subtree, and also append them to the off-chain tree
+    let mut leaves = vec![];
+    for i in 8..16 {
+        let leaf = rng.gen::<[u8; 32]>();
+        leaves.push(leaf);
+        onchain_subtree.append(leaf).unwrap();
+        off_chain_tree.add_leaf(leaf, i);
+    }
+
+    println!("leaf we want to writeback to rightmost proof leaf {:?}", onchain_subtree.rightmost_proof.leaf);
+
+    // APPEND the on_chain subtree to the merkle_roll
+    let res = merkle_roll.append_subtree(onchain_subtree.get_change_log().root, onchain_subtree.rightmost_proof.leaf, onchain_subtree.rightmost_proof.index-1, onchain_subtree.rightmost_proof.proof.to_vec());
+    let unwrapped_res = res.unwrap();
+
+    println!("written back rightmost proof leaf {:?}", merkle_roll.rightmost_proof.leaf);
+
+    println!("{:?}", unwrapped_res);
+
+    // The result should be that the merkle_roll's new root is the same as the root of the off-chain tree which had leaves 0..15 manually inserted
+     assert_eq!(
+        merkle_roll.get_change_log().root,
+        off_chain_tree.get_root(),
+        "On chain tree failed to update properly on an append",
+    );
 }
 
+#[tokio::test(threaded_scheduler)]
+async fn test_subtree_append_2() {
+    let (mut merkle_roll, mut off_chain_tree) = setup();
+    let mut rng = thread_rng();
+    merkle_roll.initialize().unwrap();
+
+    // insert eight leaves into the large tree
+    let mut merkle_roll_leaves = vec![];
+    for i in 0..2 {
+        let leaf = rng.gen::<[u8; 32]>();
+        merkle_roll_leaves.push(leaf);
+        merkle_roll.append(leaf).unwrap();
+        off_chain_tree.add_leaf(leaf, i);
+        assert_eq!(
+            merkle_roll.get_change_log().root,
+            off_chain_tree.get_root(),
+            "On chain tree failed to update properly on an append",
+        );
+    }
+
+    println!(
+        "testing"
+    );
+
+    // create a simple subtree to append of depth three
+    let mut onchain_subtree = MerkleRoll::<1, 8>::new();
+    onchain_subtree.initialize().unwrap();
+    
+    // append leaves to the subtree, and also append them to the off-chain tree
+    let mut subtree_leaves = vec![];
+    for i in 2..4 {
+        let leaf = rng.gen::<[u8; 32]>();
+        subtree_leaves.push(leaf);
+        onchain_subtree.append(leaf).unwrap();
+        off_chain_tree.add_leaf(leaf, i);
+    }
+
+    println!("leaf we want to writeback to rightmost proof leaf {:?}", onchain_subtree.rightmost_proof.leaf);
+
+    // APPEND the on_chain subtree to the merkle_roll
+    let res = merkle_roll.append_subtree(onchain_subtree.get_change_log().root, onchain_subtree.rightmost_proof.leaf, onchain_subtree.rightmost_proof.index-1, onchain_subtree.rightmost_proof.proof.to_vec());
+    let unwrapped_res = res.unwrap();
+
+    println!("written back rightmost proof leaf {:?}", merkle_roll.rightmost_proof.leaf);
+
+    println!("{:?}", unwrapped_res);
+
+    // The result should be that the merkle_roll's new root is the same as the root of the off-chain tree which had leaves 0..15 manually inserted
+     assert_eq!(
+        merkle_roll.get_change_log().root,
+        off_chain_tree.get_root(),
+        "On chain tree failed to update properly on an append",
+    );
+}
+
+/* 
 #[tokio::test(threaded_scheduler)]
 async fn test_prove_leaf() {
     let (mut merkle_roll, mut off_chain_tree) = setup();
@@ -396,4 +509,4 @@ async fn test_append_bug_repro_2() {
     }
     last_rmp = merkle_roll.rightmost_proof;
     assert_eq!(merkle_roll.get_change_log().root, tree.get_root());
-}
+}*/
