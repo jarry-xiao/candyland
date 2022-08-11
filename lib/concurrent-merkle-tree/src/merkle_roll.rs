@@ -1,7 +1,7 @@
 use crate::{
     error::CMTError,
     state::{ChangeLog, Node, Path, EMPTY},
-    utils::{empty_node, empty_node_cached, fill_in_proof, recompute, hash_to_parent},
+    utils::{empty_node, empty_node_cached, fill_in_proof, hash_to_parent, recompute},
 };
 use bytemuck::{Pod, Zeroable};
 pub(crate) use log_compute;
@@ -197,7 +197,13 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
     }
 
     /// Append subtree to current tree
-    pub fn append_subtree(&mut self, subtree_root: Node, subtree_rightmost_leaf: Node, subtree_rightmost_index: u32, subtree_rightmost_proof: Vec<Node>) -> Result<Node, CMTError> {
+    pub fn append_subtree(
+        &mut self,
+        subtree_root: Node,
+        subtree_rightmost_leaf: Node,
+        subtree_rightmost_index: u32,
+        subtree_rightmost_proof: Vec<Node>,
+    ) -> Result<Node, CMTError> {
         check_bounds(MAX_DEPTH, MAX_BUFFER_SIZE);
         // TODO: consider adding check that the subtree is not empty (but will omit for now)
         //       note: it will be more time consuming to check that the root subtree_root is not an empty_root, because it requires applying O(depth) hashes of trivial nodes
@@ -212,7 +218,12 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         }
 
         // Confirm that subtree_rightmost_proof hashes to subtree_root
-        if recompute(subtree_rightmost_leaf, &subtree_rightmost_proof[..], subtree_rightmost_index-1) != subtree_root {
+        if recompute(
+            subtree_rightmost_leaf,
+            &subtree_rightmost_proof[..],
+            subtree_rightmost_index - 1,
+        ) != subtree_root
+        {
             return Err(CMTError::InvalidProof);
         }
 
@@ -221,13 +232,13 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
 
         // @dev: At any given time (other than initialization), there is only one valid size of subtree that can be appended
         if subtree_rightmost_proof.len() != intersection {
-            return Err(CMTError::SubtreeInvalidSize)
+            return Err(CMTError::SubtreeInvalidSize);
         }
 
         let mut change_list = [EMPTY; MAX_DEPTH];
         let mut intersection_node = self.rightmost_proof.leaf;
 
-        // This will be mutated into the new root after the append. By gradually hashing this node with the RMP to the subtree, then the critical node, and then the rest of the RMP to this tree.
+        // This will be mutated into the new root after the append by gradually hashing this node with the RMP to the subtree, then the critical node, and then the rest of the RMP to this tree.
         let mut node = subtree_rightmost_leaf;
 
         for i in 0..MAX_DEPTH {
@@ -239,7 +250,11 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
                     &self.rightmost_proof.proof[i],
                     ((self.rightmost_proof.index - 1) >> i) & 1 == 0,
                 );
-                hash_to_parent(&mut node, &subtree_rightmost_proof[i], ((subtree_rightmost_index-1) >> i) & 1 == 0);
+                hash_to_parent(
+                    &mut node,
+                    &subtree_rightmost_proof[i],
+                    ((subtree_rightmost_index - 1) >> i) & 1 == 0,
+                );
                 self.rightmost_proof.proof[i] = subtree_rightmost_proof[i];
             } else if i == intersection {
                 // Compute the where the new node intersects the main tree
@@ -256,8 +271,11 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         }
 
         self.update_internal_counters();
-        self.change_logs[self.active_index as usize] =
-            ChangeLog::<MAX_DEPTH>::new(node, change_list, self.rightmost_proof.index + subtree_rightmost_index - 1);
+        self.change_logs[self.active_index as usize] = ChangeLog::<MAX_DEPTH>::new(
+            node,
+            change_list,
+            self.rightmost_proof.index + subtree_rightmost_index - 1,
+        );
         self.rightmost_proof.index = self.rightmost_proof.index + subtree_rightmost_index;
         self.rightmost_proof.leaf = leaf;
         Ok(node)
