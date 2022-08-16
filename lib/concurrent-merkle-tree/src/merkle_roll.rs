@@ -149,7 +149,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         root: Node,
         change_list: [Node; MAX_DEPTH],
         rmp_index: u32,
-        rmp_leaf: Node
+        rmp_leaf: Node,
     ) -> Result<(), CMTError> {
         self.update_internal_counters();
         self.change_logs[self.active_index as usize] =
@@ -211,9 +211,8 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         subtree_root: Node,
         subtree_rightmost_leaf: Node,
         subtree_rightmost_index: u32,
-        subtree_rightmost_proof: Vec<Node>
+        subtree_rightmost_proof: Vec<Node>,
     ) -> Result<Node, CMTError> {
-
         let leaf = subtree_rightmost_leaf.clone();
         let mut change_list = [EMPTY; MAX_DEPTH];
 
@@ -239,7 +238,12 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
                 // No need to update the RMP anymore
             }
         }
-        self.update_state_from_append(node, change_list, self.rightmost_proof.index + subtree_rightmost_index - 1, leaf)?;
+        self.update_state_from_append(
+            node,
+            change_list,
+            self.rightmost_proof.index + subtree_rightmost_index - 1,
+            leaf,
+        )?;
         Ok(node)
     }
 
@@ -273,7 +277,12 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             if subtree_rightmost_proof.len() >= MAX_DEPTH {
                 return Err(CMTError::SubtreeInvalidSize);
             }
-            return self.initialize_tree_from_subtree_append(subtree_root, subtree_rightmost_leaf, subtree_rightmost_index, subtree_rightmost_proof);
+            return self.initialize_tree_from_subtree_append(
+                subtree_root,
+                subtree_rightmost_leaf,
+                subtree_rightmost_index,
+                subtree_rightmost_proof,
+            );
         } else {
             // @dev: At any given time (other than initialization), there is only one valid size of subtree that can be appended
             if subtree_rightmost_proof.len() != intersection {
@@ -317,7 +326,12 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
                 );
             }
         }
-        self.update_state_from_append(node, change_list, self.rightmost_proof.index + subtree_rightmost_index - 1, leaf)?;
+        self.update_state_from_append(
+            node,
+            change_list,
+            self.rightmost_proof.index + subtree_rightmost_index - 1,
+            leaf,
+        )?;
         Ok(node)
     }
 

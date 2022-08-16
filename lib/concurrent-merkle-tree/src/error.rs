@@ -36,10 +36,6 @@ pub enum CMTError {
     )]
     LeafContentsModified,
 
-    /// Attempted to append subtree to initialize a tree
-    #[error("Cannot initialize tree with subtree append")]
-    CannotInitializeWithSubtreeAppend,
-
     /// Attempted to append subtree of invalid size for the current state of the tree
     #[error("Cannot append subtree with invalid size")]
     SubtreeInvalidSize,
