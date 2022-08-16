@@ -177,6 +177,51 @@ async fn test_append_incomplete_subtree() {
 }
 
 #[tokio::test(threaded_scheduler)]
+async fn test_append_subtree_to_empty_tree() {
+    let (mut merkle_roll, mut off_chain_tree) = setup();
+    let mut rng = thread_rng();
+    merkle_roll.initialize().unwrap();
+
+    // create a simple subtree to append of depth two
+    let mut onchain_subtree = MerkleRoll::<2, 8>::new();
+    onchain_subtree.initialize().unwrap();
+
+    // append leaves to the subtree, and also append them to the off-chain tree
+    for i in 0..4 {
+        let leaf = rng.gen::<[u8; 32]>();
+        onchain_subtree.append(leaf).unwrap();
+        off_chain_tree.add_leaf(leaf, i);
+    }
+
+    // append the on_chain subtree to the merkle_roll
+    merkle_roll
+        .append_subtree(
+            onchain_subtree.get_change_log().root,
+            onchain_subtree.rightmost_proof.leaf,
+            onchain_subtree.rightmost_proof.index,
+            onchain_subtree.rightmost_proof.proof.to_vec(),
+        )
+        .unwrap();
+
+    // The result should be that the merkle_roll's new root is the same as the root of the off-chain tree which had leaves 0..4 appended one by one
+    assert_eq!(
+        merkle_roll.get_change_log().root,
+        off_chain_tree.get_root(),
+        "On chain tree failed to update properly on an append",
+    );
+
+    // Show that we can still append to the large tree after performing a subtree append
+    let leaf = rng.gen::<[u8; 32]>();
+    merkle_roll.append(leaf).unwrap();
+    off_chain_tree.add_leaf(leaf, 4);
+    assert_eq!(
+        merkle_roll.get_change_log().root,
+        off_chain_tree.get_root(),
+        "Failed to append accurately to merkle roll after subtree append",
+    );
+}
+
+#[tokio::test(threaded_scheduler)]
 async fn test_prove_leaf() {
     let (mut merkle_roll, mut off_chain_tree) = setup();
     let mut rng = thread_rng();

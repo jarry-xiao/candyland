@@ -144,6 +144,21 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         }
     }
 
+    fn update_state_from_append(
+        &mut self,
+        root: Node,
+        change_list: [Node; MAX_DEPTH],
+        rmp_index: u32,
+        rmp_leaf: Node
+    ) -> Result<(), CMTError> {
+        self.update_internal_counters();
+        self.change_logs[self.active_index as usize] =
+            ChangeLog::<MAX_DEPTH>::new(root, change_list, rmp_index);
+        self.rightmost_proof.index = rmp_index + 1;
+        self.rightmost_proof.leaf = rmp_leaf;
+        Ok(())
+    }
+
     /// Append leaf to tree
     pub fn append(&mut self, mut node: Node) -> Result<Node, CMTError> {
         check_bounds(MAX_DEPTH, MAX_BUFFER_SIZE);
@@ -187,12 +202,44 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
                 );
             }
         }
+        self.update_state_from_append(node, change_list, self.rightmost_proof.index, leaf)?;
+        Ok(node)
+    }
 
-        self.update_internal_counters();
-        self.change_logs[self.active_index as usize] =
-            ChangeLog::<MAX_DEPTH>::new(node, change_list, self.rightmost_proof.index);
-        self.rightmost_proof.index = self.rightmost_proof.index + 1;
-        self.rightmost_proof.leaf = leaf;
+    fn initialize_tree_from_subtree_append(
+        &mut self,
+        subtree_root: Node,
+        subtree_rightmost_leaf: Node,
+        subtree_rightmost_index: u32,
+        subtree_rightmost_proof: Vec<Node>
+    ) -> Result<Node, CMTError> {
+
+        let leaf = subtree_rightmost_leaf.clone();
+        let mut change_list = [EMPTY; MAX_DEPTH];
+
+        // This will be mutated into the new root after the append by gradually hashing this node with the RMP to the subtree, then the critical node, and then the rest of the RMP to this tree.
+        let mut node = subtree_rightmost_leaf;
+        for i in 0..MAX_DEPTH {
+            change_list[i] = node;
+            if i < subtree_rightmost_proof.len() {
+                // Hash up to subtree_root using subtree_rmp, to create accurate change_list
+                hash_to_parent(
+                    &mut node,
+                    &subtree_rightmost_proof[i],
+                    ((subtree_rightmost_index - 1) >> i) & 1 == 0,
+                );
+                self.rightmost_proof.proof[i] = subtree_rightmost_proof[i];
+            } else {
+                // Compute where the new node intersects the main tree
+                if i == subtree_rightmost_proof.len() {
+                    assert!(node == subtree_root);
+                }
+
+                hash_to_parent(&mut node, &self.rightmost_proof.proof[i], true);
+                // No need to update the RMP anymore
+            }
+        }
+        self.update_state_from_append(node, change_list, self.rightmost_proof.index + subtree_rightmost_index - 1, leaf)?;
         Ok(node)
     }
 
@@ -205,16 +252,8 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
         subtree_rightmost_proof: Vec<Node>,
     ) -> Result<Node, CMTError> {
         check_bounds(MAX_DEPTH, MAX_BUFFER_SIZE);
-        // TODO: consider adding check that the subtree is not empty (but will omit for now)
-        //       note: it will be more time consuming to check that the subtree_root is not a root to an empty tree, because it requires applying O(depth) hashes of trivial nodes
         if self.rightmost_proof.index >= 1 << MAX_DEPTH {
             return Err(CMTError::TreeFull);
-        }
-
-        if self.rightmost_proof.index == 0 {
-            // TODO(sorend): Consider if we want to be able to initialize a tree with a subtree append (I think it would be cool, but is a little complex). write an equivallent function for subtree_append: initialize_tree_from_subtree_append
-            // For now
-            return Err(CMTError::CannotInitializeWithSubtreeAppend);
         }
 
         // Confirm that subtree_rightmost_proof is valid
@@ -227,14 +266,22 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
             return Err(CMTError::InvalidProof);
         }
 
-        let leaf = subtree_rightmost_leaf.clone();
         let intersection = self.rightmost_proof.index.trailing_zeros() as usize;
 
-        // @dev: At any given time (other than initialization), there is only one valid size of subtree that can be appended
-        if subtree_rightmost_proof.len() != intersection {
-            return Err(CMTError::SubtreeInvalidSize);
+        if self.rightmost_proof.index == 0 {
+            // @dev: If the tree has only empty leaves, then there are many sizes of tree which can be appended, but they cannot be larger than the tree itself
+            if subtree_rightmost_proof.len() >= MAX_DEPTH {
+                return Err(CMTError::SubtreeInvalidSize);
+            }
+            return self.initialize_tree_from_subtree_append(subtree_root, subtree_rightmost_leaf, subtree_rightmost_index, subtree_rightmost_proof);
+        } else {
+            // @dev: At any given time (other than initialization), there is only one valid size of subtree that can be appended
+            if subtree_rightmost_proof.len() != intersection {
+                return Err(CMTError::SubtreeInvalidSize);
+            }
         }
 
+        let leaf = subtree_rightmost_leaf.clone();
         let mut change_list = [EMPTY; MAX_DEPTH];
         let mut intersection_node = self.rightmost_proof.leaf;
 
@@ -258,6 +305,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
                 self.rightmost_proof.proof[i] = subtree_rightmost_proof[i];
             } else if i == intersection {
                 // Compute where the new node intersects the main tree
+                assert!(node == subtree_root);
                 hash_to_parent(&mut node, &intersection_node, false);
                 self.rightmost_proof.proof[intersection] = intersection_node;
             } else {
@@ -269,15 +317,7 @@ impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> MerkleRoll<MAX_DEPTH,
                 );
             }
         }
-
-        self.update_internal_counters();
-        self.change_logs[self.active_index as usize] = ChangeLog::<MAX_DEPTH>::new(
-            node,
-            change_list,
-            self.rightmost_proof.index + subtree_rightmost_index - 1,
-        );
-        self.rightmost_proof.index = self.rightmost_proof.index + subtree_rightmost_index;
-        self.rightmost_proof.leaf = leaf;
+        self.update_state_from_append(node, change_list, self.rightmost_proof.index + subtree_rightmost_index - 1, leaf)?;
         Ok(node)
     }
 
