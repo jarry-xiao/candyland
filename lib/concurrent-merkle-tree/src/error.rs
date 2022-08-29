@@ -39,4 +39,8 @@ pub enum CMTError {
     /// Attempted to append subtree of invalid size for the current state of the tree
     #[error("Cannot append subtree with invalid size")]
     SubtreeInvalidSize,
+
+    /// Attempted to index into proof beyond rightmost bound
+    #[error("Invalid index into rightmost_proof")]
+    InvalidProofAccessOrWrite,
 }

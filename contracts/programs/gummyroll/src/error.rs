@@ -24,6 +24,15 @@ pub enum GummyrollError {
     /// When using Canopy, the stored byte length should a multiple of the node's byte length (32 bytes)
     #[msg("Expected a different byte length for the merkle roll canopy")]
     CanopyLengthMismatch,
+
+    /// Error modify pre-subtree-append data structure. 
+    /// Your tree may have been modified during your initialization process, your proof may be invalid or out of date. Please reset the account.
+    #[msg("Merkle Roll Pre Append Processing Error")]
+    MerkleTreePreAppendProcessingError,
+
+    /// An issue was detected with loading the provided account data for the PreAppend data structure.
+    #[msg("Issue zero copying concurrent merkle tree append structure")]
+    PreAppendZeroCopyError,
 }
 
 impl From<&CMTError> for GummyrollError {
