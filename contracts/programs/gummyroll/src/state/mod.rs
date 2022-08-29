@@ -120,30 +120,6 @@ impl MerkleRollHeader {
     }
 }
 
-#[derive(BorshDeserialize, BorshSerialize)]
-#[repr(C)]
-pub struct MerkleRollPreAppendHeader {
-    /// Depth of associated merkle tree
-    pub max_depth: u32,
-
-    /// The next depth of tree which needs to be initialized  
-    pub next_index_to_initialize: u16,
-
-    /// Whether or not the merkle roll pre append header has been fully initialized
-    pub initialized: u16
-}
-
-impl MerkleRollPreAppendHeader {
-    pub fn initialize(
-        &mut self,
-        max_depth: u32
-    ) {
-        self.max_depth = max_depth;
-        self.next_index_to_initialize = 0;
-        self.initialized = 0;
-    }
-}
-
 #[derive(Clone)]
 pub struct CandyWrapper;
 

@@ -79,10 +79,11 @@ pub struct AppendSubtree<'info> {
     pub merkle_roll: UncheckedAccount<'info>,
 
     /// CHECK: validated in instruction
-    pub subtree_append: UncheckedAccount<'info>,
+    pub subtree_merkle_roll: UncheckedAccount<'info>,
 
     /// CHECK: validated in instruction
-    pub subtree_merkle_roll: UncheckedAccount<'info>,
+    #[account(seeds = [subtree_merkle_roll.key().as_ref()], bump)]
+    pub subtree_append: UncheckedAccount<'info>,
 
     /// Authority over merkle_roll
     /// Typically a program, e.g., the Bubblegum contract validates that leaves are valid NFTs.

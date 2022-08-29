@@ -4,7 +4,6 @@ use crate::{
     utils::{empty_node, empty_node_cached, fill_in_proof, hash_to_parent, recompute},
 };
 use bytemuck::{Pod, Zeroable};
-use borsh::{BorshDeserialize, BorshSerialize};
 pub(crate) use log_compute;
 pub(crate) use solana_logging;
 
@@ -83,7 +82,7 @@ pub trait MerkleInterface {
 ///
 /// Allows for concurrent writes to same merkle tree so long as proof
 /// was generated at most MAX_SIZE updates since the tx was submitted
-#[derive(Copy, Clone, BorshDeserialize, BorshSerialize)]
+#[derive(Copy, Clone)]
 pub struct MerkleRoll<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> {
     pub sequence_number: u64,
     /// Index of most recent root & changes
@@ -726,7 +725,7 @@ pub trait PreAppendInterface {
 /// If a user wants to append their tree as a subtree to some other tree. They should populate this structure.
 /// This structure should be filled by providing partitions with the following number of leaves in order: 1,1,2,4,...2^(k+1) where 2^k is the number of leaves in the associated merkle_roll struct
 /// The subtrees should be passed in order from smallest to largest, greedily taking the smaller trees from the rightmost side of the tree, such that the root of each partitioned tree aligns with the ith index into the rightmost proof of the larger tree
-#[derive(Copy, Clone, BorshDeserialize, BorshSerialize)]
+#[derive(Copy, Clone)]
 pub struct MerkleRollPreAppend<const NUM_PARTITIONS: usize> {
     /// The next depth of tree which needs to be initialized  
     pub next_index_to_initialize: u32,
@@ -830,7 +829,6 @@ impl<const NUM_PARTITIONS: usize> PreAppendInterface for MerkleRollPreAppend<NUM
 }
 
 impl<const NUM_PARTITIONS: usize> MerkleRollPreAppend<NUM_PARTITIONS> {
-    // TODO(sorend): investigate if there is a way to map all MerkleRoll types that match with constant MAX_DEPTH to the same function, rather than creating a new function for each buffer size which doesn't impact the pre-append data structure
     pub fn new(merkle_roll: &dyn MerkleInterface) -> Self {
         Self {
             rightmost_proofs: [Path::<NUM_PARTITIONS>::default(); NUM_PARTITIONS],

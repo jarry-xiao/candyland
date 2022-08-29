@@ -501,7 +501,6 @@ dependencies = [
 name = "concurrent-merkle-tree"
 version = "0.1.0"
 dependencies = [
- "borsh",
  "bytemuck",
  "solana-program",
  "thiserror",
