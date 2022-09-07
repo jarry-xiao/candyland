@@ -1,3 +1,19 @@
+# Note!
+
+This repository will be archived! The following programs have new homes in different repositories:
+
+- `gummyroll` is now `account-compression` (owned and maintained by Solana Labs), and can be found in the [solana-program-library](https://github.com/solana-labs/solana-program-library/tree/master/account-compression)
+- `candy-wrapper` is now `wrapper` (owned and maintained by Solana Labs), and can be found in the [solana-program-library](https://github.com/solana-labs/solana-program-library/tree/master/account-compression/programs/wrapper)
+- `bubblegum` (owned and maintained by the Metaplex Foundation) can be found in the [metaplex-program-library](https://github.com/metaplex-foundation/metaplex-program-library/tree/master/bubblegum)
+- `sugar-shack` and `gumball-machine` are proof-of-concept programs 
+
+RPC-related infrastructure and anything related to indexing compressed NFTs can be found below:
+- [metaplex-foundation/blockbuster](https://github.com/metaplex-foundation/blockbuster)
+    - Program parsing for Geyser plugins
+- [metaplex-foundation/digital-asset-rpc-infrastructure](https://github.com/metaplex-foundation/digital-asset-rpc-infrastructure)
+    - Everything you need to run the infrastructure needed to index NFTs
+- [metaplex-foundation/digital-asset-validator-plugin](https://github.com/metaplex-foundation/digital-asset-validator-plugin)
+    - Geyser plugin, messenger, and serialization libraries related to compressed NFTs
 # 🍬 Candyland 🍬
 
 Smart contracts and indexing services necessary to migrate the Solana ecosystem to a 10,000x cheaper NFT standard.
