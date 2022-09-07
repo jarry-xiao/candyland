@@ -5,7 +5,7 @@ This repository will be archived! The following programs have new homes in diffe
 - `gummyroll` is now `account-compression` (owned and maintained by Solana Labs), and can be found in the [solana-program-library](https://github.com/solana-labs/solana-program-library/tree/master/account-compression)
 - `candy-wrapper` is now `wrapper` (owned and maintained by Solana Labs), and can be found in the [solana-program-library](https://github.com/solana-labs/solana-program-library/tree/master/account-compression/programs/wrapper)
 - `bubblegum` (owned and maintained by the Metaplex Foundation) can be found in the [metaplex-program-library](https://github.com/metaplex-foundation/metaplex-program-library/tree/master/bubblegum)
-- `sugar-shack` and `gumball-machine` are proof-of-concept programs 
+- `sugar-shack` and `gumball-machine` are proof-of-concept programs that will eventually graduate to Metaplex ownership; in the meantime, they will remain archived here.
 
 RPC-related infrastructure and anything related to indexing compressed NFTs can be found below:
 - [metaplex-foundation/blockbuster](https://github.com/metaplex-foundation/blockbuster)
