@@ -6,7 +6,7 @@ use anchor_lang::{
     solana_program::{msg, program::invoke, program_error::ProgramError},
 };
 use bytemuck::{Pod, PodCastError};
-use concurrent_merkle_tree::merkle_roll::MerkleRoll;
+use concurrent_merkle_tree::merkle_roll::{MerkleRoll, MerkleRollPreAppend};
 use std::any::type_name;
 use std::mem::size_of;
 
@@ -34,6 +34,11 @@ pub trait ZeroCopy: Pod {
 
 impl<const MAX_DEPTH: usize, const MAX_BUFFER_SIZE: usize> ZeroCopy
     for MerkleRoll<MAX_DEPTH, MAX_BUFFER_SIZE>
+{
+}
+
+impl<const NUM_PARTITIONS: usize> ZeroCopy
+    for MerkleRollPreAppend<NUM_PARTITIONS>
 {
 }
 

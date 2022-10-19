@@ -2,7 +2,7 @@
 //!
 use anchor_lang::prelude::*;
 use borsh::{BorshDeserialize, BorshSerialize};
-use concurrent_merkle_tree::state::{ChangeLog, Node};
+use concurrent_merkle_tree::state::{ChangeLog, ChangeLogInterface, Node, Path};
 
 #[derive(AnchorDeserialize, AnchorSerialize, Clone, Copy, Debug)]
 pub struct PathNode {
@@ -41,30 +41,30 @@ pub struct ChangeLogEvent {
     /// Bitmap of node parity (used when hashing)
     pub index: u32,
 }
-//  ChangeLog<MAX_DEPTH>
-impl<const MAX_DEPTH: usize> From<(Box<ChangeLog<MAX_DEPTH>>, Pubkey, u64)>
+
+impl From<(Box<dyn ChangeLogInterface>, Pubkey, u64)>
     for Box<ChangeLogEvent>
 {
-    fn from(log_info: (Box<ChangeLog<MAX_DEPTH>>, Pubkey, u64)) -> Self {
+    fn from(log_info: (Box<dyn ChangeLogInterface>, Pubkey, u64)) -> Self {
         let (changelog, tree_id, seq) = log_info;
-        let path_len = changelog.path.len() as u32;
+        let path_len = changelog.get_path_as_vec().len() as u32;
         let mut path: Vec<PathNode> = changelog
-            .path
+            .get_path_as_vec()
             .iter()
             .enumerate()
             .map(|(lvl, n)| {
                 PathNode::new(
                     *n,
-                    (1 << (path_len - lvl as u32)) + (changelog.index >> lvl),
+                    (1 << (path_len - lvl as u32)) + (changelog.get_index() >> lvl),
                 )
             })
             .collect();
-        path.push(PathNode::new(changelog.root, 1));
+        path.push(PathNode::new(changelog.get_root(), 1));
         Box::new(ChangeLogEvent {
             id: tree_id,
             path,
             seq,
-            index: changelog.index,
+            index: changelog.get_index(),
         })
     }
 }

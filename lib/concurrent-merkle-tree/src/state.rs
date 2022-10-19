@@ -1,5 +1,10 @@
 use crate::utils::hash_to_parent;
 
+pub trait ChangeLogInterface {
+    fn get_root(&self) -> Node;
+    fn get_path_as_vec(&self) -> Vec<Node>;
+    fn get_index(&self) -> u32;
+}
 #[derive(Copy, Clone, Debug, PartialEq)]
 /// Stores proof for a given Merkle root update
 #[repr(C)]
@@ -11,6 +16,20 @@ pub struct ChangeLog<const MAX_DEPTH: usize> {
     /// Bitmap of node parity (used when hashing)
     pub index: u32,
     pub _padding: u32,
+}
+
+impl<const MAX_DEPTH: usize> ChangeLogInterface for ChangeLog<MAX_DEPTH> {
+    fn get_root(&self) -> Node {
+        return self.root;
+    }
+
+    fn get_path_as_vec(&self) -> Vec<Node> {
+        return self.path.to_vec();
+    }
+
+    fn get_index(&self) -> u32 {
+        return self.index;
+    }
 }
 
 impl<const MAX_DEPTH: usize> ChangeLog<MAX_DEPTH> {
@@ -37,7 +56,12 @@ impl<const MAX_DEPTH: usize> ChangeLog<MAX_DEPTH> {
     }
 
     /// Sets all change log values from a leaf and valid proof
-    pub fn replace_and_recompute_path(&mut self, index: u32, mut node: Node, proof: &[Node]) -> Node {
+    pub fn replace_and_recompute_path(
+        &mut self,
+        index: u32,
+        mut node: Node,
+        proof: &[Node],
+    ) -> Node {
         self.index = index;
         for (i, sibling) in proof.iter().enumerate() {
             self.path[i] = node;
